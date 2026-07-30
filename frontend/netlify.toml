@@ -2,9 +2,6 @@
   command = "npm run build"
   publish = ".next"
 
-[[plugins]]
-  package = "@netlify/plugin-next"
-
 # Proxy API requests to backend host
 [[redirects]]
   from = "/api/*"
