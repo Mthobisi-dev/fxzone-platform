@@ -1,0 +1,175 @@
+/**
+ * FxZone WebSocket Client with automatic reconnection and channel subscription.
+ */
+
+type WSCallback = (data: any) => void;
+
+export class FxZoneWebSocket {
+  private ws: WebSocket | null = null;
+  private url: string;
+  private listeners: Map<string, Set<WSCallback>> = new Map();
+  private reconnectTimeout: any = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private baseDelay = 1000; // 1 second
+  private isManualClose = false;
+  private subscriptions: Set<string> = new Set();
+
+  constructor(path: string) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    
+    // Check if path is absolute or relative
+    if (path.startsWith('ws://') || path.startsWith('wss://')) {
+      this.url = path;
+    } else {
+      // Direct WebSocket connections to the backend port (8000) in development
+      const wsHost = host.includes('localhost') ? 'localhost:8000' : host;
+      this.url = `${protocol}//${wsHost}${path.startsWith('/') ? path : '/' + path}`;
+    }
+  }
+
+  /**
+   * Connect to the WebSocket server with the user access token.
+   */
+  public connect() {
+    this.isManualClose = false;
+    
+    // Inject access token in query parameter for security verification
+    const token = localStorage.getItem('fxzone_access_token');
+    const connectionUrl = token 
+      ? `${this.url}${this.url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+      : this.url;
+
+    try {
+      this.ws = new WebSocket(connectionUrl);
+      this.ws.onopen = this.handleOpen.bind(this);
+      this.ws.onmessage = this.handleMessage.bind(this);
+      this.ws.onclose = this.handleClose.bind(this);
+      this.ws.onerror = this.handleError.bind(this);
+    } catch (e) {
+      this.scheduleReconnect();
+    }
+  }
+
+  /**
+   * Close the WebSocket connection manually.
+   */
+  public close() {
+    this.isManualClose = true;
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+  }
+
+  /**
+   * Send a JSON string payload to the server.
+   */
+  public send(payload: any) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(payload));
+    }
+  }
+
+  /**
+   * Subscribe to specific data events (e.g. 'prices', 'message', 'notification').
+   */
+  public on(event: string, callback: WSCallback) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event)!.add(callback);
+  }
+
+  /**
+   * Unsubscribe from specific data events.
+   */
+  public off(event: string, callback: WSCallback) {
+    if (this.listeners.has(event)) {
+      this.listeners.get(event)!.delete(callback);
+    }
+  }
+
+  private handleOpen() {
+    this.reconnectAttempts = 0;
+    this.emit('open', null);
+    
+    // Resubscribe to active symbols if we were disconnected
+    if (this.subscriptions.size > 0) {
+      this.send({
+        action: 'subscribe',
+        symbols: Array.from(this.subscriptions)
+      });
+    }
+  }
+
+  private handleMessage(event: MessageEvent) {
+    try {
+      const payload = jsonParse(event.data);
+      if (payload && payload.type) {
+        this.emit(payload.type, payload);
+      } else {
+        this.emit('message', payload);
+      }
+    } catch (e) {
+      this.emit('raw_message', event.data);
+    }
+  }
+
+  private handleClose() {
+    this.emit('close', null);
+    if (!this.isManualClose) {
+      this.scheduleReconnect();
+    }
+  }
+
+  private handleError(e: Event) {
+    this.emit('error', e);
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      loggerError('Max reconnect attempts reached.');
+      return;
+    }
+
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
+
+    const delay = this.baseDelay * Math.pow(2, this.reconnectAttempts);
+    this.reconnectAttempts += 1;
+
+    this.reconnectTimeout = setTimeout(() => {
+      this.connect();
+    }, delay);
+  }
+
+  private emit(event: string, data: any) {
+    const list = this.listeners.get(event);
+    if (list) {
+      list.forEach((cb) => {
+        try {
+          cb(data);
+        } catch (e) {
+          loggerError(e);
+        }
+      });
+    }
+  }
+}
+
+// Inline helper functions to make the module self-contained
+function jsonParse(str: string) {
+  try { return JSON.parse(str); }
+  catch { return null; }
+}
+
+function loggerError(e: any) {
+  console.error('[WebSocket Client Error]', e);
+}

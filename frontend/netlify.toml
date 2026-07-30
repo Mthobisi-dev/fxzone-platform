@@ -1,0 +1,18 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-next"
+
+# Proxy API requests to backend host
+[[redirects]]
+  from = "/api/*"
+  to = "http://127.0.0.1:8000/api/:splat"
+  status = 200
+
+# Proxy WebSocket connections
+[[redirects]]
+  from = "/ws/*"
+  to = "ws://127.0.0.1:8000/ws/:splat"
+  status = 200
