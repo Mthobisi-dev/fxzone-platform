@@ -24,7 +24,7 @@ import httpx
 # -- Configuration -----------------------------------------------------------
 SUPABASE_URL = os.getenv(
     "SUPABASE_URL",
-    "https://jimbcgbhjkahnljpijqy.supabase.co"
+    "https://cxmvfdnckedjvfcqsiiw.supabase.co"
 )
 SUPABASE_SERVICE_ROLE_KEY = os.getenv(
     "SUPABASE_SERVICE_ROLE_KEY",
