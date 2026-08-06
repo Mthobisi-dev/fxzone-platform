@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+
 const nextConfig = {
   reactStrictMode: true,
   images: {
@@ -19,21 +21,25 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'images.unsplash.com',
       },
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
     ],
   },
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://127.0.0.1:8000/api/:path*',
+        destination: `${BACKEND_URL}/api/:path*`,
       },
       {
         source: '/ws/:path*',
-        destination: 'http://127.0.0.1:8000/ws/:path*',
+        destination: `${BACKEND_URL}/ws/:path*`,
       },
       {
         source: '/uploads/:path*',
-        destination: 'http://127.0.0.1:8000/uploads/:path*',
+        destination: `${BACKEND_URL}/uploads/:path*`,
       },
     ];
   },
