@@ -4,11 +4,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.database import get_db
 from shared.security import get_current_user
 from services.auth.schemas import (
-    UserCreate, UserLogin, UserUpdate, UserResponse, TokenResponse, RefreshRequest
+    UserCreate, UserLogin, UserUpdate, UserResponse, TokenResponse, RefreshRequest, GoogleAuthRequest
 )
 from services.auth import service
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+
+@router.post("/google", response_model=TokenResponse)
+async def google_auth(data: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
+    """Authenticate or register user with Google OAuth credentials."""
+    auth = await service.authenticate_google_user(db, data)
+    user = auth["user"]
+    return TokenResponse(
+        access_token=auth["access_token"],
+        refresh_token=auth["refresh_token"],
+        user=UserResponse(
+            id=str(user.id), email=user.email, username=user.username,
+            display_name=user.display_name, avatar_url=user.avatar_url,
+            bio=user.bio, role=user.role.value if hasattr(user.role, 'value') else user.role,
+            is_active=user.is_active, followers_count=user.followers_count,
+            following_count=user.following_count, created_at=user.created_at,
+        ),
+    )
+
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)

@@ -61,6 +61,13 @@ class ChatService:
                 if t_user:
                     if t_user.username == 'fxzone_bot' or t_user.email == 'bot@fxzone.com':
                         raise ValueError("Direct messaging with FxZone Bot is restricted. Use the AI Analyst panel instead.")
+                    if t_user.username == 'admin' or t_user.email == 'mthobisimzimela031@gmail.com' or t_user.role == 'admin':
+                        # Check if creator is admin
+                        c_stmt = select(User).where(User.id == creator_uuid)
+                        c_res = await self.db.execute(c_stmt)
+                        c_user = c_res.scalar_one_or_none()
+                        if not (c_user and (c_user.username == 'admin' or c_user.role == 'admin' or c_user.email == 'mthobisimzimela031@gmail.com')):
+                            raise ValueError("Direct messaging with FxZone Admin is restricted.")
 
 
 

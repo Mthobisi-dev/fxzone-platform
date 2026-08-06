@@ -1,6 +1,14 @@
 """FxZone Backend Application - Main FastAPI Entry Point."""
 import asyncio
+import sys
 import logging
+
+# Ensure Windows stdout/stderr use UTF-8 to prevent charmap encoding crashes
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware

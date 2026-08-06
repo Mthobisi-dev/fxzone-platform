@@ -245,6 +245,13 @@ class SocialService:
         if follower_id == following_id:
             raise ValueError("Users cannot follow themselves.")
 
+        # Prevent following FxZone Bot
+        target_user_stmt = select(User).where(User.id == following_id)
+        t_res = await self.db.execute(target_user_stmt)
+        target_user = t_res.scalar_one_or_none()
+        if target_user and (target_user.username in ['fxzone_bot', 'jackbot_analyst'] or target_user.role == 'bot' or target_user.email == 'bot@fxzone.io'):
+            raise ValueError("Following FxZone Bot is restricted. Bot market signals are broadcast to all users automatically.")
+
         follow_query = select(Follow).where(
             and_(Follow.follower_id == follower_id, Follow.following_id == following_id)
         )
@@ -377,8 +384,10 @@ class SocialService:
 
     async def get_all_users(self, query: str = "", limit: int = 20, offset: int = 0, current_user_id=None) -> List[Dict[str, Any]]:
         """List or search all users for the Discover page."""
-        from sqlalchemy import or_
-        stmt = select(User)
+        from sqlalchemy import or_, not_
+        stmt = select(User).where(
+            not_(User.username.in_(['trader_bob', 'google_trader']))
+        )
         if query.strip():
             pattern = f"%{query.strip()}%"
             stmt = stmt.where(
@@ -426,6 +435,13 @@ class SocialService:
                 "is_mutual": is_following and is_follower
             })
         return user_list
+
+    async def purge_all_posts(self) -> int:
+        """Purge all posts from the social network."""
+        from sqlalchemy import delete
+        res = await self.db.execute(delete(Post))
+        await self.db.flush()
+        return res.rowcount or 0
 
     async def delete_post(self, post_id: str, user_id: str, is_admin: bool = False) -> bool:
         """Delete a post. Post author or FxZone Admin can delete any post."""

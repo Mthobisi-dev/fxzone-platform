@@ -15,6 +15,9 @@ import {
   LogOut,
   Sliders,
   Compass,
+  Instagram,
+  Linkedin,
+  Github,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar } from '../ui/Avatar';
@@ -132,6 +135,39 @@ export function Sidebar() {
               )}
             </button>
           )}
+
+        {/* Contact Links */}
+        {!isCollapsed && (
+          <div className="flex items-center justify-center gap-3 py-2">
+            <a
+              href="https://www.instagram.com/it.is_jack?igsh=MXV1dW1uM3o5NjI1Zg=="
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Instagram"
+              className="text-zinc-500 hover:text-pink-400 transition-colors"
+            >
+              <Instagram size={14} />
+            </a>
+            <a
+              href="https://www.linkedin.com/in/mthobisi-mzimela-136835354?utm_source=share_via&utm_content=profile&utm_medium=member_android"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="LinkedIn"
+              className="text-zinc-500 hover:text-blue-400 transition-colors"
+            >
+              <Linkedin size={14} />
+            </a>
+            <a
+              href="https://github.com/Mthobisi-dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="GitHub"
+              className="text-zinc-500 hover:text-white transition-colors"
+            >
+              <Github size={14} />
+            </a>
+          </div>
+        )}
 
           <button
             onClick={() => logout()}

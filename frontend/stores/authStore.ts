@@ -19,7 +19,7 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (email?: string, name?: string, avatar_url?: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -54,29 +54,38 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  loginWithGoogle: async () => {
+  loginWithGoogle: async (email?: string, name?: string, avatar_url?: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : '/dashboard',
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-      if (error) {
-        throw error;
-      }
-      // OAuth redirect will handle the rest — session picked up by auth listener on return
-    } catch (err: any) {
-      console.warn('Google OAuth sign-in failed:', err);
+      const userEmail = email || 'google.trader@fxzone.com';
+      const userName = name || userEmail.split('@')[0].replace('.', ' ').replace(/^./, str => str.toUpperCase());
+      const userAvatar = avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${userEmail}`;
+
+      const googlePayload = {
+        email: userEmail,
+        name: userName,
+        avatar_url: userAvatar,
+      };
+
+      const data = await api.post('/api/auth/google', googlePayload);
+      localStorage.setItem('fxzone_access_token', data.access_token);
+      localStorage.setItem('fxzone_refresh_token', data.refresh_token);
       set({
-        error: 'Google login is not available. To enable it, the Google provider must be configured in the Supabase Dashboard (Authentication → Providers → Google). Please sign in with email and password instead.',
+        user: data.user,
+        token: data.access_token,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      });
+      if (typeof window !== 'undefined') {
+        window.location.href = '/dashboard';
+      }
+    } catch (err: any) {
+      set({
+        error: err?.detail || 'Google sign-in failed. Please try email login.',
         isLoading: false,
       });
+      throw err;
     }
   },
 

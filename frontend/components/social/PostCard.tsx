@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Card } from '../ui/Card';
 import { Avatar } from '../ui/Avatar';
-import { Heart, MessageSquare, Repeat2, Bookmark, Share2, Tag, CheckCircle2, Trash2, Pin } from 'lucide-react';
+import { Heart, MessageSquare, Repeat2, Bookmark, Share2, Tag, CheckCircle2, Trash2, Pin, Clock, Zap } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,8 @@ export interface Post {
   isRepostedByUser?: boolean;
   isBookmarkedByUser?: boolean;
   isPinned?: boolean;
+  isStory?: boolean;
+  expiresAt?: string;
   createdAt: string;
 }
 
@@ -70,6 +72,9 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const [isBookmarked, setIsBookmarked] = useState(!!isBookmarkedByUser);
   const isPinned = post.isPinned ?? raw.is_pinned ?? false;
   const [pinned, setPinned] = useState(!!isPinned);
+  const isStory = post.isStory ?? raw.is_story ?? false;
+  const expiresAt = post.expiresAt || raw.expires_at;
+  const isBot = postUser.username === 'fxzone_bot' || postUser.role === 'bot';
 
   const [deleting, setDeleting] = useState(false);
   const isOwner = String(user?.id) === String(userId) || String(user?.id) === String(postUser.id);
@@ -203,6 +208,22 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             </div>
             
             <div className="flex items-center gap-2 shrink-0">
+              {isStory && (
+                <span className="flex items-center gap-1 text-[9px] font-bold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                  <Clock size={9} />
+                  Story
+                  {expiresAt && (
+                    <span className="text-purple-500/70 ml-0.5">
+                      · {(() => { try { return formatDistanceToNow(new Date(expiresAt), { addSuffix: false }); } catch { return ''; } })()}
+                    </span>
+                  )}
+                </span>
+              )}
+              {isBot && (
+                <span className="flex items-center gap-1 text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                  <Zap size={9} className="fill-cyan-400" /> FxZone Bot
+                </span>
+              )}
               {pinned && (
                 <span className="flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                   <Pin size={10} className="fill-amber-400" /> Pinned

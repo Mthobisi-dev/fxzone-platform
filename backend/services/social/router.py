@@ -195,6 +195,24 @@ async def get_stories(
     return await service.get_active_stories(user_id=current_user.id)
 
 
+@router.post("/stories", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
+async def create_story(
+    request: PostCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Publish a 24-hour expiring story (auto-sets is_story=True)."""
+    # Force story flag regardless of what client sends
+    story_data = PostCreate(
+        content=request.content,
+        image_url=request.image_url,
+        asset_tags=request.asset_tags,
+        is_story=True,
+    )
+    service = SocialService(db)
+    return await service.create_post(user_id=current_user.id, data=story_data)
+
+
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.mov', '.webm', '.pdf'}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
@@ -244,6 +262,28 @@ async def list_all_users(
     return await service.get_all_users(query=q, limit=limit, offset=offset, current_user_id=current_user.id)
 
 
+@router.delete("/posts/purge-all")
+async def purge_all_posts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Purge all posts from the social feed (Admin only)."""
+    is_admin = (
+        current_user.username == 'admin' 
+        or current_user.role == 'admin' 
+        or (hasattr(current_user.role, 'value') and current_user.role.value == 'admin')
+        or current_user.email == 'mthobisimzimela031@gmail.com'
+    )
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only platform administrators can purge social posts."
+        )
+    service = SocialService(db)
+    count = await service.purge_all_posts()
+    return {"status": "success", "message": f"Purged {count} posts successfully."}
+
+
 @router.delete("/posts/{post_id}")
 async def delete_post(
     post_id: str,
@@ -252,7 +292,12 @@ async def delete_post(
 ):
     """Delete a post. Post author or FxZone Admin can delete any post."""
     service = SocialService(db)
-    is_admin = (current_user.username == 'admin' or current_user.role == 'admin' or (hasattr(current_user.role, 'value') and current_user.role.value == 'admin'))
+    is_admin = (
+        current_user.username == 'admin' 
+        or current_user.role == 'admin' 
+        or (hasattr(current_user.role, 'value') and current_user.role.value == 'admin')
+        or current_user.email == 'mthobisimzimela031@gmail.com'
+    )
     deleted = await service.delete_post(post_id=post_id, user_id=current_user.id, is_admin=is_admin)
     if not deleted:
         raise HTTPException(

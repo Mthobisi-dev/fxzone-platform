@@ -3,7 +3,7 @@ uvicorn[standard]
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
-pydantic
+pydantic[email]
 pydantic-settings
 sqlalchemy
 asyncpg

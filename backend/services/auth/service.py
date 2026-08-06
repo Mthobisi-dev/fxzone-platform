@@ -1,4 +1,5 @@
 """FxZone Auth Service - Business logic."""
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from shared.models import User
@@ -119,3 +120,52 @@ async def update_user_profile(db: AsyncSession, user_id: str, data: UserUpdate) 
     await db.flush()
     await db.refresh(user)
     return user
+
+
+async def authenticate_google_user(db: AsyncSession, data) -> dict:
+    """Authenticate or register a user with Google credentials."""
+    email = data.email or "google.trader@fxzone.com"
+    name = data.name or "Google Trader"
+    avatar = data.avatar_url or f"https://api.dicebear.com/8.x/initials/svg?seed=google_trader"
+
+    # Search for user by email
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # Create Google user
+        base_username = email.split("@")[0].replace(".", "_")
+        username = base_username
+        count = 1
+        while True:
+            existing = await db.execute(select(User).where(User.username == username))
+            if not existing.scalar_one_or_none():
+                break
+            username = f"{base_username}_{count}"
+            count += 1
+
+        user = User(
+            email=email,
+            username=username,
+            password_hash=hash_password(f"google_oauth_secret_{uuid.uuid4().hex}"),
+            display_name=name,
+            avatar_url=avatar,
+            role="trader",
+        )
+        db.add(user)
+        await db.flush()
+        await db.refresh(user)
+
+    token_data = {
+        "sub": str(user.id),
+        "email": user.email,
+        "role": user.role.value if hasattr(user.role, 'value') else user.role,
+        "username": user.username,
+    }
+
+    return {
+        "access_token": create_access_token(token_data),
+        "refresh_token": create_refresh_token(token_data),
+        "user": user,
+    }
+

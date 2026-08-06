@@ -17,9 +17,14 @@ import {
   BarChart3,
   Lock,
   Activity,
-  ChevronRight
+  ChevronRight,
+  ExternalLink,
+  Instagram,
+  Linkedin,
+  Github
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { TradeActionModal } from '@/components/trading/TradeActionModal';
 
 export default function LandingPage() {
   const [livePrices, setLivePrices] = React.useState<any[]>([]);
@@ -31,14 +36,29 @@ export default function LandingPage() {
     platformUptime: '99.99%',
   });
 
+  const [tradeModalOpen, setTradeModalOpen] = React.useState(false);
+  const [selectedSymbol, setSelectedSymbol] = React.useState('EURUSD');
+
+  const openTradeModal = (symbol = 'EURUSD') => {
+    setSelectedSymbol(symbol);
+    setTradeModalOpen(true);
+  };
+
   React.useEffect(() => {
     const fetchLivePrices = async () => {
       try {
         const res = await fetch('/api/market/prices');
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            setLivePrices(data.slice(0, 6));
+          let priceItems: any[] = [];
+          if (Array.isArray(data)) {
+            priceItems = data;
+          } else if (data && typeof data === 'object') {
+            priceItems = Object.values(data);
+          }
+
+          if (priceItems.length > 0) {
+            setLivePrices(priceItems);
           }
         }
       } catch (err) {
@@ -84,8 +104,8 @@ export default function LandingPage() {
     fetchLandingInsight();
     fetchSystemStats();
 
-    const intervalPrices = setInterval(fetchLivePrices, 30000);
-    const intervalInsights = setInterval(fetchLandingInsight, 600000); // 10 minutes
+    const intervalPrices = setInterval(fetchLivePrices, 10000); // 10s live updates
+    const intervalInsights = setInterval(fetchLandingInsight, 300000);
 
     return () => {
       clearInterval(intervalPrices);
@@ -161,22 +181,36 @@ export default function LandingPage() {
   ];
 
   const tickerAssets = livePrices.length > 0
-    ? livePrices.map((p: any) => ({
-        symbol: p.symbol,
-        price: p.price > 10 ? `$${p.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${p.price}`,
-        change: `${p.change_pct >= 0 ? '+' : ''}${p.change_pct.toFixed(2)}%`,
-        positive: p.change_pct >= 0
-      }))
+    ? livePrices.map((p: any) => {
+        const priceVal = typeof p.price === 'number' ? p.price : parseFloat(p.price) || 0;
+        const isForex = p.symbol.includes('USD') && !p.symbol.startsWith('BTC') && !p.symbol.startsWith('ETH') && !p.symbol.startsWith('SOL') && !p.symbol.startsWith('XAU') && !p.symbol.startsWith('XAG');
+        const formattedPrice = isForex ? priceVal.toFixed(4) : priceVal > 100 ? `$${priceVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${priceVal}`;
+        const changePct = typeof p.change_pct === 'number' ? p.change_pct : parseFloat(p.change_pct) || 0;
+        return {
+          symbol: p.symbol,
+          price: formattedPrice,
+          change: `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`,
+          positive: changePct >= 0
+        };
+      })
     : defaultTicker;
 
   return (
     <div className="min-h-screen text-zinc-100 selection:bg-purple-600/30 selection:text-white relative overflow-x-hidden">
+      {/* Trade Action Modal */}
+      <TradeActionModal
+        isOpen={tradeModalOpen}
+        onClose={() => setTradeModalOpen(false)}
+        symbol={selectedSymbol}
+      />
       {/* Top Fixed Header */}
       <nav className="h-20 px-6 md:px-12 border-b border-zinc-800/50 bg-zinc-950/70 backdrop-blur-xl fixed top-0 left-0 right-0 z-50 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-[0_0_20px_rgba(99,102,241,0.5)] border border-white/10">
-            FX
-          </div>
+          <img
+            src="/fxzone-logo.jpg"
+            alt="FxZone Logo"
+            className="h-11 w-11 rounded-xl object-cover shadow-[0_0_22px_rgba(255,255,255,0.18)] border border-zinc-700"
+          />
           <span className="text-2xl font-black tracking-tight text-white">
             FxZone
           </span>
@@ -190,6 +224,11 @@ export default function LandingPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-3 border-r border-zinc-800/80 pr-4 mr-1">
+            <a href="https://www.instagram.com/it.is_jack?igsh=MXV1dW1uM3o5NjI1Zg==" target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-pink-400 transition-colors" title="Instagram"><Instagram size={16} /></a>
+            <a href="https://www.linkedin.com/in/mthobisi-mzimela-136835354?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-400 transition-colors" title="LinkedIn"><Linkedin size={16} /></a>
+            <a href="https://github.com/Mthobisi-dev" target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-white transition-colors" title="GitHub"><Github size={16} /></a>
+          </div>
           <Link href="/login">
             <Button variant="ghost" size="sm" className="text-xs text-zinc-300 hover:text-white hover:bg-zinc-900/60 font-semibold px-4">
               Sign In
@@ -255,6 +294,13 @@ export default function LandingPage() {
               Launch Terminal <ArrowRight size={18} />
             </Button>
           </Link>
+          <Button
+            size="lg"
+            onClick={() => openTradeModal('EURUSD')}
+            className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-400 font-bold px-8 py-6 rounded-xl text-sm transition-all shadow-lg flex items-center gap-2 hover:scale-105"
+          >
+            <Zap size={18} /> Trade Now (Exness / TradingView)
+          </Button>
           <Link href="/dashboard">
             <Button variant="outline" size="lg" className="border-zinc-700/80 bg-zinc-900/60 backdrop-blur-md text-zinc-200 hover:text-white hover:bg-zinc-800/80 px-8 py-6 rounded-xl font-bold text-sm transition-all">
               Explore Live Demo
@@ -264,30 +310,37 @@ export default function LandingPage() {
 
         {/* Live Ticker Bar Preview */}
         <motion.div
+          id="markets"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
-          className="w-full mt-16 p-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 backdrop-blur-xl shadow-2xl overflow-hidden"
+          className="w-full mt-16 p-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 backdrop-blur-xl shadow-2xl overflow-hidden scroll-mt-24"
         >
           <div className="flex items-center justify-between gap-4 overflow-x-auto no-scrollbar py-1 px-2">
             <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest shrink-0 border-r border-zinc-800 pr-4">
               <Activity size={16} className="text-blue-400 animate-pulse" /> Live Markets
             </div>
             {tickerAssets.map((asset, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs shrink-0 px-3 py-1.5 rounded-lg bg-zinc-900/50 border border-zinc-800/50">
-                <span className="font-bold text-zinc-200">{asset.symbol}</span>
+              <button
+                key={i}
+                onClick={() => openTradeModal(asset.symbol)}
+                className="flex items-center gap-2 text-xs shrink-0 px-3 py-1.5 rounded-lg bg-zinc-900/50 border border-zinc-800/50 hover:border-purple-500/40 hover:bg-zinc-800/60 transition-all cursor-pointer group"
+                title={`Trade or Analyze ${asset.symbol}`}
+              >
+                <span className="font-bold text-zinc-200 group-hover:text-purple-300">{asset.symbol}</span>
                 <span className="font-semibold text-zinc-400">{asset.price}</span>
                 <span className={`font-bold ${asset.positive ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {asset.change}
                 </span>
-              </div>
+                <ExternalLink size={10} className="text-zinc-500 group-hover:text-purple-400 ml-0.5" />
+              </button>
             ))}
           </div>
         </motion.div>
       </section>
 
       {/* Terminal Feature Preview Banner */}
-      <section className="py-12 px-6 max-w-6xl mx-auto relative z-10">
+      <section id="ai" className="py-12 px-6 max-w-6xl mx-auto relative z-10 scroll-mt-24">
         <div className="rounded-3xl border border-zinc-800/80 bg-zinc-950/50 backdrop-blur-xl p-8 md:p-12 shadow-2xl relative overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div>
@@ -328,7 +381,12 @@ export default function LandingPage() {
                 {landingInsight ? `"${landingInsight.summary || 'Market technicals and sentiment remain constructive.'}"` : '"BTC is consolidating above the 50-period EMA. RSI neutral (58). News sentiment score +0.42."'}
               </p>
               <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-2 border-t border-zinc-800/50">
-                <span>Updated Live</span>
+                <button
+                  onClick={() => openTradeModal(landingInsight?.symbol || 'BTCUSD')}
+                  className="px-2.5 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1 transition-all"
+                >
+                  <Zap size={12} /> Trade {landingInsight?.symbol || 'BTCUSD'}
+                </button>
                 <span className="text-purple-400 font-semibold">Gemini 3.5 Flash</span>
               </div>
             </div>
@@ -420,9 +478,14 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-zinc-900 bg-zinc-950/80 py-10 px-6 text-center relative z-10">
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <div className="h-6 w-6 rounded-md bg-purple-600 flex items-center justify-center text-white font-black text-xs">FX</div>
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <img src="/fxzone-logo.jpg" alt="FxZone Logo" className="h-7 w-7 rounded-md object-cover border border-zinc-800" />
           <span className="text-lg font-black text-white">FxZone</span>
+        </div>
+        <div className="flex items-center justify-center gap-4 mb-4">
+          <a href="https://www.instagram.com/it.is_jack?igsh=MXV1dW1uM3o5NjI1Zg==" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-pink-400 transition-colors" title="Instagram"><Instagram size={18} /></a>
+          <a href="https://www.linkedin.com/in/mthobisi-mzimela-136835354?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-blue-400 transition-colors" title="LinkedIn"><Linkedin size={18} /></a>
+          <a href="https://github.com/Mthobisi-dev" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-white transition-colors" title="GitHub"><Github size={18} /></a>
         </div>
         <p className="text-[11px] text-zinc-500 max-w-lg mx-auto">
           © 2026 FxZone Inc. All rights reserved. Leveraged financial trading carries high risk. Past performance does not guarantee future results.

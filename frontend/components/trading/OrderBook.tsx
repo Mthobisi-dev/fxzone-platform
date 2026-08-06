@@ -123,6 +123,29 @@ export function OrderBook() {
           </div>
         ))}
       </div>
+
+      {/* Quick Execution Action Bar — Exness Only */}
+      <div className="mt-3 pt-2 border-t border-zinc-900 grid grid-cols-2 gap-2 font-sans">
+        <a
+          href="https://one.exnesstrack.net"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="py-2 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-black text-center text-[11px] transition-all shadow-md flex items-center justify-center gap-1.5 select-none"
+        >
+          ▲ BUY {selectedAsset.symbol}
+        </a>
+        <a
+          href="https://one.exnesstrack.net"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="py-2 px-2 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-black text-center text-[11px] transition-all shadow-md flex items-center justify-center gap-1.5 select-none"
+        >
+          ▼ SELL {selectedAsset.symbol}
+        </a>
+        <p className="col-span-2 text-center text-[9px] text-zinc-500 mt-0.5">
+          Executing via <span className="text-emerald-400 font-semibold">Exness</span> — Institutional liquidity, instant fill
+        </p>
+      </div>
     </Card>
   );
 }

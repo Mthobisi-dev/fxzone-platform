@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Shield, Sparkles, TrendingUp, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { GoogleAuthModal } from '@/components/auth/GoogleAuthModal';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,9 +49,11 @@ export default function LoginPage() {
         <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:24px_24px]" />
         
         <div className="flex items-center gap-3 z-10">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-[0_0_20px_rgba(99,102,241,0.4)]">
-            FX
-          </div>
+          <img
+            src="/fxzone-logo.jpg"
+            alt="FxZone Logo"
+            className="h-11 w-11 rounded-xl object-cover shadow-[0_0_20px_rgba(255,255,255,0.15)] border border-zinc-700"
+          />
           <span className="text-xl font-black tracking-tight text-white">FxZone</span>
         </div>
 
@@ -125,16 +129,7 @@ export default function LoginPage() {
 
                 <Button
                   type="button"
-                  onClick={async () => {
-                    setError(null);
-                    setLoading(true);
-                    try {
-                      await loginWithGoogle();
-                    } catch (err: any) {
-                      setError(err.message || 'Google Auth failed');
-                      setLoading(false);
-                    }
-                  }}
+                  onClick={() => setIsGoogleModalOpen(true)}
                   className="w-full bg-zinc-900/80 hover:bg-zinc-800/80 text-zinc-200 border border-zinc-750 h-9 font-semibold text-xs flex items-center justify-center gap-2"
                   disabled={loading}
                 >
@@ -160,6 +155,12 @@ export default function LoginPage() {
           </motion.div>
         </div>
       </div>
+
+      <GoogleAuthModal
+        isOpen={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        defaultEmail="mthomzi890@gmail.com"
+      />
     </div>
   );
 }

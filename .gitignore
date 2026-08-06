@@ -39,6 +39,9 @@ mongodata/
 .env
 .env*.local
 
+# Logs
+*.log
+
 # IDEs
 .idea/
 .vscode/

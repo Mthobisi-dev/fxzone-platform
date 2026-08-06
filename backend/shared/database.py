@@ -432,7 +432,7 @@ except (ImportError, ModuleNotFoundError):
 if _use_sqlite:
     engine = create_async_engine(
         db_url,
-        echo=settings.APP_ENV == "development",
+        echo=False,
     )
 else:
     connect_args = {}
@@ -449,7 +449,7 @@ else:
 
     engine = create_async_engine(
         db_url,
-        echo=settings.APP_ENV == "development",
+        echo=False,
         pool_size=20,
         max_overflow=10,
         pool_pre_ping=True,
@@ -574,14 +574,23 @@ async def init_all_databases():
         
     if use_sqlite:
         sqlite_url = "sqlite+aiosqlite:///../fxzone.db"
-        engine = create_async_engine(sqlite_url, echo=settings.APP_ENV == "development")
+        engine = create_async_engine(
+            sqlite_url,
+            echo=False,
+            connect_args={"timeout": 30.0}
+        )
         AsyncSessionLocal = async_sessionmaker(
             engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
-        # Create all tables dynamically
+        # Create all tables dynamically & enable WAL mode for high performance concurrency
         async with engine.begin() as conn:
+            await conn.execute(text("PRAGMA journal_mode=WAL;"))
+            await conn.execute(text("PRAGMA busy_timeout=30000;"))
+            await conn.execute(text("PRAGMA synchronous=NORMAL;"))
+            await conn.execute(text("PRAGMA cache_size=-64000;"))
+            await conn.execute(text("PRAGMA temp_store=MEMORY;"))
             from shared.models import Base as ModelsBase
             await conn.run_sync(ModelsBase.metadata.create_all)
             try:
@@ -592,7 +601,7 @@ async def init_all_databases():
                 await conn.execute(text("ALTER TABLE posts ADD COLUMN is_pinned BOOLEAN DEFAULT 0"))
             except Exception:
                 pass
-        logger.info("SQLite database tables created successfully.")
+        logger.info("SQLite database configured with WAL mode & busy timeout 30s.")
         await seed_sqlite_if_empty()
 
     # 2. Initialize Redis / Mock Redis fallback

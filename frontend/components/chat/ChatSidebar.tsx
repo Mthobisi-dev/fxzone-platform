@@ -95,6 +95,8 @@ export function ChatSidebar({
 
   const filteredPeople = suggestedUsers.filter((u) => {
     if (existingDmUserIds.has(u.id)) return false;
+    const isAdminUser = u.role === 'admin' || u.username === 'admin' || u.username === 'fxadmin';
+    if (isAdminUser) return false;
     const term = search.toLowerCase();
     return (
       u.username.toLowerCase().includes(term) ||

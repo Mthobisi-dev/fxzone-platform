@@ -59,36 +59,12 @@ INSERT INTO watchlist_items (id, watchlist_id, asset_id) VALUES
     ('d0000000000000000000000000000006', 'b0000000000000000000000000000002', 'c0000000000000000000000000000017'),
     ('d0000000000000000000000000000007', 'b0000000000000000000000000000002', 'c0000000000000000000000000000018');
 
--- ============================================================
--- SAMPLE POSTS
--- ============================================================
-INSERT INTO posts (id, user_id, content, likes_count, comments_count, reposts_count, is_story, created_at) VALUES
-    ('e0000000000000000000000000000001', 'a0000000000000000000000000000002', 'EUR/USD breaking above the 1.0850 resistance level. The ECB''s hawkish stance is providing strong support. Watch for a retest of 1.0900 this week. Key levels to monitor: Support at 1.0820, resistance at 1.0900. 📊', 24, 8, 0, false, '2026-07-02 12:00:00'),
-    ('e0000000000000000000000000000002', 'a0000000000000000000000000000003', 'BTC looking incredibly bullish right now! The halving effect is kicking in and institutional adoption keeps growing. My target remains $80K by Q3. Not financial advice, always DYOR. 🚀🔥', 89, 34, 0, false, '2026-07-02 12:05:00'),
-    ('e0000000000000000000000000000003', 'a0000000000000000000000000000002', 'NVIDIA earnings beat expectations again. AI demand driving GPU sales through the roof. This stock is becoming the backbone of the AI revolution. Added to my position today. 💚', 45, 12, 0, false, '2026-07-02 12:10:00'),
-    ('e0000000000000000000000000000004', 'a0000000000000000000000000000003', 'Solana ecosystem is exploding! DeFi TVL up 300% this quarter. The speed and low fees make it a serious ETH competitor. Loading up on SOL dips. 🟢', 67, 21, 0, false, '2026-07-02 12:15:00'),
-    ('e0000000000000000000000000000005', 'a0000000000000000000000000000001', 'Market Update: Fed minutes released today suggest potential rate pause. This could be bullish for both equities and crypto. Stay alert for volatility around the announcement. ⚡', 112, 43, 0, false, '2026-07-02 12:20:00');
-
-INSERT INTO post_asset_tags (post_id, asset_id) VALUES
-    ('e0000000000000000000000000000001', 'c0000000000000000000000000000001'),
-    ('e0000000000000000000000000000002', 'c0000000000000000000000000000016'),
-    ('e0000000000000000000000000000003', 'c0000000000000000000000000000014'),
-    ('e0000000000000000000000000000004', 'c0000000000000000000000000000018'),
-    ('e0000000000000000000000000000004', 'c0000000000000000000000000000017'),
-    ('e0000000000000000000000000000005', 'c0000000000000000000000000000016'),
-    ('e0000000000000000000000000000005', 'c0000000000000000000000000000009'),
-    ('e0000000000000000000000000000005', 'c0000000000000000000000000000001');
+-- SAMPLE POSTS removed per user request
 
 -- ============================================================
 -- FOLLOWS
 -- ============================================================
-INSERT INTO follows (id, follower_id, following_id) VALUES
-    ('f0000000000000000000000000000001', 'a0000000000000000000000000000003', 'a0000000000000000000000000000002'),
-    ('f0000000000000000000000000000002', 'a0000000000000000000000000000001', 'a0000000000000000000000000000002');
-
-UPDATE users SET followers_count = 2 WHERE id = 'a0000000000000000000000000000002';
-UPDATE users SET following_count = 1 WHERE id = 'a0000000000000000000000000000003';
-UPDATE users SET following_count = 1 WHERE id = 'a0000000000000000000000000000001';
+-- No initial follows for bot accounts per user policy
 
 -- ============================================================
 -- NOTIFICATION PREFERENCES (defaults for demo users)

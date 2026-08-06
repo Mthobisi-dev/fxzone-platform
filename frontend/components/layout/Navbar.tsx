@@ -57,9 +57,11 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
       <nav className="h-14 border-b border-zinc-850 bg-zinc-950/80 backdrop-blur-md px-6 flex items-center justify-between shrink-0 select-none z-40 relative">
         {/* Left Side: Brand Logo */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => (window.location.href = '/')}>
-          <div className="h-8 w-8 rounded-lg bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.45)] flex items-center justify-center">
-            <TrendingUp size={18} className="text-white" />
-          </div>
+          <img
+            src="/fxzone-logo.jpg"
+            alt="FxZone Logo"
+            className="h-9 w-9 rounded-lg object-cover shadow-[0_0_14px_rgba(255,255,255,0.12)] border border-zinc-800"
+          />
           <div>
             <span className="font-extrabold text-sm tracking-wider bg-gradient-to-r from-white via-zinc-200 to-blue-500 bg-clip-text text-transparent">
               FXZONE
@@ -103,6 +105,29 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
               )}
             </button>
           )}
+
+          {/* Exness Direct Trade Action */}
+          <a
+            href="https://one.exnesstrack.net"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold transition-all shadow-sm"
+            title="Trade live markets on Exness Broker"
+          >
+            <TrendingUp size={14} />
+            <span>Trade Exness</span>
+          </a>
+
+          {/* TradingView Chart Link */}
+          <a
+            href="https://www.tradingview.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs font-bold transition-all shadow-sm"
+            title="Open TradingView Charting"
+          >
+            <span>TradingView</span>
+          </a>
 
           <div className="h-5 w-[1px] bg-zinc-850" />
 

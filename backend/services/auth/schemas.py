@@ -51,3 +51,11 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class GoogleAuthRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    id_token: Optional[str] = None
+
