@@ -1,6 +1,6 @@
 """Business logic for the FxZone Live Trading Sessions service."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -21,7 +21,7 @@ class LiveSessionService:
 
     async def create_session(self, host_id: int, data: LiveSessionCreate) -> LiveSession:
         """Host or schedule a new live trading session."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         session = LiveSession(
             host_id=host_id,
             title=data.title,
@@ -64,7 +64,7 @@ class LiveSessionService:
 
     async def join_session(self, user_id: int, session_id: int, role: str = "viewer") -> SessionParticipant:
         """Register a user as a participant (viewer or co-host) in a live session."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # 1. Fetch session
         session = await self.get_session_by_id(session_id)
@@ -83,12 +83,16 @@ class LiveSessionService:
             role = "pending"
 
         # 3. Check for existing active participation to avoid duplicate entries
-        check_query = select(SessionParticipant).where(
-            and_(
-                SessionParticipant.session_id == session_id,
-                SessionParticipant.user_id == user_id,
-                SessionParticipant.left_at == None
+        check_query = (
+            select(SessionParticipant)
+            .where(
+                and_(
+                    SessionParticipant.session_id == session_id,
+                    SessionParticipant.user_id == user_id,
+                    SessionParticipant.left_at == None
+                )
             )
+            .options(selectinload(SessionParticipant.user))
         )
         res = await self.db.execute(check_query)
         existing = res.scalar_one_or_none()

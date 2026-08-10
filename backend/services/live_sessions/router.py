@@ -133,24 +133,42 @@ async def get_session_details(
 async def join_session(
     session_id: str,
     role: str = Query("viewer", description="Role to assume: 'viewer' or 'co-host'"),
-    current_user: User = Depends(get_current_user),
+    current_user: Any = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Join a live session, registering as a participant and activating host status if applicable."""
     service = LiveSessionService(db)
     try:
-        p = await service.join_session(user_id=current_user.id, session_id=session_id, role=role)
+        user_id = str(getattr(current_user, 'user_id', None) or getattr(current_user, 'id', ''))
+        p = await service.join_session(user_id=user_id, session_id=session_id, role=role)
+        
+        user_dict = {}
+        try:
+            if hasattr(p, 'user') and p.user is not None:
+                user_dict = {
+                    "id": str(p.user.id),
+                    "username": str(p.user.username or ""),
+                    "display_name": str(p.user.display_name or ""),
+                    "avatar_url": str(p.user.avatar_url or ""),
+                    "role": str(getattr(p.user.role, 'value', p.user.role) if p.user.role else "trader")
+                }
+        except Exception:
+            pass
+
+        if not user_dict:
+            user_dict = {
+                "id": user_id,
+                "username": str(getattr(current_user, 'username', '')),
+                "display_name": str(getattr(current_user, 'display_name', '')),
+                "avatar_url": str(getattr(current_user, 'avatar_url', '')),
+                "role": str(getattr(current_user, 'role', 'trader'))
+            }
+
         return {
             "id": p.id,
             "session_id": p.session_id,
             "user_id": p.user_id,
-            "user": {
-                "id": p.user.id,
-                "username": p.user.username,
-                "display_name": p.user.display_name,
-                "avatar_url": p.user.avatar_url,
-                "role": p.user.role
-            },
+            "user": user_dict,
             "role": p.role,
             "joined_at": p.joined_at,
             "left_at": p.left_at

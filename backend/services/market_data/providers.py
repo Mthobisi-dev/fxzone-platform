@@ -153,7 +153,11 @@ class CoinGeckoProvider:
             return result
 
         except Exception as e:
-            logger.error(f"CoinGecko API error: {e}")
+            if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429:
+                logger.warning("CoinGecko API rate limit reached (429). Serving cached crypto prices for 60s.")
+                self._cache_ts = now + 30  # Cool down for 30s
+            else:
+                logger.error(f"CoinGecko API error: {e}")
             return self._cache if self._cache else {}
 
     async def get_history(self, symbol: str, days: int = 90) -> List[Dict]:
@@ -194,7 +198,10 @@ class CoinGeckoProvider:
             return candles
 
         except Exception as e:
-            logger.error(f"CoinGecko OHLC error for {symbol}: {e}")
+            if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429:
+                logger.warning(f"CoinGecko OHLC rate limited (429) for {symbol}.")
+            else:
+                logger.error(f"CoinGecko OHLC error for {symbol}: {e}")
             return self._history_cache.get(cache_key, {}).get("data", [])
 
 
@@ -227,8 +234,9 @@ class YahooFinanceProvider:
             return None
 
         try:
+            loop = asyncio.get_running_loop()
             result = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(
+                loop.run_in_executor(
                     _yahoo_executor, self._fetch_yahoo_sync, symbol, yahoo_ticker
                 ),
                 timeout=4.0
@@ -238,13 +246,24 @@ class YahooFinanceProvider:
                 self._cache_ts[symbol] = now
             return result
         except Exception as e:
-            logger.error(f"Yahoo Finance error for {symbol}: {e}")
+            err_msg = str(e) or type(e).__name__
+            if "Rate limited" in err_msg or "Too Many Requests" in err_msg:
+                logger.warning(f"Yahoo Finance rate limited for {symbol}, using cached data.")
+                self._cache_ts[symbol] = now + 30
+            else:
+                logger.warning(f"Yahoo Finance fetch issue for {symbol}: {err_msg}")
             return self._cache.get(symbol)
 
     def _fetch_yahoo_sync(self, our_symbol: str, yahoo_ticker: str) -> Optional[Dict[str, Any]]:
         """Synchronous Yahoo Finance fetch (runs in dedicated thread pool)."""
         try:
+            import os
             import yfinance as yf
+            try:
+                os.makedirs('/tmp/py-yfinance', exist_ok=True)
+                yf.set_tz_cache_location('/tmp/py-yfinance')
+            except Exception:
+                pass
             ticker = yf.Ticker(yahoo_ticker)
             info = ticker.fast_info
 
