@@ -268,7 +268,7 @@ export default function LandingPage() {
             Fx<span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">Zone</span>
           </h1>
           <p className="text-lg sm:text-2xl md:text-3xl font-extrabold text-zinc-300 tracking-tight mt-4 max-w-3xl">
-            Next-Gen AI Trading Intelligence & Multi-Asset Terminal
+            Analyze markets. Understand signals. Trade with AI intelligence.
           </p>
         </motion.div>
 
@@ -279,7 +279,7 @@ export default function LandingPage() {
           transition={{ duration: 0.7, delay: 0.2 }}
           className="text-sm md:text-base text-zinc-400 mt-6 max-w-2xl leading-relaxed font-medium"
         >
-          Stream real-time global markets, generate deep AI technical analysis, follow top signal analysts, and execute high-precision setups in one unified platform.
+          FxZone combines real-time multi-asset market streams, Google Gemini AI technical analysis, news sentiment, and risk tools in one unified trading terminal.
         </motion.p>
 
         {/* CTA Buttons */}
@@ -294,15 +294,8 @@ export default function LandingPage() {
               Launch Terminal <ArrowRight size={18} />
             </Button>
           </Link>
-          <Button
-            size="lg"
-            onClick={() => openTradeModal('EURUSD')}
-            className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-400 font-bold px-8 py-6 rounded-xl text-sm transition-all shadow-lg flex items-center gap-2 hover:scale-105"
-          >
-            <Zap size={18} /> Trade Now (Exness / TradingView)
-          </Button>
           <Link href="/dashboard">
-            <Button variant="outline" size="lg" className="border-zinc-700/80 bg-zinc-900/60 backdrop-blur-md text-zinc-200 hover:text-white hover:bg-zinc-800/80 px-8 py-6 rounded-xl font-bold text-sm transition-all">
+            <Button variant="outline" size="lg" className="border-zinc-700/80 bg-zinc-900/60 backdrop-blur-md text-zinc-200 hover:text-white hover:bg-zinc-800/80 px-8 py-6 rounded-xl font-bold text-sm transition-all hover:scale-105">
               Explore Live Demo
             </Button>
           </Link>
@@ -318,7 +311,8 @@ export default function LandingPage() {
         >
           <div className="flex items-center justify-between gap-4 overflow-x-auto no-scrollbar py-1 px-2">
             <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest shrink-0 border-r border-zinc-800 pr-4">
-              <Activity size={16} className="text-blue-400 animate-pulse" /> Live Markets
+              <Activity size={16} className="text-emerald-400 animate-pulse" /> Live Market Feeds
+              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono font-normal">Realtime</span>
             </div>
             {tickerAssets.map((asset, i) => (
               <button
@@ -351,11 +345,11 @@ export default function LandingPage() {
                 AI Assistant That Reads Chart Setup & Sentiment
               </h2>
               <p className="text-zinc-400 text-xs md:text-sm mt-4 leading-relaxed">
-                FxZone AI monitors high-volume tickers, parses real-time macroeconomic feeds, and generates actionable buy/sell sentiment signals directly on your watchlist.
+                FxZone AI monitors high-volume tickers, parses real-time macroeconomic feeds, and generates contextual market sentiment biases directly on your watchlist.
               </p>
               <div className="flex flex-col gap-3 mt-6">
                 <div className="flex items-center gap-2 text-xs text-zinc-300">
-                  <ShieldCheck size={16} className="text-emerald-400" /> Instant Watchlist Sentiment Analytics
+                  <ShieldCheck size={16} className="text-emerald-400" /> Explainable Technical Indicators & Sentiment Factors
                 </div>
                 <div className="flex items-center gap-2 text-xs text-zinc-300">
                   <ShieldCheck size={16} className="text-purple-400" /> Automated Risk & Leverage Exposure Calculation
@@ -365,29 +359,45 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+
             <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 backdrop-blur-md shadow-xl flex flex-col gap-4">
               <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-emerald-500" />
+                  <div className="h-3 w-3 rounded-full bg-emerald-500 animate-ping" />
                   <span className="text-xs font-bold text-white">
-                    {landingInsight ? `${landingInsight.symbol} Watchlist Insight` : 'BTCUSD Watchlist Insight'}
+                    {landingInsight ? `${landingInsight.symbol} Market Bias` : 'BTCUSD Market Bias'}
                   </span>
                 </div>
-                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                  {landingInsight ? `${landingInsight.sentiment} ${Math.round((landingInsight.confidence || 0.8) * 100)}%` : 'Bullish 84%'}
+                <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
+                  {landingInsight ? `${landingInsight.sentiment} ${Math.round((landingInsight.confidence || 0.84) * 100)}%` : 'Bullish • 84% Confidence'}
                 </span>
               </div>
+
               <p className="text-xs text-zinc-300 leading-relaxed font-mono">
                 {landingInsight ? `"${landingInsight.summary || 'Market technicals and sentiment remain constructive.'}"` : '"BTC is consolidating above the 50-period EMA. RSI neutral (58). News sentiment score +0.42."'}
               </p>
+
+              {/* Technical Reasoning Factors Breakdown */}
+              <div className="p-3 rounded-lg bg-zinc-950/80 border border-zinc-800 text-[11px] font-mono space-y-1.5">
+                <div className="text-zinc-400 font-bold uppercase text-[9px] tracking-wider mb-1">Technical Factors & Breakdown:</div>
+                <div className="flex justify-between text-zinc-300">
+                  <span>• EMA 50 Trend: <span className="text-emerald-400 font-bold">Bullish Support</span></span>
+                  <span>• RSI (14): <span className="text-zinc-200">58 (Neutral)</span></span>
+                </div>
+                <div className="flex justify-between text-zinc-300">
+                  <span>• Macro Sentiment: <span className="text-emerald-400 font-bold">+0.42 Positive</span></span>
+                  <span>• Estimated Risk: <span className="text-amber-400 font-bold">Medium (4H)</span></span>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-2 border-t border-zinc-800/50">
                 <button
                   onClick={() => openTradeModal(landingInsight?.symbol || 'BTCUSD')}
                   className="px-2.5 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1 transition-all"
                 >
-                  <Zap size={12} /> Trade {landingInsight?.symbol || 'BTCUSD'}
+                  <Zap size={12} /> Inspect Setup ({landingInsight?.symbol || 'BTCUSD'})
                 </button>
-                <span className="text-purple-400 font-semibold">Gemini 3.5 Flash</span>
+                <span className="text-purple-400 font-semibold text-[10px]">AI Signal • Not Financial Advice</span>
               </div>
             </div>
           </div>
@@ -401,7 +411,7 @@ export default function LandingPage() {
             Engineered for High-Performance Trading
           </h2>
           <p className="text-xs md:text-sm text-zinc-400 mt-3 max-w-xl mx-auto">
-            Everything you need for market intelligence, technical execution, and community collaboration in one terminal.
+            Everything you need for market intelligence, technical execution, and community collaboration in one workspace.
           </p>
         </div>
 
@@ -435,24 +445,24 @@ export default function LandingPage() {
         </motion.div>
       </section>
 
-      {/* Stats Counter Section */}
+      {/* Product Positioning Stats Section */}
       <section id="stats" className="border-y border-zinc-800/60 bg-zinc-950/50 backdrop-blur-xl py-16 px-6 relative z-10">
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           <div>
-            <span className="text-3xl md:text-5xl font-black text-white block bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">{systemStats.monthlyVolume}</span>
-            <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold mt-2 block">Monthly Volume</span>
+            <span className="text-xl sm:text-2xl md:text-3xl font-black text-white block bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Multi-Asset</span>
+            <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold mt-2 block">Forex • Crypto • Equities</span>
           </div>
           <div>
-            <span className="text-3xl md:text-5xl font-black text-white block bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">{systemStats.activeTraders}</span>
-            <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold mt-2 block">Active Traders</span>
+            <span className="text-xl sm:text-2xl md:text-3xl font-black text-white block bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Real-Time</span>
+            <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold mt-2 block">WebSocket Feeds</span>
           </div>
           <div>
-            <span className="text-3xl md:text-5xl font-black text-white block bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">{systemStats.executionLatency}</span>
-            <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold mt-2 block">Execution Latency</span>
+            <span className="text-xl sm:text-2xl md:text-3xl font-black text-white block bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Gemini AI</span>
+            <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold mt-2 block">Technical & Sentiment Engine</span>
           </div>
           <div>
-            <span className="text-3xl md:text-5xl font-black text-white block bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">{systemStats.platformUptime}</span>
-            <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold mt-2 block">Platform Uptime</span>
+            <span className="text-xl sm:text-2xl md:text-3xl font-black text-white block bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">Global Edge</span>
+            <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold mt-2 block">Built on Vercel Infrastructure</span>
           </div>
         </div>
       </section>
@@ -464,7 +474,7 @@ export default function LandingPage() {
             Ready to Experience <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">FxZone</span>?
           </h2>
           <p className="text-xs md:text-sm text-zinc-400 mt-4 max-w-xl mx-auto leading-relaxed">
-            Join thousands of traders leveraging AI-powered insights, real-time market streams, and community signal sharing.
+            Leverage AI-powered technical insights, real-time market streams, and intelligent risk tools in your workspace.
           </p>
           <div className="mt-8 flex justify-center gap-4">
             <Link href="/register">
@@ -487,8 +497,8 @@ export default function LandingPage() {
           <a href="https://www.linkedin.com/in/mthobisi-mzimela-136835354?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-blue-400 transition-colors" title="LinkedIn"><Linkedin size={18} /></a>
           <a href="https://github.com/Mthobisi-dev" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-white transition-colors" title="GitHub"><Github size={18} /></a>
         </div>
-        <p className="text-[11px] text-zinc-500 max-w-lg mx-auto">
-          © 2026 FxZone Inc. All rights reserved. Leveraged financial trading carries high risk. Past performance does not guarantee future results.
+        <p className="text-[11px] text-zinc-500 max-w-xl mx-auto leading-relaxed">
+          © 2026 FxZone Inc. All rights reserved. Leveraged financial trading carries a high level of risk. AI-generated market insights are provided for analytical purposes only and do not constitute financial or investment advice.
         </p>
       </footer>
     </div>
