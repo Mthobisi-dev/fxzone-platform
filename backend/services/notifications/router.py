@@ -24,23 +24,35 @@ logger = logging.getLogger(__name__)
 async def get_user_notifications(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Retrieve paginated historical in-app notifications for the authenticated user."""
     service = NotificationService(db)
-    return await service.get_user_notifications(user_id=current_user.id, limit=limit, offset=offset)
+    notifications = await service.get_user_notifications(user_id=current_user["user_id"], limit=limit, offset=offset)
+    return [
+        NotificationResponse(
+            id=str(n.id),
+            user_id=str(n.user_id),
+            type=n.type,
+            title=n.title,
+            message=n.message or "",
+            data=n.data or {},
+            is_read=n.is_read,
+            created_at=n.created_at
+        ) for n in notifications
+    ]
 
 
 @router.put("/{notification_id}/read", status_code=status.HTTP_200_OK)
 async def mark_notification_read(
-    notification_id: int,
-    current_user: User = Depends(get_current_user),
+    notification_id: str,
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Mark a specific notification log as read."""
     service = NotificationService(db)
-    success = await service.mark_as_read(user_id=current_user.id, notification_id=notification_id)
+    success = await service.mark_as_read(user_id=current_user["user_id"], notification_id=notification_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -51,12 +63,12 @@ async def mark_notification_read(
 
 @router.put("/read-all", status_code=status.HTTP_200_OK)
 async def mark_all_notifications_read(
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Mark all unread notifications of the current user as read."""
     service = NotificationService(db)
-    read_count = await service.mark_all_read(user_id=current_user.id)
+    read_count = await service.mark_all_read(user_id=current_user["user_id"])
     return {
         "status": "success",
         "message": f"Successfully marked {read_count} notifications as read."
@@ -65,24 +77,24 @@ async def mark_all_notifications_read(
 
 @router.get("/preferences", response_model=List[NotificationPreferenceResponse])
 async def get_delivery_preferences(
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Fetch the delivery channel configurations (email, in-app, push) for each alert type."""
     service = NotificationService(db)
-    return await service.get_user_preferences(user_id=current_user.id)
+    return await service.get_user_preferences(user_id=current_user["user_id"])
 
 
 @router.put("/preferences", response_model=NotificationPreferenceResponse)
 async def update_delivery_preferences(
     request: NotificationPreferenceUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Update or insert channel delivery rules for a notification type."""
     service = NotificationService(db)
     pref = await service.update_preferences(
-        user_id=current_user.id,
+        user_id=current_user["user_id"],
         notification_type=request.type,
         email_enabled=request.email_enabled,
         push_enabled=request.push_enabled,

@@ -34,6 +34,10 @@ yarn-error.log*
 pgdata/
 redisdata/
 mongodata/
+*.db
+*.db-shm
+*.db-wal
+
 
 # Environment configurations
 .env

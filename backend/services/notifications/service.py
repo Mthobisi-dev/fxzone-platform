@@ -27,7 +27,7 @@ class NotificationService:
 
     async def create_notification(
         self, 
-        user_id: int, 
+        user_id: Any, 
         notification_type: str, 
         title: str, 
         message: str, 
@@ -35,11 +35,13 @@ class NotificationService:
     ) -> Notification:
         """Create a notification in the database and dispatch it over active channels."""
         now = datetime.utcnow()
-        
+        import uuid
+        u_id = uuid.UUID(str(user_id)) if isinstance(user_id, str) else user_id
+
         # 1. Fetch user's notification preferences
         pref_query = select(NotificationPreference).where(
             and_(
-                NotificationPreference.user_id == user_id,
+                NotificationPreference.user_id == u_id,
                 NotificationPreference.type == notification_type
             )
         )
@@ -53,7 +55,7 @@ class NotificationService:
 
         # 2. Insert notification record
         notification = Notification(
-            user_id=user_id,
+            user_id=u_id,
             type=notification_type,
             title=title,
             message=message,
@@ -68,28 +70,30 @@ class NotificationService:
         if in_app_enabled:
             # We pass complete notification details including database ID
             data_with_id = (data or {}).copy()
-            data_with_id["id"] = notification.id
+            data_with_id["id"] = str(notification.id)
             data_with_id["type"] = notification_type
-            await CHANNELS["in_app"].send(user_id, title, message, data_with_id)
+            await CHANNELS["in_app"].send(str(user_id), title, message, data_with_id)
 
         if email_enabled:
-            await CHANNELS["email"].send(user_id, title, message, data)
+            await CHANNELS["email"].send(str(user_id), title, message, data)
 
         if push_enabled:
-            await CHANNELS["push"].send(user_id, title, message, data)
+            await CHANNELS["push"].send(str(user_id), title, message, data)
 
         return notification
 
     async def get_user_notifications(
         self, 
-        user_id: int, 
+        user_id: Any, 
         limit: int = 20, 
         offset: int = 0
     ) -> List[Notification]:
         """Fetch notifications logs for a user, sorted by creation date."""
+        import uuid
+        u_id = uuid.UUID(str(user_id)) if isinstance(user_id, str) else user_id
         query = (
             select(Notification)
-            .where(Notification.user_id == user_id)
+            .where(Notification.user_id == u_id)
             .order_by(Notification.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -97,14 +101,17 @@ class NotificationService:
         res = await self.db.execute(query)
         return list(res.scalars().all())
 
-    async def mark_as_read(self, user_id: int, notification_id: int) -> bool:
+    async def mark_as_read(self, user_id: Any, notification_id: Any) -> bool:
         """Mark a specific user notification as read."""
+        import uuid
+        u_id = uuid.UUID(str(user_id)) if isinstance(user_id, str) else user_id
+        n_id = uuid.UUID(str(notification_id)) if isinstance(notification_id, str) else notification_id
         stmt = (
             update(Notification)
             .where(
                 and_(
-                    Notification.id == notification_id,
-                    Notification.user_id == user_id
+                    Notification.id == n_id,
+                    Notification.user_id == u_id
                 )
             )
             .values(is_read=True)
@@ -112,13 +119,15 @@ class NotificationService:
         res = await self.db.execute(stmt)
         return res.rowcount > 0
 
-    async def mark_all_read(self, user_id: int) -> int:
+    async def mark_all_read(self, user_id: Any) -> int:
         """Mark all unread notifications for a user as read."""
+        import uuid
+        u_id = uuid.UUID(str(user_id)) if isinstance(user_id, str) else user_id
         stmt = (
             update(Notification)
             .where(
                 and_(
-                    Notification.user_id == user_id,
+                    Notification.user_id == u_id,
                     Notification.is_read == False
                 )
             )

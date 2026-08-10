@@ -200,6 +200,11 @@ class CoinGeckoProvider:
 
 # ── Yahoo Finance Provider (Stocks + Forex) ────────────────────────────────
 
+from concurrent.futures import ThreadPoolExecutor
+
+_yahoo_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="yahoo_fetcher")
+
+
 class YahooFinanceProvider:
     """Fetches real stock and forex prices from Yahoo Finance via yfinance."""
 
@@ -222,8 +227,11 @@ class YahooFinanceProvider:
             return None
 
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
-                None, self._fetch_yahoo_sync, symbol, yahoo_ticker
+            result = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    _yahoo_executor, self._fetch_yahoo_sync, symbol, yahoo_ticker
+                ),
+                timeout=4.0
             )
             if result:
                 self._cache[symbol] = result
@@ -234,7 +242,7 @@ class YahooFinanceProvider:
             return self._cache.get(symbol)
 
     def _fetch_yahoo_sync(self, our_symbol: str, yahoo_ticker: str) -> Optional[Dict[str, Any]]:
-        """Synchronous Yahoo Finance fetch (runs in thread pool)."""
+        """Synchronous Yahoo Finance fetch (runs in dedicated thread pool)."""
         try:
             import yfinance as yf
             ticker = yf.Ticker(yahoo_ticker)
@@ -284,9 +292,9 @@ class YahooFinanceProvider:
             try:
                 price = await asyncio.wait_for(
                     asyncio.get_event_loop().run_in_executor(
-                        None, self._fetch_yahoo_sync, our_symbol, yahoo_ticker
+                        _yahoo_executor, self._fetch_yahoo_sync, our_symbol, yahoo_ticker
                     ),
-                    timeout=10.0
+                    timeout=3.0
                 )
                 if price:
                     return our_symbol, price

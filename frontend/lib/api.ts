@@ -47,10 +47,18 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+    });
+  } catch (netErr: any) {
+    const error = new Error('Network error: Unable to connect to backend server.');
+    (error as any).status = 0;
+    (error as any).detail = netErr?.message || 'Connection refused or socket hangup.';
+    throw error;
+  }
 
   // Handle token refresh on 401 Unauthorized
   if (response.status === 401 && typeof window !== 'undefined') {
@@ -99,7 +107,7 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
           resolve(
             fetch(url, { ...options, headers }).then((res) => {
               if (!res.ok) {
-                return res.json().then((err) => Promise.reject(err));
+                return res.json().then((err) => Promise.reject(err)).catch(() => Promise.reject(new Error(`HTTP ${res.status}`)));
               }
               return res.json();
             })
@@ -110,9 +118,18 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
   }
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({ detail: 'Unknown error occurred.' }));
-    throw errorBody;
+    const errorBody = await response.json().catch(() => null);
+    const detailMsg = errorBody?.detail || errorBody?.message || (typeof errorBody === 'string' ? errorBody : null);
+    const message = detailMsg || `Request failed with status ${response.status} (${response.statusText || 'Server Error'}).`;
+    const error = new Error(message);
+    Object.assign(error, typeof errorBody === 'object' && errorBody ? errorBody : {}, {
+      status: response.status,
+      detail: message,
+      data: errorBody,
+    });
+    throw error;
   }
+
 
   return response.json();
 }

@@ -26,12 +26,20 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   unreadCount: 0,
 
   fetchNotifications: async () => {
+    if (typeof window !== 'undefined' && !localStorage.getItem('fxzone_access_token')) {
+      set({ notifications: [], unreadCount: 0 });
+      return;
+    }
     try {
       const data = await api.get('/api/notifications');
-      const unread = data.filter((n: NotificationItem) => !n.is_read).length;
-      set({ notifications: data, unreadCount: unread });
-    } catch (err) {
-      console.error('Failed to fetch notifications:', err);
+      if (Array.isArray(data)) {
+        const unread = data.filter((n: NotificationItem) => !n.is_read).length;
+        set({ notifications: data, unreadCount: unread });
+      }
+    } catch (err: any) {
+      if (err?.status !== 401 && err?.detail !== 'Not authenticated') {
+        console.error('Failed to fetch notifications:', err?.message || err?.detail || err);
+      }
     }
   },
 

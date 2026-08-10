@@ -36,7 +36,13 @@ export class FxZoneWebSocket {
     this.isManualClose = false;
     
     // Inject access token in query parameter for security verification
-    const token = localStorage.getItem('fxzone_access_token');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('fxzone_access_token') : null;
+
+    // Skip connecting to protected sockets if unauthenticated
+    if (!token && (this.url.includes('/notifications') || this.url.includes('/chat') || this.url.includes('/live'))) {
+      return;
+    }
+
     const connectionUrl = token 
       ? `${this.url}${this.url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
       : this.url;
@@ -121,9 +127,10 @@ export class FxZoneWebSocket {
     }
   }
 
-  private handleClose() {
-    this.emit('close', null);
-    if (!this.isManualClose) {
+  private handleClose(event: CloseEvent) {
+    this.emit('close', event);
+    // Don't auto-reconnect on manual close or policy violation (unauthorized code 1008)
+    if (!this.isManualClose && event?.code !== 1008) {
       this.scheduleReconnect();
     }
   }
@@ -171,5 +178,7 @@ function jsonParse(str: string) {
 }
 
 function loggerError(e: any) {
-  console.error('[WebSocket Client Error]', e);
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('[WebSocket Client Warning]', e);
+  }
 }

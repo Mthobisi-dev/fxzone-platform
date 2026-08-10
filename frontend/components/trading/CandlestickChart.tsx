@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi } from 'lightweight-charts';
+import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi } from 'lightweight-charts';
 import { useMarketStore } from '@/stores/marketStore';
 import { api } from '@/lib/api';
 import { Card } from '../ui/Card';
@@ -90,7 +90,7 @@ export function CandlestickChart() {
     setTrendlineStart(null);
   };
 
-  // Clear all drawing tools
+  // Clear all drawings
   const clearDrawings = () => {
     if (candlestickSeriesRef.current) {
       horizontalLinesRef.current.forEach((line) => {
@@ -151,8 +151,8 @@ export function CandlestickChart() {
       },
     });
 
-    // Add candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
+    // Add candlestick series (v5 API)
+    const candlestickSeries = (chart.addSeries as any)(CandlestickSeries, {
       upColor: '#10b981',
       downColor: '#ef4444',
       borderUpColor: '#10b981',
@@ -161,8 +161,8 @@ export function CandlestickChart() {
       wickDownColor: '#ef4444',
     });
 
-    // Add volume series (overlayed at bottom)
-    const volumeSeries = chart.addHistogramSeries({
+    // Add volume series (v5 API)
+    const volumeSeries = (chart.addSeries as any)(HistogramSeries, {
       color: '#3b82f6',
       priceFormat: {
         type: 'volume',
@@ -268,7 +268,7 @@ export function CandlestickChart() {
           }
 
           // Second point - draw line and save reference
-          const lineSeries = chart.addLineSeries({
+          const lineSeries = (chart.addSeries as any)(LineSeries, {
             color: '#3b82f6', // Bright neon blue trend line
             lineWidth: 2,
             priceLineVisible: false,
