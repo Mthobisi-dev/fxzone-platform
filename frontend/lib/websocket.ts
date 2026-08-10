@@ -16,16 +16,23 @@ export class FxZoneWebSocket {
   private subscriptions: Set<string> = new Set();
 
   constructor(path: string) {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    
     // Check if path is absolute or relative
     if (path.startsWith('ws://') || path.startsWith('wss://')) {
       this.url = path;
     } else {
-      // Direct WebSocket connections to the backend port (8000) in development
-      const wsHost = host.includes('localhost') ? 'localhost:8000' : host;
-      this.url = `${protocol}//${wsHost}${path.startsWith('/') ? path : '/' + path}`;
+      // Use NEXT_PUBLIC_API_URL in production, else derive from window.location
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (apiUrl) {
+        // Convert http(s) URL to ws(s) URL
+        const wsUrl = apiUrl.replace(/^http/, 'ws');
+        this.url = `${wsUrl}${path.startsWith('/') ? path : '/' + path}`;
+      } else {
+        const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8000';
+        // Direct WebSocket connections to the backend port (8000) in development
+        const wsHost = host.includes('localhost') ? 'localhost:8000' : host;
+        this.url = `${protocol}//${wsHost}${path.startsWith('/') ? path : '/' + path}`;
+      }
     }
   }
 
