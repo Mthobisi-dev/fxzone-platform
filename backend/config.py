@@ -33,15 +33,16 @@ class Settings(BaseSettings):
     FINNHUB_KEY: Optional[str] = None
 
     # App
-    CORS_ORIGINS: str = '["http://localhost:3000"]'
+    CORS_ORIGINS: str = '["http://localhost:3000","https://fxzone-platform-4dqe.vercel.app","https://fxzone-platform.vercel.app"]'
     APP_ENV: str = "development"
 
     @property
     def cors_origins_list(self) -> List[str]:
         try:
-            return json.loads(self.CORS_ORIGINS)
+            origins = json.loads(self.CORS_ORIGINS)
         except (json.JSONDecodeError, TypeError):
-            return ["http://localhost:3000"]
+            origins = ["http://localhost:3000"]
+        return origins
 
     @property
     def use_supabase(self) -> bool:
