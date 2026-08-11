@@ -294,7 +294,7 @@ export default function LandingPage() {
               Launch Terminal <ArrowRight size={18} />
             </Button>
           </Link>
-          <Link href="/dashboard">
+          <Link href="/demo">
             <Button variant="outline" size="lg" className="border-zinc-700/80 bg-zinc-900/60 backdrop-blur-md text-zinc-200 hover:text-white hover:bg-zinc-800/80 px-8 py-6 rounded-xl font-bold text-sm transition-all hover:scale-105">
               Explore Live Demo
             </Button>
@@ -496,6 +496,15 @@ export default function LandingPage() {
           <a href="https://www.instagram.com/it.is_jack?igsh=MXV1dW1uM3o5NjI1Zg==" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-pink-400 transition-colors" title="Instagram"><Instagram size={18} /></a>
           <a href="https://www.linkedin.com/in/mthobisi-mzimela-136835354?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-blue-400 transition-colors" title="LinkedIn"><Linkedin size={18} /></a>
           <a href="https://github.com/Mthobisi-dev" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-white transition-colors" title="GitHub"><Github size={18} /></a>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 mb-4 text-[11px] text-zinc-500">
+          <Link href="/demo" className="hover:text-purple-400 transition-colors">Live Demo</Link>
+          <span className="text-zinc-800">·</span>
+          <Link href="/terms" className="hover:text-zinc-300 transition-colors">Terms of Service</Link>
+          <span className="text-zinc-800">·</span>
+          <Link href="/privacy" className="hover:text-zinc-300 transition-colors">Privacy Policy</Link>
+          <span className="text-zinc-800">·</span>
+          <Link href="/risk-disclosure" className="hover:text-amber-400 transition-colors">Risk Disclosure</Link>
         </div>
         <p className="text-[11px] text-zinc-500 max-w-xl mx-auto leading-relaxed">
           © 2026 FxZone Inc. All rights reserved. Leveraged financial trading carries a high level of risk. AI-generated market insights are provided for analytical purposes only and do not constitute financial or investment advice.

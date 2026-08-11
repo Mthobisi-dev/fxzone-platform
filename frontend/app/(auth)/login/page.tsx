@@ -59,15 +59,15 @@ export default function LoginPage() {
 
         <div className="max-w-md z-10">
           <h2 className="text-3xl font-black text-white leading-tight mb-4 flex items-center gap-2">
-            Market Intelligence Engine <Sparkles size={24} className="text-purple-400" />
+            AI Trading Workspace <Sparkles size={24} className="text-purple-400" />
           </h2>
           <p className="text-xs text-zinc-300 leading-relaxed">
-            Gain immediate access to WebSocket order flows, real-time ML news relevance pipelines, and encrypted webinar sharing rooms.
+            Access real-time market data, Gemini AI technical sentiment analysis, interactive charts, and trading intelligence tools.
           </p>
         </div>
 
         <div className="text-[10px] text-zinc-400 z-10 flex gap-2 items-center">
-          <Shield size={12} className="text-emerald-400" /> Secure SSL trading session
+          <Shield size={12} className="text-emerald-400" /> Encrypted SSL trading session
         </div>
       </div>
 
@@ -81,8 +81,8 @@ export default function LoginPage() {
           >
             <Card className="p-6 border border-zinc-800/80 bg-zinc-950/70 backdrop-blur-xl shadow-2xl">
               <div className="text-center mb-6">
-                <h3 className="text-lg font-bold text-white mb-1">Access Terminal</h3>
-                <p className="text-[10px] text-zinc-400">Input your security credentials below to connect.</p>
+                <h3 className="text-lg font-bold text-white mb-1">Welcome Back</h3>
+                <p className="text-[10px] text-zinc-400">Sign in to access your FxZone trading workspace.</p>
               </div>
 
               {/* Error messages */}
@@ -95,7 +95,7 @@ export default function LoginPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
-                  label="Email Address"
+                  label="Email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -104,7 +104,7 @@ export default function LoginPage() {
                 />
                 
                 <Input
-                  label="Security Password"
+                  label="Password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -117,7 +117,7 @@ export default function LoginPage() {
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 h-9 font-semibold text-xs mt-2 shadow-lg shadow-purple-600/20"
                   disabled={loading}
                 >
-                  {loading ? 'Authorizing Session...' : 'Sign In to Terminal'}
+                  {loading ? 'Signing in...' : 'Sign In'}
                 </Button>
 
                 <div className="relative my-3 flex items-center justify-center">
@@ -139,15 +139,15 @@ export default function LoginPage() {
                       d="M12.24 10.285V13.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.866-3.577-7.866-8s3.536-8 7.866-8c2.46 0 4.105 1.025 5.047 1.926l2.427-2.334C17.955 2.192 15.34 1 12.24 1 6.033 1 12.24 6.033 12.24 12.24s5.033 11.24 11.24 11.24c6.478 0 10.793-4.537 10.793-10.985 0-.746-.08-1.32-.176-1.884H12.24z"
                     />
                   </svg>
-                  <span>Sign In with Google</span>
+                  <span>Continue with Google</span>
                 </Button>
               </form>
 
               <div className="text-center mt-6 pt-4 border-t border-zinc-850">
                 <span className="text-[10px] text-zinc-400">
-                  New operator?{' '}
+                  Don't have an account?{' '}
                   <Link href="/register" className="text-purple-400 hover:text-purple-300 font-semibold underline">
-                    Create credentials
+                    Create one
                   </Link>
                 </span>
               </div>
