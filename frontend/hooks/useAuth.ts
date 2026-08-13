@@ -12,10 +12,8 @@ export function useAuth(requireAuth = false, redirectPath = '/login') {
   }, [isAuthenticated, token, initialize, isLoading]);
 
   useEffect(() => {
-    const hasLocalToken = typeof window !== 'undefined' ? !!localStorage.getItem('fxzone_access_token') : false;
-    
-    // If auth is required, verify user is logged in and not initializing a local token
-    if (requireAuth && !isLoading && !isAuthenticated && !hasLocalToken) {
+    // If auth is required, verify user is logged in once loading completes
+    if (requireAuth && !isLoading && !isAuthenticated) {
       if (typeof window !== 'undefined') {
         window.location.href = redirectPath;
       }

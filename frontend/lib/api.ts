@@ -60,8 +60,13 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
     throw error;
   }
 
-  // Handle token refresh on 401 Unauthorized
-  if (response.status === 401 && typeof window !== 'undefined') {
+  // Handle token refresh on 401 Unauthorized (except for auth endpoints)
+  const isAuthEndpoint = endpoint.includes('/api/auth/login') ||
+    endpoint.includes('/api/auth/register') ||
+    endpoint.includes('/api/auth/refresh') ||
+    endpoint.includes('/api/auth/google');
+
+  if (response.status === 401 && typeof window !== 'undefined' && !isAuthEndpoint) {
     const refreshToken = localStorage.getItem('fxzone_refresh_token');
     
     if (refreshToken) {

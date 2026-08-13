@@ -93,7 +93,11 @@ async def refresh_tokens(db: AsyncSession, refresh_token: str) -> dict:
 
 async def get_user_by_id(db: AsyncSession, user_id: str) -> User:
     """Get user by ID."""
-    result = await db.execute(select(User).where(User.id == user_id))
+    try:
+        user_uuid = uuid.UUID(str(user_id))
+    except (ValueError, TypeError):
+        user_uuid = user_id
+    result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
