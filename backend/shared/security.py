@@ -190,6 +190,11 @@ async def get_current_user(
         "username": user.username,
         "display_name": user.display_name,
         "avatar_url": user.avatar_url,
+        "bio": getattr(user, "bio", None),
+        "is_active": getattr(user, "is_active", True),
+        "followers_count": getattr(user, "followers_count", 0),
+        "following_count": getattr(user, "following_count", 0),
+        "created_at": getattr(user, "created_at", None),
     })
 
 
