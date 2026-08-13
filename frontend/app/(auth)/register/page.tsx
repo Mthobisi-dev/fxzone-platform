@@ -27,7 +27,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!displayName || !username || !email || !password || !confirmPassword) {
-      setError('Please fill in all parameter fields.');
+      setError('Please fill in all fields.');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 

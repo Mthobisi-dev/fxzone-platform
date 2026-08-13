@@ -142,7 +142,7 @@ export default function LandingPage() {
     {
       icon: <TrendingUp className="text-emerald-400" size={26} />,
       title: 'Ultra-Low Latency Feeds',
-      description: 'Stream live WebSocket order books and pricing for Forex, Crypto, and Global Equities in sub-millisecond intervals.',
+      description: 'Stream live WebSocket order books and pricing for Forex, Crypto, and Global Equities in low-latency real-time streams.',
       badge: 'Live Data'
     },
     {
@@ -289,14 +289,14 @@ export default function LandingPage() {
           transition={{ duration: 0.7, delay: 0.3 }}
           className="flex flex-wrap justify-center gap-4 mt-10"
         >
-          <Link href="/register">
+          <Link href="/dashboard">
             <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold px-8 py-6 rounded-xl flex items-center gap-2 shadow-2xl shadow-purple-600/30 text-sm border border-white/10 transition-all hover:scale-105">
               Launch Terminal <ArrowRight size={18} />
             </Button>
           </Link>
-          <Link href="/demo">
+          <Link href="/register">
             <Button variant="outline" size="lg" className="border-zinc-700/80 bg-zinc-900/60 backdrop-blur-md text-zinc-200 hover:text-white hover:bg-zinc-800/80 px-8 py-6 rounded-xl font-bold text-sm transition-all hover:scale-105">
-              Explore Live Demo
+              Get Started Free
             </Button>
           </Link>
         </motion.div>
@@ -369,7 +369,7 @@ export default function LandingPage() {
                   </span>
                 </div>
                 <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
-                  {landingInsight ? `${landingInsight.sentiment} ${Math.round((landingInsight.confidence || 0.84) * 100)}%` : 'Bullish • 84% Confidence'}
+                  {landingInsight ? `${landingInsight.sentiment} • AI Signal Strength: ${Math.round((landingInsight.confidence || 0.84) * 100)}/100` : 'Bullish • AI Signal Strength: 84/100'}
                 </span>
               </div>
 
@@ -397,7 +397,7 @@ export default function LandingPage() {
                 >
                   <Zap size={12} /> Inspect Setup ({landingInsight?.symbol || 'BTCUSD'})
                 </button>
-                <span className="text-purple-400 font-semibold text-[10px]">AI Signal • Not Financial Advice</span>
+                <span className="text-purple-400 font-semibold text-[10px]">AI analysis is informational only. Not financial advice.</span>
               </div>
             </div>
           </div>
@@ -498,8 +498,6 @@ export default function LandingPage() {
           <a href="https://github.com/Mthobisi-dev" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-white transition-colors" title="GitHub"><Github size={18} /></a>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 mb-4 text-[11px] text-zinc-500">
-          <Link href="/demo" className="hover:text-purple-400 transition-colors">Live Demo</Link>
-          <span className="text-zinc-800">·</span>
           <Link href="/terms" className="hover:text-zinc-300 transition-colors">Terms of Service</Link>
           <span className="text-zinc-800">·</span>
           <Link href="/privacy" className="hover:text-zinc-300 transition-colors">Privacy Policy</Link>
