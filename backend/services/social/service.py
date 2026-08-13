@@ -437,14 +437,14 @@ class SocialService:
         return user_list
 
     async def purge_all_posts(self) -> int:
-        """Purge all posts from the social network."""
+        """Purge all posts permanently from the social database."""
         from sqlalchemy import delete
         res = await self.db.execute(delete(Post))
-        await self.db.flush()
+        await self.db.commit()
         return res.rowcount or 0
 
     async def delete_post(self, post_id: str, user_id: str, is_admin: bool = False) -> bool:
-        """Delete a post. Post author or FxZone Admin can delete any post."""
+        """Permanently delete a post from database. Post author or FxZone Admin can delete any post."""
         if is_admin:
             stmt = select(Post).where(Post.id == post_id)
         else:
@@ -454,7 +454,7 @@ class SocialService:
         if not post:
             return False
         await self.db.delete(post)
-        await self.db.flush()
+        await self.db.commit()
         return True
 
     async def toggle_pin_post(self, post_id: str, user_id: str) -> Optional[Post]:

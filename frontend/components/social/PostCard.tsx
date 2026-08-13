@@ -80,7 +80,8 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
 
   const [deleting, setDeleting] = useState(false);
   const isOwner = String(user?.id) === String(userId) || String(user?.id) === String(postUser.id);
-  const canDelete = true; // Allow users to delete posts directly from feed
+  const isAdmin = user?.email === 'mthobisimzimela031@gmail.com' || user?.username === 'admin' || user?.role === 'admin' || (user?.role as any)?.value === 'admin';
+  const canDelete = isOwner || isAdmin;
 
   const handlePin = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -373,25 +374,29 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
 
           {/* Action Bar */}
           <div className="flex items-center justify-between border-t border-zinc-850/50 pt-2.5 mt-2 max-w-sm select-none">
-            {/* Comment Button */}
-            <button 
-              className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 transition-colors focus:outline-none"
-            >
-              <MessageSquare size={13} className="group-hover:scale-110 transition-transform" />
-              <span className="text-[10px] font-medium">{post.commentsCount}</span>
-            </button>
+            {!isBot && (
+              <>
+                {/* Comment Button */}
+                <button 
+                  className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 transition-colors focus:outline-none"
+                >
+                  <MessageSquare size={13} className="group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] font-medium">{post.commentsCount}</span>
+                </button>
 
-            {/* Repost Button */}
-            <button 
-              onClick={handleRepost}
-              className={cn(
-                'group flex items-center gap-1.5 transition-colors focus:outline-none',
-                isReposted ? 'text-emerald-400' : 'text-zinc-500 hover:text-emerald-400'
-              )}
-            >
-              <Repeat2 size={13} className={cn('group-hover:rotate-180 transition-transform duration-300', isReposted && 'scale-110')} />
-              <span className="text-[10px] font-medium">{reposts}</span>
-            </button>
+                {/* Repost Button */}
+                <button 
+                  onClick={handleRepost}
+                  className={cn(
+                    'group flex items-center gap-1.5 transition-colors focus:outline-none',
+                    isReposted ? 'text-emerald-400' : 'text-zinc-500 hover:text-emerald-400'
+                  )}
+                >
+                  <Repeat2 size={13} className={cn('group-hover:rotate-180 transition-transform duration-300', isReposted && 'scale-110')} />
+                  <span className="text-[10px] font-medium">{reposts}</span>
+                </button>
+              </>
+            )}
 
             {/* Like Button */}
             <button 
@@ -413,30 +418,34 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
               <span className="text-[10px] font-medium">{likes}</span>
             </button>
 
-            {/* Bookmark */}
-            <button 
-              onClick={handleBookmark}
-              className={cn(
-                'group flex items-center transition-colors focus:outline-none',
-                isBookmarked ? 'text-yellow-500' : 'text-zinc-500 hover:text-yellow-500'
-              )}
-            >
-              <Bookmark 
-                size={13} 
-                className={cn(
-                  'transition-transform',
-                  isBookmarked ? 'fill-yellow-500 stroke-yellow-500' : 'group-hover:scale-110'
-                )}
-              />
-            </button>
-            {/* Share / Reshare to User Button */}
-            <button
-              onClick={openShareModal}
-              className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 transition-colors focus:outline-none"
-              title="Reshare post to another user"
-            >
-              <Share2 size={13} className="group-hover:scale-110 transition-transform" />
-            </button>
+            {!isBot && (
+              <>
+                {/* Bookmark */}
+                <button 
+                  onClick={handleBookmark}
+                  className={cn(
+                    'group flex items-center transition-colors focus:outline-none',
+                    isBookmarked ? 'text-yellow-500' : 'text-zinc-500 hover:text-yellow-500'
+                  )}
+                >
+                  <Bookmark 
+                    size={13} 
+                    className={cn(
+                      'transition-transform',
+                      isBookmarked ? 'fill-yellow-500 stroke-yellow-500' : 'group-hover:scale-110'
+                    )}
+                  />
+                </button>
+                {/* Share / Reshare to User Button */}
+                <button
+                  onClick={openShareModal}
+                  className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 transition-colors focus:outline-none"
+                  title="Reshare post to another user"
+                >
+                  <Share2 size={13} className="group-hover:scale-110 transition-transform" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -10,8 +10,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { TrendingUp, RefreshCw, Loader2, Sparkles, Star } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function SocialFeedPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.email === 'mthobisimzimela031@gmail.com' || user?.username === 'admin' || user?.role === 'admin' || (user?.role as any)?.value === 'admin';
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -86,13 +89,15 @@ export default function SocialFeedPage() {
         <div className="flex justify-between items-center px-1">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Operator Streams</span>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleStartFresh}
-              className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 rounded transition-colors"
-              title="Delete all social feed posts and start fresh"
-            >
-              Start Fresh (Purge Feed)
-            </button>
+            {isAdmin && (
+              <button
+                onClick={handleStartFresh}
+                className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 rounded transition-colors"
+                title="Delete all social feed posts and start fresh"
+              >
+                Start Fresh (Purge Feed)
+              </button>
+            )}
             <button
               onClick={fetchFeed}
               disabled={loading}
