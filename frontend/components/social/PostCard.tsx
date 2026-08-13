@@ -79,6 +79,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const isBot = postUser.username === 'fxzone_bot' || postUser.role === 'bot';
 
   const [deleting, setDeleting] = useState(false);
+  const isOwner = String(user?.id) === String(userId) || String(user?.id) === String(postUser.id);
   const canDelete = true; // Allow users to delete posts directly from feed
 
   const handlePin = async (e: React.MouseEvent) => {
