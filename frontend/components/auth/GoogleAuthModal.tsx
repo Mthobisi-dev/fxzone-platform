@@ -13,7 +13,7 @@ interface GoogleAuthModalProps {
   defaultEmail?: string;
 }
 
-export function GoogleAuthModal({ isOpen, onClose, defaultEmail = 'mthomzi890@gmail.com' }: GoogleAuthModalProps) {
+export function GoogleAuthModal({ isOpen, onClose, defaultEmail = '' }: GoogleAuthModalProps) {
   const { loginWithGoogle } = useAuth();
   const [email, setEmail] = useState(defaultEmail);
   const [name, setName] = useState('');
@@ -84,7 +84,7 @@ export function GoogleAuthModal({ isOpen, onClose, defaultEmail = 'mthomzi890@gm
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="e.g. mthomzi890@gmail.com"
+            placeholder="name@company.com"
             disabled={loading}
           />
 
@@ -93,7 +93,7 @@ export function GoogleAuthModal({ isOpen, onClose, defaultEmail = 'mthomzi890@gm
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Mthobisi Dev"
+            placeholder="e.g. Alex Vance"
             disabled={loading}
           />
 

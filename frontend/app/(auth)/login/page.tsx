@@ -159,7 +159,6 @@ export default function LoginPage() {
       <GoogleAuthModal
         isOpen={isGoogleModalOpen}
         onClose={() => setIsGoogleModalOpen(false)}
-        defaultEmail="mthomzi890@gmail.com"
       />
     </div>
   );

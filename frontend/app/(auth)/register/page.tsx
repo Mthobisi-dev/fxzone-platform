@@ -251,7 +251,6 @@ export default function RegisterPage() {
       <GoogleAuthModal
         isOpen={isGoogleModalOpen}
         onClose={() => setIsGoogleModalOpen(false)}
-        defaultEmail="mthomzi890@gmail.com"
       />
     </div>
   );
