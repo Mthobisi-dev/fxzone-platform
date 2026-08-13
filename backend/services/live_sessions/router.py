@@ -336,6 +336,34 @@ async def reject_participant(
         )
 
 
+@router.delete("/history")
+async def clear_session_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Clear all ended sessions from the live session history."""
+    service = LiveSessionService(db)
+    count = await service.clear_ended_sessions(user_id=current_user.id)
+    return {"status": "success", "message": f"Cleared {count} ended sessions from history."}
+
+
+@router.delete("/{session_id}")
+async def delete_single_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a live session by ID."""
+    service = LiveSessionService(db)
+    deleted = await service.delete_session(session_id=session_id, user_id=current_user.id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found or unauthorized to delete."
+        )
+    return {"status": "success", "message": "Session deleted successfully."}
+
+
 @router.websocket("/ws/session/{session_id}")
 async def session_chat_websocket_endpoint(websocket: WebSocket, session_id: str):
     """WebSocket handler for in-room live chat within a trading stream."""

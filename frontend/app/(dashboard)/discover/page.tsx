@@ -260,27 +260,30 @@ export default function DiscoverPage() {
                       {u.bio}
                     </p>
                   )}
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className="text-[9px] text-zinc-500">
-                      <strong className="text-zinc-300">{u.followers_count}</strong> followers
-                    </span>
-                  </div>
+                  {u.username !== 'fxzone_bot' && u.role !== 'bot' && (
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-[9px] text-zinc-500">
+                        <strong className="text-zinc-300">{u.followers_count}</strong> followers
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-850/50">
-                <Button
-                  onClick={() => handleFollow(u)}
-                  size="sm"
-                  variant={u.is_following ? 'ghost' : 'primary'}
-                  className={`flex-1 h-7 text-[10px] flex items-center justify-center gap-1 ${
-                    u.is_following
-                      ? 'text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-zinc-800'
-                      : 'bg-blue-600/80 hover:bg-blue-500 text-white'
-                  }`}
-                  disabled={followLoading === u.id}
-                >
+              {u.username !== 'fxzone_bot' && u.role !== 'bot' && (
+                <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-850/50">
+                  <Button
+                    onClick={() => handleFollow(u)}
+                    size="sm"
+                    variant={u.is_following ? 'ghost' : 'primary'}
+                    className={`flex-1 h-7 text-[10px] flex items-center justify-center gap-1 ${
+                      u.is_following
+                        ? 'text-zinc-400 hover:text-red-400 hover:bg-red-500/10 border border-zinc-800'
+                        : 'bg-blue-600/80 hover:bg-blue-500 text-white'
+                    }`}
+                    disabled={followLoading === u.id}
+                  >
                   {followLoading === u.id ? (
                     <Loader2 size={10} className="animate-spin" />
                   ) : u.is_following ? (
@@ -306,6 +309,7 @@ export default function DiscoverPage() {
                   <MessageCircle size={12} />
                 </Button>
               </div>
+              )}
             </Card>
           ))}
         </div>

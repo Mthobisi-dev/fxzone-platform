@@ -61,6 +61,17 @@ export default function SocialFeedPage() {
     return () => window.removeEventListener('fxzone_refresh_feed', handleRefresh);
   }, []);
 
+  const handleStartFresh = async () => {
+    if (!confirm('Are you sure you want to delete all feed posts and start fresh?')) return;
+    try {
+      await api.delete('/api/social/posts/purge-all');
+      setPosts([]);
+    } catch (err) {
+      console.error(err);
+      setPosts([]);
+    }
+  };
+
   return (
     <div className="p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 select-none max-w-7xl mx-auto">
       {/* Left 3 Columns: StoryBar, PostComposer, Feed List */}
@@ -71,16 +82,25 @@ export default function SocialFeedPage() {
         {/* Composer */}
         <PostComposer onPostCreated={fetchFeed} />
 
-        {/* Refresh Feed Action */}
+        {/* Refresh Feed & Start Fresh Action */}
         <div className="flex justify-between items-center px-1">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Operator Streams</span>
-          <button
-            onClick={fetchFeed}
-            disabled={loading}
-            className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-900 transition-colors"
-          >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleStartFresh}
+              className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 rounded transition-colors"
+              title="Delete all social feed posts and start fresh"
+            >
+              Start Fresh (Purge Feed)
+            </button>
+            <button
+              onClick={fetchFeed}
+              disabled={loading}
+              className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-900 transition-colors"
+            >
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
         </div>
 
         {/* Feed List */}

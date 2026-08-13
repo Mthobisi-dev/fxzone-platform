@@ -234,3 +234,20 @@ class LiveSessionService:
             p.left_at = datetime.utcnow()
             await self.db.flush()
         return True
+
+    async def clear_ended_sessions(self, user_id: str) -> int:
+        """Clear all ended sessions from history."""
+        from sqlalchemy import delete
+        stmt = delete(LiveSession).where(LiveSession.status == "ended")
+        res = await self.db.execute(stmt)
+        await self.db.flush()
+        return res.rowcount
+
+    async def delete_session(self, session_id: str, user_id: str) -> bool:
+        """Delete a single session by ID."""
+        session = await self.get_session_by_id(session_id)
+        if not session:
+            return False
+        await self.db.delete(session)
+        await self.db.flush()
+        return True

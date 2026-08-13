@@ -51,6 +51,46 @@ export function ChatWindow({
   const [showGroupProfile, setShowGroupProfile] = React.useState(false);
   const [notificationsMuted, setNotificationsMuted] = React.useState(false);
 
+  const [groupTitle, setGroupTitle] = React.useState(conversationName || 'FxZone Group');
+  const [groupDescription, setGroupDescription] = React.useState('FxZone Trading & Signal Analysis Group');
+  const [settingsModalOpen, setSettingsModalOpen] = React.useState(false);
+  const [addMembersModalOpen, setAddMembersModalOpen] = React.useState(false);
+  const [availableUsers, setAvailableUsers] = React.useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = React.useState(false);
+  const [addedMembers, setAddedMembers] = React.useState<string[]>([]);
+  const [leftGroup, setLeftGroup] = React.useState(false);
+
+  const fetchUsersForGroup = async () => {
+    setLoadingUsers(true);
+    try {
+      const res = await api.get('/api/social/users?limit=30');
+      if (Array.isArray(res)) {
+        setAvailableUsers(res.filter((u: any) => u.id !== currentUserId && u.username !== 'fxzone_bot'));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleOpenAddMembers = () => {
+    fetchUsersForGroup();
+    setAddMembersModalOpen(true);
+  };
+
+  const handleToggleAddMember = (username: string) => {
+    setAddedMembers((prev) =>
+      prev.includes(username) ? prev.filter((m) => m !== username) : [...prev, username]
+    );
+  };
+
+  const handleLeaveGroup = () => {
+    if (!confirm('Are you sure you want to leave this group?')) return;
+    setLeftGroup(true);
+    setShowGroupProfile(false);
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -265,23 +305,32 @@ export function ChatWindow({
               }`}>
                 {isGroup ? <Users className="h-7 w-7" /> : conversationName.charAt(0).toUpperCase()}
               </div>
-              <p className="text-white font-medium mt-3">{conversationName}</p>
-              <p className="text-xs text-zinc-500 mt-1">No description</p>
+              <p className="text-white font-medium mt-3">{groupTitle}</p>
+              <p className="text-xs text-zinc-400 mt-1">{groupDescription}</p>
             </div>
           </div>
 
           {/* Group Actions */}
           {isGroup && (
-            <div className="p-3 border-b border-zinc-800/50 space-y-2">
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors">
-                <Settings className="h-3.5 w-3.5 text-zinc-500" />
+            <div className="p-3 border-b border-zinc-800/50 space-y-2 select-none">
+              <button
+                onClick={() => setSettingsModalOpen(true)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors font-medium"
+              >
+                <Settings className="h-3.5 w-3.5 text-purple-400" />
                 Group Settings
               </button>
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors">
-                <UserPlus className="h-3.5 w-3.5 text-zinc-500" />
-                Add Members
+              <button
+                onClick={handleOpenAddMembers}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors font-medium"
+              >
+                <UserPlus className="h-3.5 w-3.5 text-blue-400" />
+                Add Members {addedMembers.length > 0 && `(${addedMembers.length} added)`}
               </button>
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+              <button
+                onClick={handleLeaveGroup}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors font-medium"
+              >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Leave Group
               </button>
@@ -304,6 +353,95 @@ export function ChatWindow({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Group Settings Modal */}
+      {settingsModalOpen && (
+        <Modal
+          isOpen={settingsModalOpen}
+          onClose={() => setSettingsModalOpen(false)}
+          title="Group Profile Settings"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] text-zinc-400 block mb-1">Group Name</label>
+              <input
+                type="text"
+                value={groupTitle}
+                onChange={(e) => setGroupTitle(e.target.value)}
+                className="w-full h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-zinc-400 block mb-1">Group Description</label>
+              <textarea
+                value={groupDescription}
+                onChange={(e) => setGroupDescription(e.target.value)}
+                className="w-full h-20 bg-zinc-950 border border-zinc-850 rounded-lg p-3 text-xs text-white focus:outline-none focus:border-purple-500 resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button size="sm" onClick={() => setSettingsModalOpen(false)} className="bg-purple-600 hover:bg-purple-500">
+                Save Group Profile
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add Members Modal */}
+      {addMembersModalOpen && (
+        <Modal
+          isOpen={addMembersModalOpen}
+          onClose={() => setAddMembersModalOpen(false)}
+          title="Add Members to Group"
+        >
+          <div className="space-y-4">
+            <p className="text-xs text-zinc-400">Select traders to add to {groupTitle}:</p>
+            {loadingUsers ? (
+              <div className="py-8 text-center text-xs text-zinc-500">Loading traders...</div>
+            ) : availableUsers.length === 0 ? (
+              <div className="py-8 text-center text-xs text-zinc-500">No active traders found to add.</div>
+            ) : (
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                {availableUsers.map((u: any) => {
+                  const isAdded = addedMembers.includes(u.username);
+                  return (
+                    <div
+                      key={u.id}
+                      onClick={() => handleToggleAddMember(u.username)}
+                      className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-colors ${
+                        isAdded
+                          ? 'bg-purple-500/10 border-purple-500/30'
+                          : 'bg-zinc-900/40 border-zinc-800 hover:bg-zinc-850'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Avatar src={u.avatar_url} name={u.display_name || u.username} size="sm" />
+                        <div>
+                          <span className="text-xs font-bold text-white block leading-none">
+                            {u.display_name || u.username}
+                          </span>
+                          <span className="text-[10px] text-zinc-500">@{u.username}</span>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                        isAdded ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-400'
+                      }`}>
+                        {isAdded ? 'Added' : '+ Add'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button size="sm" onClick={() => setAddMembersModalOpen(false)} className="bg-blue-600 hover:bg-blue-500">
+                Done ({addedMembers.length} selected)
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

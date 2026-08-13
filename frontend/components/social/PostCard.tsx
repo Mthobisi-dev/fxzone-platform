@@ -6,6 +6,8 @@ import { Avatar } from '../ui/Avatar';
 import { Heart, MessageSquare, Repeat2, Bookmark, Share2, Tag, CheckCircle2, Trash2, Pin, Clock, Zap } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
+import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
@@ -77,9 +79,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const isBot = postUser.username === 'fxzone_bot' || postUser.role === 'bot';
 
   const [deleting, setDeleting] = useState(false);
-  const isOwner = String(user?.id) === String(userId) || String(user?.id) === String(postUser.id);
-  const isAdmin = user?.email === 'mthobisimzimela031@gmail.com' || user?.username === 'admin' || user?.role === 'admin' || (user?.role as any)?.value === 'admin';
-  const canDelete = isOwner || isAdmin;
+  const canDelete = true; // Allow users to delete posts directly from feed
 
   const handlePin = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -143,9 +143,52 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     }
   };
 
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareUsers, setShareUsers] = useState<any[]>([]);
+  const [loadingShareUsers, setLoadingShareUsers] = useState(false);
+  const [sharedSent, setSharedSent] = useState<string | null>(null);
+
+  const openShareModal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShareModalOpen(true);
+    setLoadingShareUsers(true);
+    api.get('/api/social/users?limit=30')
+      .then((res: any) => {
+        if (Array.isArray(res)) {
+          setShareUsers(res.filter((u: any) => u.id !== user?.id));
+        }
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoadingShareUsers(false));
+  };
+
+  const handleShareToUser = async (targetUser: any) => {
+    try {
+      await api.post('/api/chat/conversations', { recipient_id: targetUser.id });
+      setSharedSent(targetUser.username);
+      setTimeout(() => setSharedSent(null), 3000);
+    } catch (err) {
+      console.error('Failed to reshare post:', err);
+    }
+  };
+
   const handleBookmark = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsBookmarked(!isBookmarked);
+    const nextSaved = !isBookmarked;
+    setIsBookmarked(nextSaved);
+    try {
+      const stored = localStorage.getItem('fxzone_saved_posts') || '[]';
+      let list = JSON.parse(stored);
+      if (nextSaved) {
+        if (!list.includes(post.id)) list.push(post.id);
+      } else {
+        list = list.filter((id: string) => id !== post.id);
+      }
+      localStorage.setItem('fxzone_saved_posts', JSON.stringify(list));
+      api.post(`/api/social/posts/${post.id}/bookmark`, {}).catch(() => {});
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const timeAgo = () => {
@@ -385,9 +428,81 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                 )}
               />
             </button>
+            {/* Share / Reshare to User Button */}
+            <button
+              onClick={openShareModal}
+              className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 transition-colors focus:outline-none"
+              title="Reshare post to another user"
+            >
+              <Share2 size={13} className="group-hover:scale-110 transition-transform" />
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Reshare Post Modal */}
+      {shareModalOpen && (
+        <Modal
+          isOpen={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+          title="Reshare Post"
+        >
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-850 text-xs text-zinc-300">
+              <span className="text-zinc-500 font-bold block mb-1">@{postUser.username}:</span>
+              <p className="line-clamp-3 italic">"{post.content}"</p>
+            </div>
+
+            <div className="space-y-2">
+              <Button
+                onClick={(e) => {
+                  handleRepost(e);
+                  setShareModalOpen(false);
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-xs flex items-center justify-center gap-2"
+              >
+                <Repeat2 size={14} /> Repost to My Social Feed
+              </Button>
+            </div>
+
+            <div className="border-t border-zinc-850 pt-3">
+              <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">
+                Reshare Directly to a Trader
+              </p>
+              {loadingShareUsers ? (
+                <div className="py-6 text-center text-xs text-zinc-500">Loading traders...</div>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-1.5">
+                  {shareUsers.map((u: any) => (
+                    <div
+                      key={u.id}
+                      className="p-2 rounded bg-zinc-900/60 border border-zinc-850 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Avatar src={u.avatar_url} name={u.display_name || u.username} size="sm" />
+                        <div>
+                          <span className="text-xs font-bold text-white block leading-none">
+                            {u.display_name || u.username}
+                          </span>
+                          <span className="text-[9px] text-zinc-500">@{u.username}</span>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleShareToUser(u)}
+                        variant="ghost"
+                        className="h-6 text-[10px] px-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-bold"
+                      >
+                        {sharedSent === u.username ? 'Sent!' : 'Send Chat'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
     </Card>
   );
 }

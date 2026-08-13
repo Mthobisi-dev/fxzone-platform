@@ -7,7 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
-import { Video, Users, Plus, RefreshCw, Loader2, Calendar, Radio } from 'lucide-react';
+import { Video, Users, Plus, RefreshCw, Loader2, Calendar, Radio, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface LiveSession {
@@ -97,8 +97,30 @@ export default function SessionsPage() {
     router.push(`/session/${id}`);
   };
 
+  const handleClearHistory = async () => {
+    if (!confirm('Are you sure you want to clear live session history?')) return;
+    try {
+      await api.delete('/api/sessions/history');
+      setSessions((prev) => prev.filter((s) => s.status !== 'ended'));
+    } catch (err) {
+      console.error(err);
+      setSessions((prev) => prev.filter((s) => s.status !== 'ended'));
+    }
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    try {
+      await api.delete(`/api/sessions/${id}`);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      console.error(err);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+    }
+  };
+
   const liveSessions = sessions.filter((s) => s.status === 'live');
   const scheduledSessions = sessions.filter((s) => s.status === 'scheduled');
+  const endedSessions = sessions.filter((s) => s.status === 'ended');
 
   const isEducator = !!user;
 
@@ -217,7 +239,54 @@ export default function SessionsPage() {
         </div>
       )}
 
-      {/* Broadcast Creation Modal */}
+      {/* Session History */}
+      <div className="space-y-4 pt-4 border-t border-zinc-900">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+            <Video size={12} className="text-zinc-500" /> Past Session History ({endedSessions.length})
+          </h3>
+          {endedSessions.length > 0 && (
+            <button
+              onClick={handleClearHistory}
+              className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 hover:underline transition-colors"
+            >
+              <Trash2 size={12} /> Clear History
+            </button>
+          )}
+        </div>
+
+        {endedSessions.length === 0 ? (
+          <div className="py-6 text-center border border-dashed border-zinc-900/60 rounded-xl bg-zinc-950/20">
+            <p className="text-[11px] text-zinc-500">No past live session history.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {endedSessions.map((session) => (
+              <Card
+                key={session.id}
+                className="p-4 border border-zinc-900 bg-zinc-950/20 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">
+                      Ended Broadcast
+                    </span>
+                    <button
+                      onClick={() => handleDeleteSession(session.id)}
+                      className="text-zinc-500 hover:text-rose-400 p-1 rounded transition-colors"
+                      title="Delete from history"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                  <h4 className="text-xs font-bold text-white mb-1">{session.title}</h4>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{session.description}</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
       {createOpen && (
         <Modal
           isOpen={createOpen}

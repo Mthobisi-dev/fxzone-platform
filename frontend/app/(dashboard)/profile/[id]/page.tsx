@@ -187,7 +187,7 @@ export default function ProfilePage() {
                 <Edit3 size={12} />
                 <span>Edit Profile</span>
               </Button>
-            ) : (
+            ) : profile?.username !== 'fxzone_bot' && profile?.role !== 'bot' ? (
               <Button
                 onClick={handleFollowToggle}
                 variant={profile?.isFollowing ? 'outline' : 'primary'}
@@ -208,7 +208,7 @@ export default function ProfilePage() {
                   </>
                 )}
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -223,14 +223,18 @@ export default function ProfilePage() {
               <span className="text-xs font-bold text-zinc-200 block leading-tight">{posts.length}</span>
               <span className="text-[9px] text-zinc-500 font-medium">Ideas</span>
             </div>
-            <div>
-              <span className="text-xs font-bold text-zinc-200 block leading-tight">{profile?.followersCount || profile?.followers_count || 0}</span>
-              <span className="text-[9px] text-zinc-500 font-medium">Followers</span>
-            </div>
-            <div>
-              <span className="text-xs font-bold text-zinc-200 block leading-tight">{profile?.followingCount || profile?.following_count || 0}</span>
-              <span className="text-[9px] text-zinc-500 font-medium">Following</span>
-            </div>
+            {profile?.username !== 'fxzone_bot' && profile?.role !== 'bot' && (
+              <>
+                <div>
+                  <span className="text-xs font-bold text-zinc-200 block leading-tight">{profile?.followersCount || profile?.followers_count || 0}</span>
+                  <span className="text-[9px] text-zinc-500 font-medium">Followers</span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-zinc-200 block leading-tight">{profile?.followingCount || profile?.following_count || 0}</span>
+                  <span className="text-[9px] text-zinc-500 font-medium">Following</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </Card>
