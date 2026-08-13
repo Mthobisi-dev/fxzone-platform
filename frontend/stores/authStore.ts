@@ -81,6 +81,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isInitialized: true,
         error: null,
       });
+      if (typeof window !== 'undefined') {
+        window.location.href = '/dashboard';
+      }
     } catch (err: any) {
       set({
         error: err.detail || 'Failed to authenticate user.',
@@ -148,6 +151,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isInitialized: true,
         error: null,
       });
+      if (typeof window !== 'undefined') {
+        window.location.href = '/dashboard';
+      }
     } catch (err: any) {
       set({
         error: err.detail || 'Registration failed.',
