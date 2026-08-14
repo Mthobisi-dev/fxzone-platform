@@ -243,7 +243,36 @@ class ChatService:
         # 3. Retrieve with loaded sender details
         query = select(Message).where(Message.id == msg.id).options(selectinload(Message.sender))
         res = await self.db.execute(query)
-        return res.scalar_one()
+        saved_msg = res.scalar_one()
+
+        # 4. Dispatch in-app notification to all other conversation members
+        try:
+            from services.notifications.service import NotificationService
+            notif_service = NotificationService(self.db)
+            m_stmt = select(ConversationMember).where(
+                and_(
+                    ConversationMember.conversation_id == conv_uuid,
+                    ConversationMember.user_id != sender_uuid
+                )
+            )
+            m_res = await self.db.execute(m_stmt)
+            other_members = m_res.scalars().all()
+
+            sender_name = saved_msg.sender.display_name if saved_msg.sender else "Someone"
+            sender_handle = saved_msg.sender.username if saved_msg.sender else "trader"
+
+            for mem in other_members:
+                await notif_service.create_notification(
+                    user_id=mem.user_id,
+                    notification_type="social",
+                    title=f"New Message from @{sender_handle}",
+                    message=f"{sender_name}: \"{content[:45]}\"",
+                    data={"conversation_id": str(conversation_id)}
+                )
+        except Exception as e:
+            logger.error(f"Error dispatching chat notification: {e}")
+
+        return saved_msg
 
     async def verify_membership(self, user_id: str, conversation_id: str) -> bool:
         """Verify if a user is authorized inside a target chat room."""

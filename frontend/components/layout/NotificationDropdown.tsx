@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNotificationStore, NotificationItem } from '@/stores/notificationStore';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { Bell, Check, Trash, AlertCircle, Info, TrendingUp, MessageSquare } from 'lucide-react';
+import { Bell, Check, Trash, AlertCircle, Info, TrendingUp, MessageSquare, Heart, UserPlus, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { timeAgo } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -44,8 +44,15 @@ export function NotificationDropdown() {
 
   const getIcon = (type: string) => {
     switch (type) {
+      case 'follow':
+        return <UserPlus size={14} className="text-blue-400" />;
+      case 'like':
+        return <Heart size={14} className="text-rose-500 fill-rose-500/20" />;
+      case 'comment':
+        return <MessageSquare size={14} className="text-purple-400" />;
       case 'market':
-        return <TrendingUp size={14} className="text-emerald-400" />;
+      case 'session_live':
+        return <Video size={14} className="text-red-400" />;
       case 'social':
         return <MessageSquare size={14} className="text-purple-400" />;
       case 'system':

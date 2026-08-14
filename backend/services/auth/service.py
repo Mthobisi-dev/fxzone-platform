@@ -35,6 +35,21 @@ async def register_user(db: AsyncSession, data: UserCreate) -> User:
     db.add(user)
     await db.flush()
     await db.refresh(user)
+
+    # Dispatch welcome system notification
+    try:
+        from services.notifications.service import NotificationService
+        notif_service = NotificationService(db)
+        await notif_service.create_notification(
+            user_id=user.id,
+            notification_type="system",
+            title="Welcome to FxZone Platform! ⚡",
+            message="Your account is active. Explore technical AI signals, social feed setups, and live trading rooms.",
+            data={"welcome": True}
+        )
+    except Exception as e:
+        logging.error(f"Error creating welcome notification: {e}")
+
     return user
 
 

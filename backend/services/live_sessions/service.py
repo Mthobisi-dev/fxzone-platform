@@ -37,7 +37,32 @@ class LiveSessionService:
         # Load host details
         query = select(LiveSession).where(LiveSession.id == session.id).options(selectinload(LiveSession.host))
         res = await self.db.execute(query)
-        return res.scalar_one()
+        created = res.scalar_one()
+
+        # Notify active traders about the new live broadcast
+        try:
+            from services.notifications.service import NotificationService
+            notif_service = NotificationService(self.db)
+            host_name = created.host.display_name if created.host else "Verified Educator"
+            host_handle = created.host.username if created.host else "educator"
+            
+            # Fetch active users (excluding host)
+            u_stmt = select(User.id).where(User.id != created.host_id).limit(50)
+            u_res = await self.db.execute(u_stmt)
+            trader_ids = u_res.scalars().all()
+
+            for tid in trader_ids:
+                await notif_service.create_notification(
+                    user_id=tid,
+                    notification_type="market",
+                    title=f"Live Stream: {created.title}",
+                    message=f"@{host_handle} scheduled a new live trading stream.",
+                    data={"session_id": str(created.id)}
+                )
+        except Exception as e:
+            logger.error(f"Error dispatching live session notification: {e}")
+
+        return created
 
     async def get_active_sessions(self, limit: int = 15, offset: int = 0) -> List[LiveSession]:
         """Fetch all sessions that are currently 'live' or 'scheduled'."""

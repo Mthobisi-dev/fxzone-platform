@@ -20,17 +20,26 @@ class NotificationChannel(ABC):
 class InAppChannel(NotificationChannel):
     """Deliver real-time notifications via active WebSocket connections."""
 
-    async def send(self, user_id: int, title: str, message: str, data: Dict[str, Any] = None) -> bool:
+    async def send(self, user_id: Any, title: str, message: str, data: Dict[str, Any] = None) -> bool:
         try:
+            from datetime import datetime
+            data_dict = data or {}
             payload = {
                 "type": "notification",
-                "title": title,
-                "message": message,
-                "data": data or {}
+                "notification": {
+                    "id": str(data_dict.get("id", "")),
+                    "user_id": str(user_id),
+                    "type": str(data_dict.get("type", "system")),
+                    "title": title,
+                    "message": message,
+                    "data": data_dict,
+                    "is_read": False,
+                    "created_at": datetime.utcnow().isoformat()
+                }
             }
-            # Send using the global connection manager
-            await manager.send_personal(str(user_id), payload)
-            logger.info(f"InApp notification sent to user {user_id}: {title}")
+            channel_name = f"user_notifications_{user_id}"
+            await manager.broadcast(channel_name, payload)
+            logger.info(f"InApp notification broadcasted to channel {channel_name}: {title}")
             return True
         except Exception as e:
             logger.error(f"Failed to send InApp notification: {e}")

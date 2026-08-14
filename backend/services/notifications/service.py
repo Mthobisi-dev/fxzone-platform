@@ -39,19 +39,14 @@ class NotificationService:
         u_id = uuid.UUID(str(user_id)) if isinstance(user_id, str) else user_id
 
         # 1. Fetch user's notification preferences
-        pref_query = select(NotificationPreference).where(
-            and_(
-                NotificationPreference.user_id == u_id,
-                NotificationPreference.type == notification_type
-            )
-        )
+        pref_query = select(NotificationPreference).where(NotificationPreference.user_id == u_id)
         res = await self.db.execute(pref_query)
         pref = res.scalar_one_or_none()
 
         # Defaults if no preference is configured
-        in_app_enabled = pref.in_app_enabled if pref else True
-        email_enabled = pref.email_enabled if pref else False
-        push_enabled = pref.push_enabled if pref else False
+        in_app_enabled = pref.in_app if pref else True
+        email_enabled = pref.email if pref else False
+        push_enabled = pref.push if pref else False
 
         # 2. Insert notification record
         notification = Notification(
