@@ -289,6 +289,16 @@ async def approve_participant(
         p = await service.approve_participant(
             host_id=current_user.id, session_id=session_id, participant_user_id=user_id
         )
+        
+        # Broadcast approval event over WebSocket so the approved user instantly joins
+        channel_name = f"session_chat_{session_id}"
+        await manager.broadcast(channel_name, {
+            "type": "participant_approved",
+            "user_id": str(user_id),
+            "session_id": str(session_id),
+            "message": "Access approved by the session host."
+        })
+        
         return {
             "id": p.id,
             "session_id": p.session_id,
@@ -329,6 +339,14 @@ async def reject_participant(
         await service.reject_participant(
             host_id=current_user.id, session_id=session_id, participant_user_id=user_id
         )
+        # Broadcast rejection event
+        channel_name = f"session_chat_{session_id}"
+        await manager.broadcast(channel_name, {
+            "type": "participant_rejected",
+            "user_id": str(user_id),
+            "session_id": str(session_id),
+            "message": "Access request was declined by the session host."
+        })
         return {"status": "success", "message": "Participant rejected."}
     except PermissionError as e:
         raise HTTPException(
@@ -389,24 +407,31 @@ async def delete_single_session(
 
 @router.websocket("/ws/session/{session_id}")
 async def session_chat_websocket_endpoint(websocket: WebSocket, session_id: str):
-    """WebSocket handler for in-room live chat within a trading stream."""
+    """WebSocket handler for in-room live chat, WebRTC signaling, and stream presence."""
     user = await get_ws_user(websocket)
     if not user:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    user_id = user["user_id"]
+    user_id = str(user["user_id"])
     channel_name = f"session_chat_{session_id}"
 
-    # Connect to session chat channel
-    await manager.connect(websocket, channel_name, str(user_id))
+    # Connect to session channel
+    await manager.connect(websocket, channel_name, user_id)
 
-    # Broadcast user joined session chat
+    # Broadcast user joined session
     await manager.broadcast(channel_name, {
         "type": "chat_status",
         "user_id": user_id,
         "username": user["username"],
         "status": "joined"
+    })
+    
+    # Broadcast updated participant count
+    total_members = len(manager.active_connections.get(channel_name, []))
+    await manager.broadcast(channel_name, {
+        "type": "members_update",
+        "data": {"count": total_members}
     })
 
     try:
@@ -418,14 +443,14 @@ async def session_chat_websocket_endpoint(websocket: WebSocket, session_id: str)
                 continue
 
             msg_type = payload.get("type", "chat_message")
+            
+            # 1. Chat Message
             if msg_type == "chat_message":
-                # Support both flat payload {content: "..."} and nested {data: {content: "..."}}
                 inner = payload.get("data", payload)
                 content = inner.get("content", "").strip()
                 if not content:
                     continue
 
-                # Broadcast chat message instantly to all viewers
                 await manager.broadcast(channel_name, {
                     "type": "chat_message",
                     "user_id": user_id,
@@ -435,13 +460,61 @@ async def session_chat_websocket_endpoint(websocket: WebSocket, session_id: str)
                     "timestamp": datetime.utcnow().isoformat()
                 })
 
+            # 2. WebRTC Peer-to-Peer Signaling (Screen Share & Audio Routing)
+            elif msg_type in ["rtc_signal", "offer", "answer", "candidate", "peer_joined", "request_stream", "presenter_stream_started", "presenter_stream_stopped"]:
+                inner_data = payload.get("data", {})
+                target_user_id = payload.get("target_user_id") or inner_data.get("target_user_id")
+                signal_type = inner_data.get("type") or msg_type
+
+                signal_message = {
+                    "type": "rtc_signal",
+                    "data": {
+                        **inner_data,
+                        "type": signal_type,
+                        "sender_id": user_id,
+                        "sender_username": user["username"]
+                    }
+                }
+
+                if target_user_id and str(target_user_id) != user_id:
+                    # Send direct signal to targeted participant
+                    await manager.send_personal(str(target_user_id), signal_message)
+                else:
+                    # Broadcast signal to all room participants (e.g. host starting screen share)
+                    await manager.broadcast(channel_name, signal_message)
+
+            # 3. Live Recording Status (Broadcast when host toggles recording)
+            elif msg_type == "recording_status":
+                await manager.broadcast(channel_name, {
+                    "type": "recording_status",
+                    "data": {
+                        **payload.get("data", {}),
+                        "sender_id": user_id,
+                        "sender_username": user["username"]
+                    }
+                })
+
     except WebSocketDisconnect:
         await manager.disconnect(websocket, channel_name)
+        total_members = len(manager.active_connections.get(channel_name, []))
         await manager.broadcast(channel_name, {
             "type": "chat_status",
             "user_id": user_id,
             "username": user["username"],
             "status": "left"
+        })
+        await manager.broadcast(channel_name, {
+            "type": "members_update",
+            "data": {"count": max(1, total_members)}
+        })
+        # Announce peer left for WebRTC cleanup
+        await manager.broadcast(channel_name, {
+            "type": "rtc_signal",
+            "data": {
+                "type": "peer_left",
+                "sender_id": user_id,
+                "user_id": user_id
+            }
         })
     except Exception as e:
         logger.error(f"Session chat WebSocket error: {e}")

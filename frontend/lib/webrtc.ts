@@ -1,61 +1,161 @@
 /**
- * FxZone WebRTC client manager for peer-to-peer screen sharing and audio.
+ * FxZone WebRTC Client Manager
+ * High-reliability peer-to-peer screen sharing and real-time audio/video routing.
  */
 
+const RTC_CONFIG: RTCConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+  ],
+  iceCandidatePoolSize: 10,
+};
+
+export interface WebRTCOptions {
+  sessionId?: string | number;
+  isHost?: boolean;
+  isPresenter?: boolean;
+  onStream?: (stream: MediaStream | null) => void;
+  onSignal?: (signal: any) => void;
+}
+
 export class WebRTCClient {
-  private peerConnections: Map<string | number, RTCPeerConnection> = new Map();
+  private peerConnections: Map<string, RTCPeerConnection> = new Map();
+  private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private localStream: MediaStream | null = null;
-  private sessionId: string | number;
-  private signalSocket: WebSocket | null = null;
-  private onRemoteStreamCallback: ((userId: string | number, stream: MediaStream) => void) | null = null;
-  private onPeerLeftCallback: ((userId: string | number) => void) | null = null;
+  private sessionId: string;
   private isPresenter: boolean = false;
   private onStreamCallback: ((stream: MediaStream | null) => void) | null = null;
   private onSignalCallback: ((signal: any) => void) | null = null;
+  private onPeerLeftCallback: ((userId: string) => void) | null = null;
 
-  constructor(options: {
-    sessionId?: string | number;
-    isHost?: boolean;
-    isPresenter?: boolean;
-    onStream?: (stream: MediaStream | null) => void;
-    onSignal?: (signal: any) => void;
-  } | string | number, isPresenter: boolean = false) {
+  constructor(options: WebRTCOptions | string | number, isPresenter: boolean = false) {
     if (typeof options === 'object' && options !== null) {
-      this.sessionId = options.sessionId || '';
-      this.isPresenter = options.isHost || options.isPresenter || false;
-      if (options.onStream) {
-        this.onStreamCallback = options.onStream;
-      }
-      if (options.onSignal) {
-        this.onSignalCallback = options.onSignal;
-      }
+      this.sessionId = String(options.sessionId || '');
+      this.isPresenter = !!(options.isHost || options.isPresenter);
+      if (options.onStream) this.onStreamCallback = options.onStream;
+      if (options.onSignal) this.onSignalCallback = options.onSignal;
     } else {
-      this.sessionId = options;
+      this.sessionId = String(options);
       this.isPresenter = isPresenter;
     }
   }
 
   /**
-   * Set local MediaStream directly.
+   * Set or update local MediaStream (Screen Share or Camera).
    */
-  public setLocalStream(stream: MediaStream | null) {
+  public async setLocalStream(stream: MediaStream | null) {
     this.localStream = stream;
-    if (this.onStreamCallback && stream) {
-      this.onStreamCallback(stream);
-    }
-    
-    // Add tracks to existing peer connections if stream changes
+
     if (stream) {
+      // Notify local callback
+      if (this.onStreamCallback && this.isPresenter) {
+        this.onStreamCallback(stream);
+      }
+
+      // Update tracks in existing peer connections or create new offers
+      const peers = Array.from(this.peerConnections.entries());
+      for (let i = 0; i < peers.length; i++) {
+        const [peerId, pc] = peers[i];
+        try {
+          const senders = pc.getSenders();
+          const videoTrack = stream.getVideoTracks()[0];
+          const audioTrack = stream.getAudioTracks()[0];
+
+          if (senders.length > 0) {
+            const videoSender = senders.find((s: RTCRtpSender) => s.track?.kind === 'video');
+            const audioSender = senders.find((s: RTCRtpSender) => s.track?.kind === 'audio');
+
+            if (videoSender && videoTrack) {
+              await videoSender.replaceTrack(videoTrack);
+            } else if (videoTrack) {
+              pc.addTrack(videoTrack, stream);
+            }
+
+            if (audioSender && audioTrack) {
+              await audioSender.replaceTrack(audioTrack);
+            } else if (audioTrack) {
+              pc.addTrack(audioTrack, stream);
+            }
+          } else {
+            stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+          }
+
+          // Renegotiate connection with peer
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+          });
+          await pc.setLocalDescription(offer);
+          this.sendSignal({
+            target_user_id: peerId,
+            type: 'offer',
+            data: offer,
+          });
+        } catch (e) {
+          console.error(`Error updating stream tracks for peer ${peerId}:`, e);
+        }
+      }
+
+      // Announce to all room peers that presenter stream has started
+      this.sendSignal({
+        type: 'presenter_stream_started',
+        data: { active: true },
+      });
+    } else {
+      // Stream stopped — remove tracks from connections and announce stop
       this.peerConnections.forEach((pc) => {
-        stream.getTracks().forEach((track) => {
-          pc.addTrack(track, stream);
+        pc.getSenders().forEach((sender: RTCRtpSender) => {
+          try {
+            pc.removeTrack(sender);
+          } catch (e) {
+            // Safe ignore
+          }
         });
+      });
+
+      this.sendSignal({
+        type: 'presenter_stream_stopped',
+        data: { active: false },
       });
     }
   }
 
   /**
-   * Enable or disable audio track.
+   * Capture local screen and start streaming.
+   */
+  public async startLocalStream(): Promise<MediaStream> {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: 'monitor',
+          cursor: 'always',
+          frameRate: { max: 30 },
+        } as any,
+        audio: true,
+      });
+
+      await this.setLocalStream(stream);
+
+      // Handle user stopping screen share via browser floating UI
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          this.setLocalStream(null);
+        };
+      }
+
+      return stream;
+    } catch (err) {
+      console.error('Failed to capture screen stream:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Toggle microphone audio track state.
    */
   public toggleAudio(enabled: boolean) {
     if (this.localStream) {
@@ -66,7 +166,7 @@ export class WebRTCClient {
   }
 
   /**
-   * Enable or disable video track.
+   * Toggle camera / video track state.
    */
   public toggleVideo(enabled: boolean) {
     if (this.localStream) {
@@ -77,222 +177,143 @@ export class WebRTCClient {
   }
 
   /**
-   * Initialize screen capture and presenter streams.
-   */
-  public async startLocalStream(): Promise<MediaStream> {
-    try {
-      this.localStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always' } as any,
-        audio: true,
-      });
-      if (this.onStreamCallback) {
-        this.onStreamCallback(this.localStream);
-      }
-      return this.localStream;
-    } catch (e) {
-      console.error('Failed to get local screen stream:', e);
-      throw e;
-    }
-  }
-
-  /**
-   * Set callback for when a remote user joins and shares their stream.
-   */
-  public onRemoteStream(callback: (userId: string | number, stream: MediaStream) => void) {
-    this.onRemoteStreamCallback = callback;
-  }
-
-  /**
-   * Set callback for when a peer leaves the stream room.
-   */
-  public onPeerLeft(callback: (userId: string | number) => void) {
-    this.onPeerLeftCallback = callback;
-  }
-
-  /**
-   * Initialize signaling link connection.
-   */
-  public connectSignaling() {
-    if (this.onSignalCallback) return; // Routed signaling is active
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const token = localStorage.getItem('fxzone_access_token');
-    
-    const url = `${protocol}//${host}/ws/rtc/signal/${this.sessionId}?token=${encodeURIComponent(token || '')}`;
-    
-    this.signalSocket = new WebSocket(url);
-    this.signalSocket.onmessage = this.handleSignalingMessage.bind(this);
-    
-    this.signalSocket.onopen = () => {
-      if (this.isPresenter && this.localStream) {
-        // Broadcast to all peers that presenter is live
-        this.sendSignal({
-          type: 'presenter_live',
-          data: {}
-        });
-      }
-    };
-  }
-
-  /**
-   * Close peer connections and signaling sockets.
-   */
-  public disconnect() {
-    this.close();
-  }
-
-  /**
-   * Alias of disconnect for compatibility.
-   */
-  public close() {
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => track.stop());
-      this.localStream = null;
-    }
-
-    this.peerConnections.forEach((pc) => pc.close());
-    this.peerConnections.clear();
-
-    if (this.signalSocket) {
-      this.signalSocket.close();
-      this.signalSocket = null;
-    }
-  }
-
-  private sendSignal(payload: any) {
-    if (this.onSignalCallback) {
-      this.onSignalCallback(payload);
-    } else if (this.signalSocket && this.signalSocket.readyState === WebSocket.OPEN) {
-      this.signalSocket.send(JSON.stringify(payload));
-    }
-  }
-
-  /**
-   * Handle incoming WebRTC signal payloads manually.
+   * Handle incoming WebRTC signaling payload from WebSocket.
    */
   public async handleSignal(payload: any) {
     if (!payload) return;
-    const { sender_id, type, data } = payload;
-    if (type === 'offer') {
-      await this.handleOffer(sender_id, data);
-    } else if (type === 'answer') {
-      const pc = this.peerConnections.get(sender_id);
-      if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(data));
+    const senderId = String(payload.sender_id || payload.user_id || '');
+    const signalType = payload.type;
+    const signalData = payload.data || payload;
+
+    if (!senderId) return;
+
+    try {
+      switch (signalType) {
+        case 'peer_joined':
+          // Viewer joined the room: if we are presenter with an active stream, send an offer
+          if (this.isPresenter && this.localStream) {
+            await this.initiatePeerConnection(senderId);
+          }
+          break;
+
+        case 'request_stream':
+          // Peer explicitly requested stream from presenter
+          if (this.isPresenter && this.localStream) {
+            await this.initiatePeerConnection(senderId);
+          }
+          break;
+
+        case 'presenter_stream_started':
+          // Presenter started sharing: if we are a viewer, request their stream
+          if (!this.isPresenter) {
+            this.sendSignal({
+              target_user_id: senderId,
+              type: 'request_stream',
+              data: {},
+            });
+          }
+          break;
+
+        case 'presenter_stream_stopped':
+          // Presenter stopped sharing
+          if (!this.isPresenter) {
+            if (this.onStreamCallback) {
+              this.onStreamCallback(null);
+            }
+          }
+          break;
+
+        case 'offer':
+          await this.handleOffer(senderId, signalData.data || signalData);
+          break;
+
+        case 'answer':
+          await this.handleAnswer(senderId, signalData.data || signalData);
+          break;
+
+        case 'candidate':
+          await this.handleCandidate(senderId, signalData.data || signalData);
+          break;
+
+        case 'peer_left':
+          this.handlePeerLeft(senderId);
+          break;
       }
-    } else if (type === 'candidate') {
-      const pc = this.peerConnections.get(sender_id);
-      if (pc) {
-        await pc.addIceCandidate(new RTCIceCandidate(data));
-      }
+    } catch (err) {
+      console.error(`WebRTC signal error handling ${signalType} from ${senderId}:`, err);
     }
   }
 
-  private async handleSignalingMessage(event: MessageEvent) {
-    const message = JSON.parse(event.data);
-    const { sender_id, type, data } = message;
-
-    if (type === 'peer_joined') {
-      if (this.isPresenter && this.localStream) {
-        // Presenter creates a peer connection for this new viewer
-        await this.initiatePeerConnection(sender_id);
-      }
-    } else if (type === 'peer_left') {
-      const pc = this.peerConnections.get(sender_id);
-      if (pc) {
-        pc.close();
-        this.peerConnections.delete(sender_id);
-      }
-      if (this.onPeerLeftCallback) {
-        this.onPeerLeftCallback(sender_id);
-      }
-    } else if (type === 'presenter_live') {
-      if (!this.isPresenter) {
-        // Viewers join by signaling the presenter
-        this.sendSignal({
-          target_user_id: sender_id,
-          type: 'peer_joined',
-          data: {}
-        });
-      }
-    } else if (type === 'offer') {
-      await this.handleOffer(sender_id, data);
-    } else if (type === 'answer') {
-      const pc = this.peerConnections.get(sender_id);
-      if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(data));
-      }
-    } else if (type === 'candidate') {
-      const pc = this.peerConnections.get(sender_id);
-      if (pc) {
-        await pc.addIceCandidate(new RTCIceCandidate(data));
-      }
+  /**
+   * Viewer or peer left room.
+   */
+  private handlePeerLeft(peerId: string) {
+    const pc = this.peerConnections.get(peerId);
+    if (pc) {
+      pc.close();
+      this.peerConnections.delete(peerId);
+    }
+    this.pendingCandidates.delete(peerId);
+    if (this.onPeerLeftCallback) {
+      this.onPeerLeftCallback(peerId);
     }
   }
 
-  private async initiatePeerConnection(targetUserId: string | number) {
-    const pc = this.createPeerConnection(targetUserId);
+  /**
+   * Presenter initiates connection and sends SDP offer to a specific peer.
+   */
+  private async initiatePeerConnection(targetUserId: string) {
+    let pc = this.peerConnections.get(targetUserId);
+    if (pc) {
+      pc.close();
+    }
+
+    pc = this.createPeerConnection(targetUserId);
     this.peerConnections.set(targetUserId, pc);
 
-    // Add local tracks to peer connection
+    // Add local stream tracks
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
+        pc!.addTrack(track, this.localStream!);
       });
     }
 
-    const offer = await pc.createOffer();
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true,
+    });
     await pc.setLocalDescription(offer);
 
     this.sendSignal({
       target_user_id: targetUserId,
       type: 'offer',
-      data: offer
+      data: offer,
     });
   }
 
-  private createPeerConnection(targetUserId: string | number): RTCPeerConnection {
-    const configuration = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    };
+  /**
+   * Handle incoming SDP offer from presenter.
+   */
+  private async handleOffer(senderId: string, offerData: any) {
+    let pc = this.peerConnections.get(senderId);
+    if (pc && pc.signalingState !== 'closed') {
+      pc.close();
+    }
 
-    const pc = new RTCPeerConnection(configuration);
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.sendSignal({
-          target_user_id: targetUserId,
-          type: 'candidate',
-          data: event.candidate
-        });
-      }
-    };
-
-    pc.ontrack = (event) => {
-      if (this.onRemoteStreamCallback && event.streams[0]) {
-        this.onRemoteStreamCallback(targetUserId, event.streams[0]);
-      }
-      if (this.onStreamCallback && event.streams[0]) {
-        this.onStreamCallback(event.streams[0]);
-      }
-    };
-
-    return pc;
-  }
-
-  private async handleOffer(senderId: string | number, offerData: any) {
-    const pc = this.createPeerConnection(senderId);
+    pc = this.createPeerConnection(senderId);
     this.peerConnections.set(senderId, pc);
+
+    // If viewer also has local media tracks (2-way audio/video)
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => {
+        pc!.addTrack(track, this.localStream!);
+      });
+    }
 
     await pc.setRemoteDescription(new RTCSessionDescription(offerData));
 
-    // If local presenter has stream, we add it (mostly viewers only receive, but support 2-way)
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
-      });
-    }
+    // Flush any ICE candidates queued before remote description was ready
+    await this.flushPendingCandidates(senderId, pc);
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -300,7 +321,124 @@ export class WebRTCClient {
     this.sendSignal({
       target_user_id: senderId,
       type: 'answer',
-      data: answer
+      data: answer,
     });
+  }
+
+  /**
+   * Handle incoming SDP answer from viewer.
+   */
+  private async handleAnswer(senderId: string, answerData: any) {
+    const pc = this.peerConnections.get(senderId);
+    if (!pc) return;
+
+    if (pc.signalingState === 'have-local-offer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(answerData));
+      await this.flushPendingCandidates(senderId, pc);
+    }
+  }
+
+  /**
+   * Handle incoming ICE candidate with buffering support.
+   */
+  private async handleCandidate(senderId: string, candidateData: any) {
+    const pc = this.peerConnections.get(senderId);
+    const candidate = candidateData?.candidate ? candidateData : candidateData?.data;
+    if (!candidate) return;
+
+    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.warn(`Could not add direct ICE candidate for ${senderId}:`, err);
+      }
+    } else {
+      // Buffer until setRemoteDescription completes
+      const queue = this.pendingCandidates.get(senderId) || [];
+      queue.push(candidate);
+      this.pendingCandidates.set(senderId, queue);
+    }
+  }
+
+  /**
+   * Flush pending ICE candidate queue once remote description is set.
+   */
+  private async flushPendingCandidates(senderId: string, pc: RTCPeerConnection) {
+    const queue = this.pendingCandidates.get(senderId);
+    if (queue && queue.length > 0) {
+      for (let i = 0; i < queue.length; i++) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(queue[i]));
+        } catch (e) {
+          console.warn('Error flushing buffered ICE candidate:', e);
+        }
+      }
+      this.pendingCandidates.delete(senderId);
+    }
+  }
+
+  /**
+   * Create an RTCPeerConnection with configured handlers.
+   */
+  private createPeerConnection(targetUserId: string): RTCPeerConnection {
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        this.sendSignal({
+          target_user_id: targetUserId,
+          type: 'candidate',
+          data: event.candidate,
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      const incomingStream = event.streams[0] || new MediaStream([event.track]);
+      if (this.onStreamCallback) {
+        this.onStreamCallback(incomingStream);
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        this.handlePeerLeft(targetUserId);
+      }
+    };
+
+    return pc;
+  }
+
+  /**
+   * Send signaling message to parent or WebSocket channel.
+   */
+  private sendSignal(payload: any) {
+    if (this.onSignalCallback) {
+      this.onSignalCallback(payload);
+    }
+  }
+
+  /**
+   * Clean up all peer connections and local media tracks.
+   */
+  public close() {
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => track.stop());
+      this.localStream = null;
+    }
+
+    this.peerConnections.forEach((pc) => {
+      try {
+        pc.close();
+      } catch (e) {
+        // Safe ignore
+      }
+    });
+    this.peerConnections.clear();
+    this.pendingCandidates.clear();
+  }
+
+  public disconnect() {
+    this.close();
   }
 }

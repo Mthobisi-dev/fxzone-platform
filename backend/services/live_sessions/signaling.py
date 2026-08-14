@@ -14,7 +14,7 @@ router = APIRouter(tags=["Live Session WebSockets"])
 
 
 @router.websocket("/ws/rtc/signal/{session_id}")
-async def rtc_signaling_endpoint(websocket: WebSocket, session_id: int):
+async def rtc_signaling_endpoint(websocket: WebSocket, session_id: str):
     """WebRTC signaling WebSocket to broker SDP offers/answers and ICE candidates."""
     # 1. Authenticate user
     user = await get_ws_user(websocket)
@@ -23,7 +23,7 @@ async def rtc_signaling_endpoint(websocket: WebSocket, session_id: int):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    user_id = int(user["user_id"])
+    user_id = str(user["user_id"])
     channel_name = f"rtc_signal_{session_id}"
 
     # 2. Check if the session exists and is active
@@ -36,14 +36,14 @@ async def rtc_signaling_endpoint(websocket: WebSocket, session_id: int):
             return
 
     # 3. Connect to the WebSocket manager
-    await manager.connect(websocket, channel_name, str(user_id))
+    await manager.connect(websocket, channel_name, user_id)
     
     # Broadcast to the channel that a new peer has joined signaling
     await manager.broadcast(channel_name, {
         "type": "peer_joined",
         "user_id": user_id,
         "username": user["username"],
-        "role": "host" if user_id == session.host_id else "viewer"
+        "role": "host" if str(user_id) == str(session.host_id) else "viewer"
     })
 
     try:

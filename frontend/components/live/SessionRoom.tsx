@@ -1,12 +1,24 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ScreenShare } from './ScreenShare';
 import { SessionChat, SessionChatMessage } from './SessionChat';
 import { SessionControls } from './SessionControls';
 import { useAuth } from '@/hooks/useAuth';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { Shield, Eye, Users, AlertTriangle, Check, X, Clock } from 'lucide-react';
+import {
+  Shield,
+  Eye,
+  Users,
+  AlertTriangle,
+  Check,
+  X,
+  Clock,
+  Disc,
+  Download,
+  Radio,
+  CheckCircle2,
+} from 'lucide-react';
 import { WebRTCClient } from '@/lib/webrtc';
 import { api } from '@/lib/api';
 import { Button } from '../ui/Button';
@@ -32,34 +44,31 @@ export function SessionRoom({
   const { user } = useAuth();
   const [participantsCount, setParticipantsCount] = useState(1);
   const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
+  const [isSharingScreen, setIsSharingScreen] = useState(false);
   const [chatMessages, setChatMessages] = useState<SessionChatMessage[]>([]);
   const [rtcClient, setRtcClient] = useState<WebRTCClient | null>(null);
   const [copilotAlerts, setCopilotAlerts] = useState<string[]>([]);
-  
-  // Custom Live Session states
+
+  // Participants and Approval State
   const [participants, setParticipants] = useState<any[]>([]);
   const [shareTimeLeft, setShareTimeLeft] = useState<number | null>(null);
 
-  // Admin override detection
-  const isAdmin = !!(user && (
-    user.role === 'admin' ||
-    (user.role as any)?.value === 'admin' ||
-    user.username === 'admin' ||
-    user.email === 'admin@fxzone.io'
-  ));
+  // Live Recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isRoomBeingRecorded, setIsRoomBeingRecorded] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<any>(null);
 
-  // Admin hard-cutoff: terminate any session regardless of host role
-  const handleEndSessionAdmin = async () => {
-    if (!isAdmin) return;
-    if (!confirm('Terminate this live session? All participants will be disconnected.')) return;
-    try {
-      await api.post(`/api/sessions/${sessionId}/end`, {});
-      onLeave();
-    } catch (e) {
-      console.error('Admin cutoff failed:', e);
-      alert('Failed to end session. You may not have admin privileges.');
-    }
-  };
+  // Admin override detection
+  const isAdmin = !!(
+    user &&
+    (user.role === 'admin' ||
+      (user.role as any)?.value === 'admin' ||
+      user.username === 'admin' ||
+      user.email === 'admin@fxzone.io')
+  );
 
   // WebSocket signaling channel
   const socketRef = useWebSocket(`/ws/session/${sessionId}`, {
@@ -68,14 +77,35 @@ export function SessionRoom({
       setChatMessages((prev) => [...prev, msg]);
     },
     rtc_signal: (payload) => {
-      rtcClient?.handleSignal(payload.data);
+      rtcClient?.handleSignal(payload.data || payload);
     },
     members_update: (payload) => {
-      setParticipantsCount(payload.data.count || 1);
+      setParticipantsCount(payload.data?.count || payload.count || 1);
+    },
+    participant_approved: (payload) => {
+      fetchParticipants();
+      // If host, announce stream presence
+      if (isHost && activeStream && rtcClient) {
+        socketRef.current?.send({
+          type: 'rtc_signal',
+          data: { type: 'presenter_stream_started', active: true },
+        });
+      }
+    },
+    participant_rejected: (payload) => {
+      fetchParticipants();
+    },
+    recording_status: (payload) => {
+      const recData = payload.data || payload;
+      setIsRoomBeingRecorded(!!recData.isRecording);
+    },
+    session_ended: () => {
+      alert('This live session has been ended by the host or platform administrator.');
+      onLeave();
     },
     ai_copilot_alert: (payload) => {
       setCopilotAlerts((prev) => [payload.data.message, ...prev].slice(0, 3));
-    }
+    },
   });
 
   // Fetch participants (active + pending)
@@ -94,7 +124,7 @@ export function SessionRoom({
     fetchParticipants();
     let interval: any;
     if (isHost) {
-      interval = setInterval(fetchParticipants, 4000);
+      interval = setInterval(fetchParticipants, 3500);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -105,88 +135,128 @@ export function SessionRoom({
   const handleApproveParticipant = async (targetUserId: string) => {
     try {
       await api.post(`/api/sessions/${sessionId}/approve/${targetUserId}`);
-      // Notify participant list
-      fetchParticipants();
+      await fetchParticipants();
     } catch (e) {
       console.error('Error approving user:', e);
     }
   };
 
-  const startScreenShare = async () => {
+  // Host rejects a pending participant
+  const handleRejectParticipant = async (targetUserId: string) => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: "always" } as any,
-        audio: true,
-      });
-      
-      setActiveStream(stream);
-      if (rtcClient) {
-        rtcClient.setLocalStream(stream);
-      }
-
-      // Handle user manually stopping screen share via browser bar
-      stream.getVideoTracks()[0].onended = () => {
-        setActiveStream(null);
-      };
-    } catch (err: any) {
-      console.warn('Display media capture cancelled or rejected:', err);
-      // Fallback to user camera if screen capture was rejected
-      try {
-        const camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setActiveStream(camStream);
-        if (rtcClient) {
-          rtcClient.setLocalStream(camStream);
-        }
-      } catch (camErr) {
-        console.error('Camera fallback failed:', camErr);
-      }
+      await api.post(`/api/sessions/${sessionId}/reject/${targetUserId}`);
+      await fetchParticipants();
+    } catch (e) {
+      console.error('Error rejecting user:', e);
     }
   };
 
-  // Initialize WebRTC signaling & streams
+  // Initialize WebRTC client
   useEffect(() => {
     if (!user) return;
-    
+
     const client = new WebRTCClient({
+      sessionId,
       isHost,
+      isPresenter: isHost,
       onStream: (stream) => {
-        // Only set remote streams to prevent screen duplication for host
         if (!isHost) {
           setActiveStream(stream);
         }
       },
       onSignal: (signal) => {
-        socketRef.current?.send({ type: 'rtc_signal', data: signal });
+        socketRef.current?.send({
+          type: 'rtc_signal',
+          data: signal,
+          target_user_id: signal.target_user_id,
+        });
       },
     });
 
     setRtcClient(client);
 
+    // If viewer, announce presence to presenter
+    if (!isHost) {
+      setTimeout(() => {
+        socketRef.current?.send({
+          type: 'rtc_signal',
+          data: {
+            type: 'peer_joined',
+            user_id: user.id,
+            username: user.username,
+          },
+        });
+      }, 600);
+    }
+
     return () => {
       client.close();
-      if (activeStream) {
-        activeStream.getTracks().forEach((track) => track.stop());
-      }
     };
   }, [sessionId, isHost, user]);
+
+  // Start Screen Share
+  const handleStartScreenShare = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: 'always',
+          displaySurface: 'monitor',
+          frameRate: { max: 30 },
+        } as any,
+        audio: true,
+      });
+
+      setActiveStream(stream);
+      setIsSharingScreen(true);
+
+      if (rtcClient) {
+        await rtcClient.setLocalStream(stream);
+      }
+
+      // Handle user stopping screen share via native browser bar
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          handleStopScreenShare();
+        };
+      }
+    } catch (err: any) {
+      console.warn('Display media capture cancelled or rejected:', err);
+    }
+  };
+
+  // Stop Screen Share
+  const handleStopScreenShare = () => {
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => track.stop());
+    }
+    setActiveStream(null);
+    setIsSharingScreen(false);
+    if (rtcClient) {
+      rtcClient.setLocalStream(null);
+    }
+  };
+
+  const handleShareToggle = (enabled: boolean) => {
+    if (enabled && isHost) {
+      handleStartScreenShare();
+    } else if (isHost) {
+      handleStopScreenShare();
+    }
+  };
 
   // Screen share 30-minute limit (1800 seconds)
   useEffect(() => {
     let interval: any;
-    if (activeStream && isHost) {
+    if (isSharingScreen && isHost) {
       setShareTimeLeft(1800);
       interval = setInterval(() => {
         setShareTimeLeft((prev) => {
           if (prev === null) return null;
           if (prev <= 1) {
             clearInterval(interval);
-            // Stop stream track
-            if (activeStream) {
-              activeStream.getTracks().forEach((track) => track.stop());
-            }
-            setActiveStream(null);
-            rtcClient?.setLocalStream(null);
-            alert('Your screen sharing has reached the 30-minute session limit and was automatically stopped.');
+            handleStopScreenShare();
+            alert('Your screen sharing reached the 30-minute session limit and was safely stopped.');
             return null;
           }
           return prev - 1;
@@ -198,7 +268,118 @@ export function SessionRoom({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [activeStream, isHost]);
+  }, [isSharingScreen, isHost]);
+
+  // ============================================================
+  // Session Recording Feature (MediaRecorder API)
+  // ============================================================
+  const startRecording = async () => {
+    try {
+      let recordStream: MediaStream;
+
+      if (activeStream && activeStream.active) {
+        // Use active screen share / camera stream
+        recordStream = activeStream;
+      } else {
+        // Capture screen or audio for recording
+        recordStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+      }
+
+      recordedChunksRef.current = [];
+
+      // Determine supported MIME type
+      const mimeType = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4',
+      ].find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
+
+      const options = mimeType ? { mimeType } : {};
+      const recorder = new MediaRecorder(recordStream, options);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        exportRecording();
+      };
+
+      recorder.start(1000); // 1-second timeslices
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      // Notify WebSocket channel that recording started
+      socketRef.current?.send({
+        type: 'recording_status',
+        data: { isRecording: true, hostName },
+      });
+
+      // Start duration timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to start session recording:', err);
+      alert('Unable to start recording: permissions were denied or no stream was available.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+    }
+    setIsRecording(false);
+
+    // Notify WebSocket channel that recording stopped
+    socketRef.current?.send({
+      type: 'recording_status',
+      data: { isRecording: false, hostName },
+    });
+  };
+
+  const exportRecording = () => {
+    if (recordedChunksRef.current.length === 0) return;
+
+    const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    const sanitizedTitle = sessionTitle.replace(/[^a-zA-Z0-9_-]/g, '_');
+    a.download = `FxZone-Recording-${sanitizedTitle}-${new Date().toISOString().slice(0, 10)}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  };
+
+  const handleToggleRecord = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // Format recording timer seconds to MM:SS
+  const formatRecordTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
 
   const handleSendChat = (text: string) => {
     if (!user) return;
@@ -224,15 +405,16 @@ export function SessionRoom({
     rtcClient?.toggleVideo(enabled);
   };
 
-  const handleShareToggle = (enabled: boolean) => {
-    if (enabled && isHost) {
-      startScreenShare();
-    } else if (isHost) {
-      if (activeStream) {
-        activeStream.getTracks().forEach((track) => track.stop());
-      }
-      setActiveStream(null);
-      rtcClient?.setLocalStream(null);
+  // Admin hard cutoff
+  const handleEndSessionAdmin = async () => {
+    if (!isAdmin) return;
+    if (!confirm('Terminate this live broadcast session? All participants will be disconnected.')) return;
+    try {
+      await api.post(`/api/sessions/${sessionId}/end`, {});
+      onLeave();
+    } catch (e) {
+      console.error('Admin cutoff failed:', e);
+      alert('Failed to end session. Verify administrator permissions.');
     }
   };
 
@@ -251,14 +433,23 @@ export function SessionRoom({
         <div>
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             {sessionTitle}
-            <span className="text-[9px] bg-red-600/10 border border-red-500/20 text-red-400 font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider">
+            <span className="text-[9px] bg-red-600/10 border border-red-500/20 text-red-400 font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
               Live
             </span>
           </h2>
           <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">Presenter: {hostName}</span>
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-semibold text-zinc-300">
+        <div className="flex items-center gap-3 text-xs font-semibold text-zinc-300">
+          {/* Room Recording Status Banner */}
+          {(isRecording || isRoomBeingRecorded) && (
+            <div className="flex items-center gap-1.5 bg-red-500/15 border border-red-500/30 text-red-400 px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider">
+              <Disc size={11} className="animate-spin text-red-500" />
+              <span>Recording {isRecording ? formatRecordTime(recordingSeconds) : 'Active'}</span>
+            </div>
+          )}
+
           {isAdmin && (
             <button
               onClick={handleEndSessionAdmin}
@@ -268,19 +459,24 @@ export function SessionRoom({
               <X size={11} /> End Session (Admin)
             </button>
           )}
+
           {shareTimeLeft !== null && (
             <div className="flex items-center gap-1.5 text-amber-500 bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 rounded-lg">
               <Clock size={12} className="animate-pulse" />
-              <span className="text-[9px] uppercase tracking-wider font-bold">Screen Share Limit: {formatTime(shareTimeLeft)}</span>
+              <span className="text-[9px] uppercase tracking-wider font-bold">
+                Share Limit: {formatTime(shareTimeLeft)}
+              </span>
             </div>
           )}
-          <div className="flex items-center gap-1">
-            <Users size={14} className="text-blue-400" />
-            <span>{participantsCount} participants</span>
+
+          <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-lg">
+            <Users size={13} className="text-blue-400" />
+            <span className="text-[10px]">{participantsCount} {participantsCount === 1 ? 'viewer' : 'viewers'}</span>
           </div>
+
           <div className="h-4 w-[1px] bg-zinc-800" />
           <span className="text-[9px] text-emerald-500 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
-            <Shield size={11} className="fill-emerald-500/10" /> Protected signaling
+            <Shield size={11} className="fill-emerald-500/10" /> Encrypted WebRTC
           </span>
         </div>
       </div>
@@ -289,7 +485,7 @@ export function SessionRoom({
       <div className="flex-1 flex min-h-0 relative">
         {/* Stream Area */}
         <div className="flex-1 p-6 flex flex-col gap-4 min-w-0">
-          {/* Google AI Alerts Display */}
+          {/* AI Alerts */}
           {copilotAlerts.length > 0 && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 p-2.5 rounded-lg flex items-start gap-2 text-[10px] text-yellow-500 animate-pulse">
               <AlertTriangle size={14} className="shrink-0 mt-0.5" />
@@ -300,18 +496,31 @@ export function SessionRoom({
             </div>
           )}
 
-          {/* Screen Share Screen */}
+          {/* Screen Share Component */}
           <div className="flex-1 min-h-0">
-            <ScreenShare stream={activeStream} presenterName={hostName} isLocal={isHost} />
+            <ScreenShare
+              stream={activeStream}
+              presenterName={isHost ? 'You (Sharing Screen)' : hostName}
+              isLocal={isHost}
+            />
           </div>
-          
-          {/* Controls Bar */}
+
+          {/* Interactive Controls Bar with Screen Share and Recording */}
           <SessionControls
             isHost={isHost}
+            isSharing={isSharingScreen}
+            isRecording={isRecording}
+            recordingDuration={formatRecordTime(recordingSeconds)}
             onToggleMic={handleMicToggle}
             onToggleCamera={handleCamToggle}
             onToggleShare={handleShareToggle}
-            onLeave={onLeave}
+            onToggleRecord={handleToggleRecord}
+            onLeave={() => {
+              if (isRecording) {
+                stopRecording();
+              }
+              onLeave();
+            }}
           />
         </div>
 
@@ -326,16 +535,23 @@ export function SessionRoom({
             </div>
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar">
               {pendingParticipants.map((p) => {
-                const targetUserId = p.user_id || p.userId || p.user?.id;
+                const targetUserId = String(p.user_id || p.userId || p.user?.id);
                 return (
-                  <div key={p.id} className="p-2.5 bg-zinc-900 border border-zinc-850 rounded-xl flex items-center justify-between gap-2 transition-all hover:bg-zinc-850/50">
+                  <div
+                    key={p.id}
+                    className="p-2.5 bg-zinc-900 border border-zinc-850 rounded-xl flex items-center justify-between gap-2 transition-all hover:bg-zinc-850/50"
+                  >
                     <div className="flex items-center gap-2 min-w-0">
-                      <Avatar name={p.user.displayName || p.user.username} src={p.user.avatarUrl} size="sm" />
+                      <Avatar
+                        name={p.user?.displayName || p.user?.username || 'Trader'}
+                        src={p.user?.avatarUrl}
+                        size="sm"
+                      />
                       <div className="min-w-0">
                         <span className="text-[10px] font-bold text-white block truncate leading-tight">
-                          {p.user.displayName || p.user.username}
+                          {p.user?.displayName || p.user?.username}
                         </span>
-                        <span className="text-[8px] text-zinc-550 block">@{p.user.username}</span>
+                        <span className="text-[8px] text-zinc-550 block">@{p.user?.username}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -349,15 +565,7 @@ export function SessionRoom({
                       </Button>
                       <button
                         className="h-6 w-6 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-rose-600/80 text-zinc-400 hover:text-white transition-colors"
-                        onClick={async () => {
-                          if (!targetUserId) return;
-                          try {
-                            await api.post(`/api/sessions/${sessionId}/reject/${targetUserId}`);
-                            fetchParticipants();
-                          } catch (e) {
-                            console.error(e);
-                          }
-                        }}
+                        onClick={() => handleRejectParticipant(targetUserId)}
                         title="Reject request"
                       >
                         <X size={10} />
@@ -370,7 +578,7 @@ export function SessionRoom({
           </div>
         )}
 
-        {/* Embedded Chat sidebar */}
+        {/* Embedded Live Chat Sidebar */}
         <SessionChat
           messages={chatMessages}
           onSendMessage={handleSendChat}

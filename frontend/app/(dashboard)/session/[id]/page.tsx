@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { SessionRoom } from '@/components/live/SessionRoom';
-import { Loader2, ShieldAlert } from 'lucide-react';
+import { useWebSocket } from '@/hooks/useWebSocket';
+import { Loader2, ShieldAlert, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 
 export default function SessionRoomPage() {
@@ -16,6 +17,7 @@ export default function SessionRoomPage() {
   const [session, setSession] = useState<any>(null);
   const [participant, setParticipant] = useState<any>(null);
   const [isPendingApproval, setIsPendingApproval] = useState(false);
+  const [isRejected, setIsRejected] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchSessionDetails = async () => {
@@ -61,10 +63,28 @@ export default function SessionRoomPage() {
     joinSession();
   }, [sessionId]);
 
-  // Poll for approval status if pending
+  // Reactive approval check via WebSocket while pending
+  useWebSocket(isPendingApproval ? `/ws/session/${sessionId}` : '', {
+    participant_approved: (payload) => {
+      const targetUserId = String(payload.user_id || payload.userId || '');
+      if (user && String(user.id) === targetUserId) {
+        setIsPendingApproval(false);
+        joinSession();
+      }
+    },
+    participant_rejected: (payload) => {
+      const targetUserId = String(payload.user_id || payload.userId || '');
+      if (user && String(user.id) === targetUserId) {
+        setIsPendingApproval(false);
+        setIsRejected(true);
+      }
+    },
+  });
+
+  // Polling fallback for approval status
   useEffect(() => {
     let interval: any;
-    if (isPendingApproval) {
+    if (isPendingApproval && !isRejected) {
       interval = setInterval(async () => {
         try {
           const response = await api.post(`/api/sessions/${sessionId}/join`);
@@ -76,12 +96,12 @@ export default function SessionRoomPage() {
         } catch (e) {
           console.error('Error checking approval status:', e);
         }
-      }, 3000);
+      }, 2500);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isPendingApproval, sessionId]);
+  }, [isPendingApproval, isRejected, sessionId]);
 
   const handleLeave = async () => {
     try {
@@ -118,6 +138,26 @@ export default function SessionRoomPage() {
     );
   }
 
+  if (isRejected) {
+    return (
+      <div className="h-[calc(100vh-64px-32px)] flex flex-col items-center justify-center text-center p-6 select-none bg-zinc-950">
+        <div className="h-12 w-12 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-4 text-rose-500">
+          <XCircle size={24} />
+        </div>
+        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Access Request Declined</h4>
+        <p className="text-[10px] text-zinc-500 max-w-[280px] mt-2 mb-6 leading-relaxed">
+          The host of this live room did not approve your request to join this session.
+        </p>
+        <button
+          onClick={handleLeave}
+          className="h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 transition-colors"
+        >
+          Return to Listings
+        </button>
+      </div>
+    );
+  }
+
   if (isPendingApproval) {
     return (
       <div className="h-[calc(100vh-64px-32px)] flex flex-col items-center justify-center text-center p-6 select-none bg-zinc-950">
@@ -126,11 +166,11 @@ export default function SessionRoomPage() {
         </div>
         <h4 className="text-xs font-bold text-white uppercase tracking-wider">Awaiting Host Approval</h4>
         <p className="text-[10px] text-zinc-500 max-w-[280px] mt-2 mb-6 leading-relaxed">
-          The host of this live room ("{session.host?.displayName || session.host?.username}") must authorize your access request before you can enter the feed.
+          The host of this live room (&quot;{session.host?.displayName || session.host?.username}&quot;) must authorize your access request before you can enter the feed.
         </p>
         <button
           onClick={handleLeave}
-          className="h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 transition-colors"
+          className="h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-lg text-xs font-semibold text-zinc-300 transition-colors"
         >
           Cancel Request & Return
         </button>
