@@ -295,43 +295,47 @@ export function SessionRoom({
               </h3>
             </div>
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar">
-              {pendingParticipants.map((p) => (
-                <div key={p.id} className="p-2.5 bg-zinc-900 border border-zinc-850 rounded-xl flex items-center justify-between gap-2 transition-all hover:bg-zinc-850/50">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Avatar name={p.user.displayName || p.user.username} src={p.user.avatarUrl} size="sm" />
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-bold text-white block truncate leading-tight">
-                        {p.user.displayName || p.user.username}
-                      </span>
-                      <span className="text-[8px] text-zinc-550 block">@{p.user.username}</span>
+              {pendingParticipants.map((p) => {
+                const targetUserId = p.user_id || p.userId || p.user?.id;
+                return (
+                  <div key={p.id} className="p-2.5 bg-zinc-900 border border-zinc-850 rounded-xl flex items-center justify-between gap-2 transition-all hover:bg-zinc-850/50">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar name={p.user.displayName || p.user.username} src={p.user.avatarUrl} size="sm" />
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-bold text-white block truncate leading-tight">
+                          {p.user.displayName || p.user.username}
+                        </span>
+                        <span className="text-[8px] text-zinc-550 block">@{p.user.username}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        className="h-6 px-2 text-[9px] bg-emerald-600 hover:bg-emerald-500 font-bold rounded-lg flex items-center gap-0.5"
+                        onClick={() => handleApproveParticipant(targetUserId)}
+                        title="Approve access"
+                      >
+                        <Check size={10} /> Approve
+                      </Button>
+                      <button
+                        className="h-6 w-6 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-rose-600/80 text-zinc-400 hover:text-white transition-colors"
+                        onClick={async () => {
+                          if (!targetUserId) return;
+                          try {
+                            await api.post(`/api/sessions/${sessionId}/reject/${targetUserId}`);
+                            fetchParticipants();
+                          } catch (e) {
+                            console.error(e);
+                          }
+                        }}
+                        title="Reject request"
+                      >
+                        <X size={10} />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      size="sm"
-                      className="h-6 px-2 text-[9px] bg-emerald-600 hover:bg-emerald-500 font-bold rounded-lg flex items-center gap-0.5"
-                      onClick={() => handleApproveParticipant(p.user_id)}
-                      title="Approve access"
-                    >
-                      <Check size={10} /> Approve
-                    </Button>
-                    <button
-                      className="h-6 w-6 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-rose-600/80 text-zinc-400 hover:text-white transition-colors"
-                      onClick={async () => {
-                        try {
-                          await api.post(`/api/sessions/${sessionId}/reject/${p.user_id}`);
-                          fetchParticipants();
-                        } catch (e) {
-                          console.error(e);
-                        }
-                      }}
-                      title="Reject request"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

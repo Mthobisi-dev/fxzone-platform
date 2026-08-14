@@ -77,22 +77,37 @@ class LiveSessionService:
         res = await self.db.execute(query)
         return list(res.scalars().all())
 
-    async def get_session_by_id(self, session_id: int) -> Optional[LiveSession]:
+    async def get_session_by_id(self, session_id: Any) -> Optional[LiveSession]:
         """Retrieve details of a session by ID."""
+        import uuid
+        try:
+            s_uuid = uuid.UUID(str(session_id))
+        except ValueError:
+            s_uuid = session_id
+
         query = (
             select(LiveSession)
-            .where(LiveSession.id == session_id)
+            .where(LiveSession.id == s_uuid)
             .options(selectinload(LiveSession.host))
         )
         res = await self.db.execute(query)
         return res.scalar_one_or_none()
 
-    async def join_session(self, user_id: int, session_id: int, role: str = "viewer") -> SessionParticipant:
+    async def join_session(self, user_id: Any, session_id: Any, role: str = "viewer") -> SessionParticipant:
         """Register a user as a participant (viewer or co-host) in a live session."""
         now = datetime.now(timezone.utc)
+        import uuid
+        try:
+            s_uuid = uuid.UUID(str(session_id))
+        except ValueError:
+            s_uuid = session_id
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
         
         # 1. Fetch session
-        session = await self.get_session_by_id(session_id)
+        session = await self.get_session_by_id(s_uuid)
         if not session:
             raise ValueError("Session not found.")
             
@@ -100,7 +115,7 @@ class LiveSessionService:
             raise ValueError("This session has already ended.")
 
         # 2. Check if host is joining, if so, turn session status to 'live'
-        if str(user_id) == str(session.host_id):
+        if str(u_uuid) == str(session.host_id):
             session.status = "live"
             session.started_at = now
             role = "host"
@@ -112,8 +127,8 @@ class LiveSessionService:
             select(SessionParticipant)
             .where(
                 and_(
-                    SessionParticipant.session_id == session_id,
-                    SessionParticipant.user_id == user_id,
+                    SessionParticipant.session_id == s_uuid,
+                    SessionParticipant.user_id == u_uuid,
                     SessionParticipant.left_at == None
                 )
             )
@@ -127,43 +142,63 @@ class LiveSessionService:
 
         # 4. Insert participant record
         participant = SessionParticipant(
-            session_id=session_id,
-            user_id=user_id,
+            session_id=s_uuid,
+            user_id=u_uuid,
             role=role,
             joined_at=now
         )
         self.db.add(participant)
-        await self.db.flush()
+        await self.db.commit()
 
         # Load user details
         query = select(SessionParticipant).where(SessionParticipant.id == participant.id).options(selectinload(SessionParticipant.user))
         res = await self.db.execute(query)
         return res.scalar_one()
 
-    async def leave_session(self, user_id: int, session_id: int) -> None:
+    async def leave_session(self, user_id: Any, session_id: Any) -> None:
         """Mark a participant as having left the live session."""
         now = datetime.utcnow()
+        import uuid
+        try:
+            s_uuid = uuid.UUID(str(session_id))
+        except ValueError:
+            s_uuid = session_id
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
         
         stmt = (
             update(SessionParticipant)
             .where(
                 and_(
-                    SessionParticipant.session_id == session_id,
-                    SessionParticipant.user_id == user_id,
+                    SessionParticipant.session_id == s_uuid,
+                    SessionParticipant.user_id == u_uuid,
                     SessionParticipant.left_at == None
                 )
             )
             .values(left_at=now)
         )
         await self.db.execute(stmt)
+        await self.db.commit()
 
-    async def end_session(self, host_id: int, session_id: int) -> LiveSession:
+    async def end_session(self, host_id: Any, session_id: Any) -> LiveSession:
         """End a live session (host privilege only), marking all participants as left."""
-        session = await self.get_session_by_id(session_id)
+        import uuid
+        try:
+            s_uuid = uuid.UUID(str(session_id))
+        except ValueError:
+            s_uuid = session_id
+        try:
+            h_uuid = uuid.UUID(str(host_id))
+        except ValueError:
+            h_uuid = host_id
+
+        session = await self.get_session_by_id(s_uuid)
         if not session:
             raise ValueError("Session not found.")
 
-        if session.host_id != host_id:
+        if str(session.host_id) != str(h_uuid):
             raise PermissionError("Only the session host can terminate a session.")
 
         now = datetime.utcnow()
@@ -175,31 +210,44 @@ class LiveSessionService:
             update(SessionParticipant)
             .where(
                 and_(
-                    SessionParticipant.session_id == session_id,
+                    SessionParticipant.session_id == s_uuid,
                     SessionParticipant.left_at == None
                 )
             )
             .values(left_at=now)
         )
         await self.db.execute(stmt)
-        await self.db.flush()
+        await self.db.commit()
         
         return session
 
-    async def approve_participant(self, host_id: str, session_id: str, participant_user_id: str) -> SessionParticipant:
+    async def approve_participant(self, host_id: Any, session_id: Any, participant_user_id: Any) -> SessionParticipant:
         """Host approves a pending participant to join the session."""
-        session = await self.get_session_by_id(session_id)
+        import uuid
+        try:
+            s_uuid = uuid.UUID(str(session_id))
+        except ValueError:
+            s_uuid = session_id
+        try:
+            u_uuid = uuid.UUID(str(participant_user_id))
+        except ValueError:
+            u_uuid = participant_user_id
+        try:
+            h_uuid = uuid.UUID(str(host_id))
+        except ValueError:
+            h_uuid = host_id
+
+        session = await self.get_session_by_id(s_uuid)
         if not session:
             raise ValueError("Session not found.")
-        if str(session.host_id) != str(host_id):
+        if str(session.host_id) != str(h_uuid):
             raise PermissionError("Only the session host can approve participants.")
 
-        # Find active pending participant
+        # Find active participant
         query = select(SessionParticipant).where(
             and_(
-                SessionParticipant.session_id == session_id,
-                SessionParticipant.user_id == participant_user_id,
-                SessionParticipant.role == "pending",
+                SessionParticipant.session_id == s_uuid,
+                SessionParticipant.user_id == u_uuid,
                 SessionParticipant.left_at == None
             )
         )
@@ -209,14 +257,14 @@ class LiveSessionService:
             raise ValueError("Pending participant not found.")
 
         p.role = "viewer"
-        await self.db.flush()
+        await self.db.commit()
         
         # Load user details
         query = select(SessionParticipant).where(SessionParticipant.id == p.id).options(selectinload(SessionParticipant.user))
         res = await self.db.execute(query)
         return res.scalar_one()
 
-    async def get_participants(self, session_id: str) -> List[SessionParticipant]:
+    async def get_participants(self, session_id: Any) -> List[SessionParticipant]:
         """Fetch active participant list for a specific session."""
         import uuid
         try:
@@ -237,19 +285,32 @@ class LiveSessionService:
         res = await self.db.execute(query)
         return list(res.scalars().all())
 
-    async def reject_participant(self, host_id: str, session_id: str, participant_user_id: str) -> bool:
+    async def reject_participant(self, host_id: Any, session_id: Any, participant_user_id: Any) -> bool:
         """Host rejects a pending participant."""
-        session = await self.get_session_by_id(session_id)
+        import uuid
+        try:
+            s_uuid = uuid.UUID(str(session_id))
+        except ValueError:
+            s_uuid = session_id
+        try:
+            u_uuid = uuid.UUID(str(participant_user_id))
+        except ValueError:
+            u_uuid = participant_user_id
+        try:
+            h_uuid = uuid.UUID(str(host_id))
+        except ValueError:
+            h_uuid = host_id
+
+        session = await self.get_session_by_id(s_uuid)
         if not session:
             raise ValueError("Session not found.")
-        if str(session.host_id) != str(host_id):
+        if str(session.host_id) != str(h_uuid):
             raise PermissionError("Only the session host can reject participants.")
 
         query = select(SessionParticipant).where(
             and_(
-                SessionParticipant.session_id == session_id,
-                SessionParticipant.user_id == participant_user_id,
-                SessionParticipant.role == "pending",
+                SessionParticipant.session_id == s_uuid,
+                SessionParticipant.user_id == u_uuid,
                 SessionParticipant.left_at == None
             )
         )
@@ -257,22 +318,28 @@ class LiveSessionService:
         p = res.scalar_one_or_none()
         if p:
             p.left_at = datetime.utcnow()
-            await self.db.flush()
+            await self.db.commit()
         return True
 
-    async def clear_ended_sessions(self, user_id: str) -> int:
+    async def clear_ended_sessions(self, user_id: Any) -> int:
         """Clear all ended sessions from history."""
         from sqlalchemy import delete
         stmt = delete(LiveSession).where(LiveSession.status == "ended")
         res = await self.db.execute(stmt)
-        await self.db.flush()
+        await self.db.commit()
         return res.rowcount
 
-    async def delete_session(self, session_id: str, user_id: str) -> bool:
+    async def delete_session(self, session_id: Any, user_id: Any) -> bool:
         """Delete a single session by ID."""
-        session = await self.get_session_by_id(session_id)
+        import uuid
+        try:
+            s_uuid = uuid.UUID(str(session_id))
+        except ValueError:
+            s_uuid = session_id
+
+        session = await self.get_session_by_id(s_uuid)
         if not session:
             return False
         await self.db.delete(session)
-        await self.db.flush()
+        await self.db.commit()
         return True
