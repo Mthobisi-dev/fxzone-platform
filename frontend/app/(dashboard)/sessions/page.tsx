@@ -31,10 +31,17 @@ export default function SessionsPage() {
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [cuttingOff, setCuttingOff] = useState<string | null>(null);
   
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [creating, setCreating] = useState(false);
+
+  const isAdmin = !!user && (
+    (user as any).role === 'admin' ||
+    (user as any).username === 'admin' ||
+    (user as any).email === 'admin@fxzone.io'
+  );
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -98,23 +105,39 @@ export default function SessionsPage() {
   };
 
   const handleClearHistory = async () => {
-    if (!confirm('Are you sure you want to clear live session history?')) return;
+    if (!confirm('Clear ALL ended session records and their participant history? This cannot be undone.')) return;
     try {
       await api.delete('/api/sessions/history');
       setSessions((prev) => prev.filter((s) => s.status !== 'ended'));
     } catch (err) {
-      console.error(err);
-      setSessions((prev) => prev.filter((s) => s.status !== 'ended'));
+      console.error('Clear history error:', err);
     }
   };
 
   const handleDeleteSession = async (id: string) => {
+    if (!confirm('Permanently delete this session record?')) return;
     try {
       await api.delete(`/api/sessions/${id}`);
       setSessions((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
-      console.error(err);
-      setSessions((prev) => prev.filter((s) => s.id !== id));
+      console.error('Delete session error:', err);
+    }
+  };
+
+  // Admin-only: terminate a live/scheduled session without being the host
+  const handleAdminCutOff = async (id: string) => {
+    if (!confirm('Cut off this live session? All participants will be disconnected.')) return;
+    setCuttingOff(id);
+    try {
+      await api.post(`/api/sessions/${id}/end`, {});
+      setSessions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, status: 'ended' } : s))
+      );
+    } catch (err) {
+      console.error('Admin cutoff error:', err);
+      alert('Failed to cut off session. Check console.');
+    } finally {
+      setCuttingOff(null);
     }
   };
 
@@ -187,10 +210,20 @@ export default function SessionsPage() {
                         <span className="text-[8px] text-zinc-500">@{session.host.username}</span>
                       </div>
                     </div>
-                    
-                    <span className="text-[8px] font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase tracking-wider">
-                      <Users size={10} /> {session.participantsCount} viewing
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase tracking-wider">
+                        <Users size={10} /> {session.participantsCount} viewing
+                      </span>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteSession(session.id)}
+                          className="p-1 text-zinc-500 hover:text-rose-400 rounded transition-colors"
+                          title="Delete session record (Admin)"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <h4 className="text-xs font-bold text-white mb-1.5 leading-snug">{session.title}</h4>
@@ -199,13 +232,31 @@ export default function SessionsPage() {
                   </p>
                 </div>
 
-                <Button
-                  onClick={() => handleJoinSession(session.id)}
-                  size="sm"
-                  className="w-full bg-blue-600 hover:bg-blue-500 font-semibold text-xs py-1.5"
-                >
-                  Join Room
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleJoinSession(session.id)}
+                    size="sm"
+                    className="flex-1 bg-blue-600 hover:bg-blue-500 font-semibold text-xs py-1.5"
+                  >
+                    Join Room
+                  </Button>
+                  {isAdmin && (
+                    <Button
+                      onClick={() => handleAdminCutOff(session.id)}
+                      size="sm"
+                      disabled={cuttingOff === session.id}
+                      className="bg-rose-700 hover:bg-rose-600 text-white font-semibold text-xs px-3 flex items-center gap-1"
+                      title="Admin: Terminate live session"
+                    >
+                      {cuttingOff === session.id ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={12} />
+                      )}
+                      Cut Off
+                    </Button>
+                  )}
+                </div>
               </Card>
             ))}
           </div>
@@ -245,12 +296,12 @@ export default function SessionsPage() {
           <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
             <Video size={12} className="text-zinc-500" /> Past Session History ({endedSessions.length})
           </h3>
-          {endedSessions.length > 0 && (
+          {isAdmin && (
             <button
               onClick={handleClearHistory}
               className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 hover:underline transition-colors"
             >
-              <Trash2 size={12} /> Clear History
+              <Trash2 size={12} /> Clear All History
             </button>
           )}
         </div>

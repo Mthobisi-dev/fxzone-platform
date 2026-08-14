@@ -51,11 +51,13 @@ export function SessionRoom({
   // Admin hard-cutoff: terminate any session regardless of host role
   const handleEndSessionAdmin = async () => {
     if (!isAdmin) return;
+    if (!confirm('Terminate this live session? All participants will be disconnected.')) return;
     try {
-      await api.delete(`/api/sessions/${sessionId}`);
+      await api.post(`/api/sessions/${sessionId}/end`, {});
       onLeave();
     } catch (e) {
       console.error('Admin cutoff failed:', e);
+      alert('Failed to end session. You may not have admin privileges.');
     }
   };
 
