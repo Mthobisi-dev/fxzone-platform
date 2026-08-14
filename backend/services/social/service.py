@@ -54,106 +54,285 @@ class SocialService:
         result = await self.db.execute(query)
         return result.scalar_one()
 
-    async def get_post_by_id(self, post_id: int) -> Optional[Post]:
-        """Fetch a specific post with its author details."""
+    async def get_post_by_id(self, post_id: Any, current_user_id: Any = None) -> Optional[Dict[str, Any]]:
+        """Fetch a specific post with its author details and user reaction state."""
+        import uuid
+        try:
+            p_uuid = uuid.UUID(str(post_id))
+        except ValueError:
+            p_uuid = post_id
+
         query = (
             select(Post)
-            .where(Post.id == post_id)
-            .options(selectinload(Post.user))
+            .where(Post.id == p_uuid)
+            .options(
+                selectinload(Post.user),
+                selectinload(Post.tagged_assets),
+                selectinload(Post.reactions),
+                selectinload(Post.comments)
+            )
         )
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        p = result.scalar_one_or_none()
+        if not p:
+            return None
 
-    async def get_feed(self, user_id: int, limit: int = 15, offset: int = 0) -> List[Post]:
-        """Fetch a personalized feed ranked by age-decayed engagement score.
-        
-        Score formula: (likes * 3 + comments * 5 + reposts * 7) / (hours_age + 2)^1.5
-        """
+        is_liked = False
+        is_reposted = False
+        is_bookmarked = False
+
+        if current_user_id:
+            try:
+                u_uuid = uuid.UUID(str(current_user_id))
+            except ValueError:
+                u_uuid = current_user_id
+            
+            from shared.models import Bookmark
+            bm = await self.db.scalar(select(Bookmark.id).where(and_(Bookmark.user_id == u_uuid, Bookmark.post_id == p_uuid)))
+            is_bookmarked = bm is not None
+
+            if p.reactions:
+                is_liked = any(str(r.user_id) == str(u_uuid) and r.reaction_type == "like" for r in p.reactions)
+                is_reposted = any(str(r.user_id) == str(u_uuid) and r.reaction_type == "repost" for r in p.reactions)
+
+        actual_likes = len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else (p.likes_count or 0)
+        actual_comments = len(p.comments) if p.comments else (p.comments_count or 0)
+        actual_reposts = len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else (p.reposts_count or 0)
+
+        return {
+            "id": p.id,
+            "user_id": p.user_id,
+            "user": {
+                "id": p.user.id,
+                "username": p.user.username,
+                "display_name": p.user.display_name or p.user.username,
+                "avatar_url": p.user.avatar_url,
+                "role": p.user.role.value if hasattr(p.user.role, 'value') else p.user.role
+            },
+            "content": p.content,
+            "image_url": p.image_url,
+            "asset_tags": [a.symbol for a in p.tagged_assets] if p.tagged_assets else [],
+            "likes_count": max(p.likes_count or 0, actual_likes),
+            "comments_count": max(p.comments_count or 0, actual_comments),
+            "reposts_count": max(p.reposts_count or 0, actual_reposts),
+            "is_story": p.is_story or False,
+            "is_pinned": getattr(p, "is_pinned", False),
+            "expires_at": p.expires_at,
+            "created_at": p.created_at,
+            "is_liked_by_user": is_liked,
+            "is_reposted_by_user": is_reposted,
+            "is_bookmarked_by_user": is_bookmarked
+        }
+
+    async def get_feed(self, user_id: Any, limit: int = 15, offset: int = 0) -> List[Dict[str, Any]]:
+        """Fetch a personalized feed ranked by age-decayed engagement score with full user action states."""
+        import uuid
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
+
         # Fetch active standard posts (not stories)
         query = (
             select(Post)
             .where(Post.is_story == False)
-            .options(selectinload(Post.user))
+            .options(
+                selectinload(Post.user),
+                selectinload(Post.tagged_assets),
+                selectinload(Post.reactions),
+                selectinload(Post.comments)
+            )
         )
         result = await self.db.execute(query)
         posts = list(result.scalars().all())
 
+        # Bookmarks for user
+        from shared.models import Bookmark
+        bm_query = select(Bookmark.post_id).where(Bookmark.user_id == u_uuid)
+        bm_res = await self.db.execute(bm_query)
+        bookmarked_post_ids = {str(row[0]) for row in bm_res.all()}
+
+        # Reactions for user
+        user_react_query = select(Reaction).where(Reaction.user_id == u_uuid)
+        react_res = await self.db.execute(user_react_query)
+        user_reactions = list(react_res.scalars().all())
+        liked_post_ids = {str(r.post_id) for r in user_reactions if r.reaction_type == "like"}
+        reposted_post_ids = {str(r.post_id) for r in user_reactions if r.reaction_type == "repost"}
+
         now = datetime.utcnow()
 
-        # Score and rank in Python (simple and accurate for MVP)
         def compute_score(p: Post) -> float:
             created_at = p.created_at or now
-            hours_age = (now - created_at).total_seconds() / 3600.0
-            likes = p.likes_count or 0
-            comments = p.comments_count or 0
-            reposts = p.reposts_count or 0
+            if created_at.tzinfo is not None:
+                created_at = created_at.replace(tzinfo=None)
+            hours_age = max(0, (now - created_at).total_seconds() / 3600.0)
+            likes = p.likes_count or (len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else 0)
+            comments = p.comments_count or (len(p.comments) if p.comments else 0)
+            reposts = p.reposts_count or (len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else 0)
             engagement = (likes * 3) + (comments * 5) + (reposts * 7)
-            score = engagement / ((hours_age + 2.0) ** 1.5)
-            return score
+            return engagement / ((hours_age + 2.0) ** 1.5)
 
         posts.sort(key=lambda p: (1 if getattr(p, 'is_pinned', False) else 0, compute_score(p)), reverse=True)
-        
-        # Apply offset and limit
-        return posts[offset:offset + limit]
+        sliced = posts[offset:offset + limit]
 
-    async def get_user_posts(self, user_id: int, limit: int = 20, offset: int = 0) -> List[Post]:
+        formatted = []
+        for p in sliced:
+            p_id_str = str(p.id)
+            actual_likes = len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else (p.likes_count or 0)
+            actual_comments = len(p.comments) if p.comments else (p.comments_count or 0)
+            actual_reposts = len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else (p.reposts_count or 0)
+            
+            formatted.append({
+                "id": p.id,
+                "user_id": p.user_id,
+                "user": {
+                    "id": p.user.id,
+                    "username": p.user.username,
+                    "display_name": p.user.display_name or p.user.username,
+                    "avatar_url": p.user.avatar_url,
+                    "role": p.user.role.value if hasattr(p.user.role, 'value') else p.user.role
+                },
+                "content": p.content,
+                "image_url": p.image_url,
+                "asset_tags": [a.symbol for a in p.tagged_assets] if p.tagged_assets else [],
+                "likes_count": max(p.likes_count or 0, actual_likes),
+                "comments_count": max(p.comments_count or 0, actual_comments),
+                "reposts_count": max(p.reposts_count or 0, actual_reposts),
+                "is_story": p.is_story or False,
+                "is_pinned": getattr(p, "is_pinned", False),
+                "expires_at": p.expires_at,
+                "created_at": p.created_at,
+                "is_liked_by_user": p_id_str in liked_post_ids,
+                "is_reposted_by_user": p_id_str in reposted_post_ids,
+                "is_bookmarked_by_user": p_id_str in bookmarked_post_ids
+            })
+        return formatted
+
+    async def get_user_posts(self, user_id: Any, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
         """Retrieve standard posts authored by a specific user."""
+        import uuid
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
+
         query = (
             select(Post)
-            .where(and_(Post.user_id == user_id, Post.is_story == False))
-            .options(selectinload(Post.user))
+            .where(and_(Post.user_id == u_uuid, Post.is_story == False))
+            .options(
+                selectinload(Post.user),
+                selectinload(Post.tagged_assets),
+                selectinload(Post.reactions),
+                selectinload(Post.comments)
+            )
             .order_by(Post.created_at.desc())
             .offset(offset)
             .limit(limit)
         )
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        posts = list(result.scalars().all())
 
-    async def add_comment(self, user_id: int, post_id: int, data: CommentCreate) -> Comment:
+        formatted = []
+        for p in posts:
+            actual_likes = len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else (p.likes_count or 0)
+            actual_comments = len(p.comments) if p.comments else (p.comments_count or 0)
+            actual_reposts = len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else (p.reposts_count or 0)
+            formatted.append({
+                "id": p.id,
+                "user_id": p.user_id,
+                "user": {
+                    "id": p.user.id,
+                    "username": p.user.username,
+                    "display_name": p.user.display_name or p.user.username,
+                    "avatar_url": p.user.avatar_url,
+                    "role": p.user.role.value if hasattr(p.user.role, 'value') else p.user.role
+                },
+                "content": p.content,
+                "image_url": p.image_url,
+                "asset_tags": [a.symbol for a in p.tagged_assets] if p.tagged_assets else [],
+                "likes_count": max(p.likes_count or 0, actual_likes),
+                "comments_count": max(p.comments_count or 0, actual_comments),
+                "reposts_count": max(p.reposts_count or 0, actual_reposts),
+                "is_story": p.is_story or False,
+                "is_pinned": getattr(p, "is_pinned", False),
+                "expires_at": p.expires_at,
+                "created_at": p.created_at,
+                "is_liked_by_user": False,
+                "is_reposted_by_user": False,
+                "is_bookmarked_by_user": False
+            })
+        return formatted
+
+    async def add_comment(self, user_id: Any, post_id: Any, data: CommentCreate) -> Comment:
         """Create a new comment on a post and increment comment counter."""
+        import uuid
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
+        try:
+            p_uuid = uuid.UUID(str(post_id))
+        except ValueError:
+            p_uuid = post_id
+
+        parent_uuid = None
+        if data.parent_id:
+            try:
+                parent_uuid = uuid.UUID(str(data.parent_id))
+            except ValueError:
+                parent_uuid = data.parent_id
+
         comment = Comment(
-            post_id=post_id,
-            user_id=user_id,
+            post_id=p_uuid,
+            user_id=u_uuid,
             content=data.content,
-            parent_id=data.parent_id,
+            parent_id=parent_uuid,
             created_at=datetime.utcnow()
         )
         self.db.add(comment)
         
         # Increment comments count on post
-        post_query = select(Post).where(Post.id == post_id)
+        post_query = select(Post).where(Post.id == p_uuid)
         post_result = await self.db.execute(post_query)
         post = post_result.scalar_one_or_none()
-        if post and str(post.user_id) != str(user_id):
-            try:
-                from services.notifications.service import NotificationService
-                notif_service = NotificationService(self.db)
-                user_stmt = select(User).where(User.id == user_id)
-                u_res = await self.db.execute(user_stmt)
-                commenter = u_res.scalar_one_or_none()
-                commenter_name = commenter.display_name if commenter else "Someone"
-                await notif_service.create_notification(
-                    user_id=post.user_id,
-                    notification_type="comment",
-                    title="New Comment on Your Post",
-                    message=f"{commenter_name} commented: \"{data.content[:40]}\"",
-                    data={"post_id": str(post_id)}
-                )
-            except Exception as e:
-                logger.error(f"Error creating comment notification: {e}")
+        if post:
+            post.comments_count = (post.comments_count or 0) + 1
+            if str(post.user_id) != str(u_uuid):
+                try:
+                    from services.notifications.service import NotificationService
+                    notif_service = NotificationService(self.db)
+                    user_stmt = select(User).where(User.id == u_uuid)
+                    u_res = await self.db.execute(user_stmt)
+                    commenter = u_res.scalar_one_or_none()
+                    commenter_name = commenter.display_name if commenter else "Someone"
+                    await notif_service.create_notification(
+                        user_id=post.user_id,
+                        notification_type="comment",
+                        title="New Comment",
+                        message=f"{commenter_name} replied: \"{data.content[:45]}...\"",
+                        data={"post_id": str(p_uuid)}
+                    )
+                except Exception as e:
+                    logger.error(f"Error creating comment notification: {e}")
 
-        await self.db.flush()
+        await self.db.commit()
         
         # Load user relation
         query = select(Comment).where(Comment.id == comment.id).options(selectinload(Comment.user))
         result = await self.db.execute(query)
         return result.scalar_one()
 
-    async def get_post_comments(self, post_id: int) -> List[Comment]:
+    async def get_post_comments(self, post_id: Any) -> List[Comment]:
         """Fetch comments for a post, ordered chronologically."""
+        import uuid
+        try:
+            p_uuid = uuid.UUID(str(post_id))
+        except ValueError:
+            p_uuid = post_id
+
         query = (
             select(Comment)
-            .where(Comment.post_id == post_id)
+            .where(Comment.post_id == p_uuid)
             .options(selectinload(Comment.user))
             .order_by(Comment.created_at.asc())
         )
@@ -162,10 +341,20 @@ class SocialService:
 
     async def delete_comment(self, comment_id: str, user_id: str, is_admin: bool = False) -> bool:
         """Delete a comment by ID if user is author or admin."""
+        import uuid
+        try:
+            c_uuid = uuid.UUID(str(comment_id))
+        except ValueError:
+            c_uuid = comment_id
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
+
         if is_admin:
-            stmt = select(Comment).where(Comment.id == comment_id)
+            stmt = select(Comment).where(Comment.id == c_uuid)
         else:
-            stmt = select(Comment).where(and_(Comment.id == comment_id, Comment.user_id == user_id))
+            stmt = select(Comment).where(and_(Comment.id == c_uuid, Comment.user_id == u_uuid))
         res = await self.db.execute(stmt)
         comment = res.scalar_one_or_none()
         if not comment:
@@ -176,21 +365,35 @@ class SocialService:
         p_res = await self.db.execute(post_query)
         post = p_res.scalar_one_or_none()
         if post:
-            post.comments_count = max(0, post.comments_count - 1)
+            post.comments_count = max(0, (post.comments_count or 1) - 1)
 
         await self.db.delete(comment)
-        await self.db.flush()
+        await self.db.commit()
         return True
 
-    async def toggle_reaction(self, user_id: int, post_id: int, reaction_type: str = "like") -> Dict[str, Any]:
+    async def toggle_reaction(self, user_id: Any, post_id: Any, reaction_type: str = "like") -> Dict[str, Any]:
         """Toggle user reaction (like) on a post, keeping post likes count in sync."""
+        import uuid
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
+        try:
+            p_uuid = uuid.UUID(str(post_id))
+        except ValueError:
+            p_uuid = post_id
+
         react_query = select(Reaction).where(
-            and_(Reaction.user_id == user_id, Reaction.post_id == post_id)
+            and_(
+                Reaction.user_id == u_uuid,
+                Reaction.post_id == p_uuid,
+                Reaction.reaction_type == reaction_type
+            )
         )
         result = await self.db.execute(react_query)
         existing_reaction = result.scalar_one_or_none()
 
-        post_query = select(Post).where(Post.id == post_id)
+        post_query = select(Post).where(Post.id == p_uuid)
         post_result = await self.db.execute(post_query)
         post = post_result.scalar_one_or_none()
         
@@ -201,24 +404,24 @@ class SocialService:
         if existing_reaction:
             # Remove reaction
             await self.db.delete(existing_reaction)
-            post.likes_count = max(0, post.likes_count - 1)
+            post.likes_count = max(0, (post.likes_count or 1) - 1)
         else:
             # Create reaction
             reaction = Reaction(
-                user_id=user_id,
-                post_id=post_id,
+                user_id=u_uuid,
+                post_id=p_uuid,
                 reaction_type=reaction_type,
                 created_at=datetime.utcnow()
             )
             self.db.add(reaction)
-            post.likes_count += 1
+            post.likes_count = (post.likes_count or 0) + 1
             active = True
 
-            if str(post.user_id) != str(user_id):
+            if str(post.user_id) != str(u_uuid):
                 try:
                     from services.notifications.service import NotificationService
                     notif_service = NotificationService(self.db)
-                    user_stmt = select(User).where(User.id == user_id)
+                    user_stmt = select(User).where(User.id == u_uuid)
                     u_res = await self.db.execute(user_stmt)
                     liker = u_res.scalar_one_or_none()
                     liker_name = liker.display_name if liker else "Someone"
@@ -227,14 +430,86 @@ class SocialService:
                         notification_type="like",
                         title="Post Liked",
                         message=f"{liker_name} liked your trading post.",
-                        data={"post_id": str(post_id)}
+                        data={"post_id": str(p_uuid)}
                     )
                 except Exception as e:
                     logger.error(f"Error dispatching reaction notification: {e}")
 
-        await self.db.flush()
+        await self.db.commit()
         return {
-            "post_id": post_id,
+            "post_id": str(post_id),
+            "reaction_type": reaction_type,
+            "active": active,
+            "likes_count": post.likes_count or 0
+        }
+
+    async def toggle_repost(self, user_id: Any, post_id: Any) -> Dict[str, Any]:
+        """Toggle repost / reshare of a post by user."""
+        import uuid
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
+        try:
+            p_uuid = uuid.UUID(str(post_id))
+        except ValueError:
+            p_uuid = post_id
+
+        post_stmt = select(Post).where(Post.id == p_uuid)
+        res = await self.db.execute(post_stmt)
+        post = res.scalar_one_or_none()
+        if not post:
+            raise ValueError("Post not found.")
+
+        react_stmt = select(Reaction).where(
+            and_(
+                Reaction.user_id == u_uuid,
+                Reaction.post_id == p_uuid,
+                Reaction.reaction_type == "repost"
+            )
+        )
+        r_res = await self.db.execute(react_stmt)
+        existing = r_res.scalar_one_or_none()
+
+        is_reposted = False
+        if existing:
+            await self.db.delete(existing)
+            post.reposts_count = max(0, (post.reposts_count or 1) - 1)
+        else:
+            new_r = Reaction(
+                user_id=u_uuid,
+                post_id=p_uuid,
+                reaction_type="repost",
+                created_at=datetime.utcnow()
+            )
+            self.db.add(new_r)
+            post.reposts_count = (post.reposts_count or 0) + 1
+            is_reposted = True
+
+            if str(post.user_id) != str(u_uuid):
+                try:
+                    from services.notifications.service import NotificationService
+                    notif_service = NotificationService(self.db)
+                    u_stmt = select(User).where(User.id == u_uuid)
+                    u_res = await self.db.execute(u_stmt)
+                    reposter = u_res.scalar_one_or_none()
+                    reposter_name = reposter.display_name if reposter else "A trader"
+                    await notif_service.create_notification(
+                        user_id=post.user_id,
+                        notification_type="repost",
+                        title="Post Reshared",
+                        message=f"{reposter_name} reshared your trading post.",
+                        data={"post_id": str(p_uuid)}
+                    )
+                except Exception as e:
+                    logger.error(f"Error creating repost notification: {e}")
+
+        await self.db.commit()
+        return {
+            "post_id": str(post_id),
+            "is_reposted": is_reposted,
+            "reposts_count": post.reposts_count or 0
+        }
             "reaction_type": reaction_type,
             "active": active,
             "likes_count": post.likes_count

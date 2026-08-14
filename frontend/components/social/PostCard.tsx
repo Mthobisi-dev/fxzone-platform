@@ -3,11 +3,28 @@
 import React, { useState } from 'react';
 import { Card } from '../ui/Card';
 import { Avatar } from '../ui/Avatar';
-import { Heart, MessageSquare, Repeat2, Bookmark, Share2, Tag, CheckCircle2, Trash2, Pin, Clock, Zap } from 'lucide-react';
+import {
+  Heart,
+  MessageSquare,
+  Repeat2,
+  Bookmark,
+  Share2,
+  Tag,
+  CheckCircle2,
+  Trash2,
+  Pin,
+  Clock,
+  Zap,
+  Copy,
+  Check,
+  Send,
+  Loader2,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { CommentThread } from './CommentThread';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,26 +69,34 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const postUser = {
     id: post.user?.id || raw.user?.id || userId,
     username: post.user?.username || raw.user?.username || 'trader',
-    displayName: post.user?.displayName || raw.user?.display_name || raw.user?.displayName || post.user?.username || raw.user?.username || 'Trader',
+    displayName:
+      post.user?.displayName ||
+      raw.user?.display_name ||
+      raw.user?.displayName ||
+      post.user?.username ||
+      raw.user?.username ||
+      'Trader',
     avatarUrl: post.user?.avatarUrl || raw.user?.avatar_url || raw.user?.avatarUrl,
     role: post.user?.role || raw.user?.role || 'trader',
   };
 
   const imageUrl = post.imageUrl || raw.image_url;
   const assetTags = post.assetTags || raw.asset_tags || [];
-  const likesCount = post.likesCount ?? raw.likes_count ?? 0;
-  const commentsCount = post.commentsCount ?? raw.comments_count ?? 0;
-  const repostsCount = post.repostsCount ?? raw.reposts_count ?? 0;
-  const isLikedByUser = post.isLikedByUser ?? raw.is_liked_by_user ?? false;
-  const isRepostedByUser = post.isRepostedByUser ?? raw.is_reposted_by_user ?? false;
-  const isBookmarkedByUser = post.isBookmarkedByUser ?? raw.is_bookmarked_by_user ?? false;
+  const initialLikes = post.likesCount ?? raw.likes_count ?? 0;
+  const initialComments = post.commentsCount ?? raw.comments_count ?? 0;
+  const initialReposts = post.repostsCount ?? raw.reposts_count ?? 0;
+  const initialLiked = post.isLikedByUser ?? raw.is_liked_by_user ?? false;
+  const initialReposted = post.isRepostedByUser ?? raw.is_reposted_by_user ?? false;
+  const initialBookmarked = post.isBookmarkedByUser ?? raw.is_bookmarked_by_user ?? false;
   const createdAt = post.createdAt || raw.created_at;
 
-  const [likes, setLikes] = useState(likesCount);
-  const [isLiked, setIsLiked] = useState(!!isLikedByUser);
-  const [reposts, setReposts] = useState(repostsCount);
-  const [isReposted, setIsReposted] = useState(!!isRepostedByUser);
-  const [isBookmarked, setIsBookmarked] = useState(!!isBookmarkedByUser);
+  const [likes, setLikes] = useState(initialLikes);
+  const [isLiked, setIsLiked] = useState(!!initialLiked);
+  const [commentsCount, setCommentsCount] = useState(initialComments);
+  const [showComments, setShowComments] = useState(false);
+  const [reposts, setReposts] = useState(initialReposts);
+  const [isReposted, setIsReposted] = useState(!!initialReposted);
+  const [isBookmarked, setIsBookmarked] = useState(!!initialBookmarked);
   const isPinned = post.isPinned ?? raw.is_pinned ?? false;
   const [pinned, setPinned] = useState(!!isPinned);
   const isStory = post.isStory ?? raw.is_story ?? false;
@@ -79,17 +104,25 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const isBot = postUser.username === 'fxzone_bot' || postUser.role === 'bot';
 
   const [deleting, setDeleting] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [repostLoading, setRepostLoading] = useState(false);
+  const [bookmarkLoading, setBookmarkLoading] = useState(false);
+
   const isOwner = String(user?.id) === String(userId) || String(user?.id) === String(postUser.id);
-  const isAdmin = user?.email === 'mthobisimzimela031@gmail.com' || user?.username === 'admin' || user?.role === 'admin' || (user?.role as any)?.value === 'admin';
+  const isAdmin =
+    user?.email === 'mthobisimzimela031@gmail.com' ||
+    user?.username === 'admin' ||
+    user?.role === 'admin' ||
+    (user?.role as any)?.value === 'admin';
   const canDelete = isOwner || isAdmin;
 
+  // Pin / Unpin Post
   const handlePin = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const newPinned = !pinned;
     setPinned(newPinned);
     try {
       await api.post(`/api/social/posts/${post.id}/pin`, {});
-      // Refresh feed if callback provided
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
       }
@@ -99,6 +132,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     }
   };
 
+  // Delete Post
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Are you sure you want to delete this post?')) return;
@@ -113,48 +147,107 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     }
   };
 
+  // Like / Unlike Post
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const newLiked = !isLiked;
-    setIsLiked(newLiked);
-    setLikes((prev) => (newLiked ? prev + 1 : prev - 1));
+    if (likeLoading) return;
+    setLikeLoading(true);
+
+    const nextLiked = !isLiked;
+    setIsLiked(nextLiked);
+    setLikes((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
 
     try {
-      await api.post(`/api/social/posts/${post.id}/react`, { reaction_type: 'like' });
+      const res = await api.post(`/api/social/posts/${post.id}/react`, { reaction_type: 'like' });
+      if (res && typeof res.likes_count === 'number') {
+        setLikes(res.likes_count);
+        setIsLiked(res.active);
+      }
     } catch (err) {
       console.error('Like toggle error:', err);
-      // Revert if error
-      setIsLiked(!newLiked);
-      setLikes((prev) => (!newLiked ? prev + 1 : prev - 1));
+      // Revert optimistic state
+      setIsLiked(!nextLiked);
+      setLikes((prev) => (!nextLiked ? prev + 1 : Math.max(0, prev - 1)));
+    } finally {
+      setLikeLoading(false);
     }
   };
 
+  // Repost / Reshare Post
   const handleRepost = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const newReposted = !isReposted;
-    setIsReposted(newReposted);
-    setReposts((prev) => (newReposted ? prev + 1 : prev - 1));
+    if (repostLoading) return;
+    setRepostLoading(true);
+
+    const nextReposted = !isReposted;
+    setIsReposted(nextReposted);
+    setReposts((prev) => (nextReposted ? prev + 1 : Math.max(0, prev - 1)));
 
     try {
-      await api.post(`/api/social/posts/${post.id}/repost`, {});
+      const res = await api.post(`/api/social/posts/${post.id}/repost`, {});
+      if (res && typeof res.reposts_count === 'number') {
+        setReposts(res.reposts_count);
+        setIsReposted(res.is_reposted);
+      }
     } catch (err) {
       console.error('Repost error:', err);
-      // Revert
-      setIsReposted(!newReposted);
-      setReposts((prev) => (!newReposted ? prev + 1 : prev - 1));
+      setIsReposted(!nextReposted);
+      setReposts((prev) => (!nextReposted ? prev + 1 : Math.max(0, prev - 1)));
+    } finally {
+      setRepostLoading(false);
     }
   };
 
+  // Toggle Inline Comments
+  const handleToggleComments = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowComments((prev) => !prev);
+  };
+
+  // Bookmark / Save Post
+  const handleBookmark = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (bookmarkLoading) return;
+    setBookmarkLoading(true);
+
+    const nextSaved = !isBookmarked;
+    setIsBookmarked(nextSaved);
+
+    try {
+      // Local storage sync for instant offline reference
+      const stored = localStorage.getItem('fxzone_saved_posts') || '[]';
+      let list = JSON.parse(stored);
+      if (nextSaved) {
+        if (!list.includes(post.id)) list.push(post.id);
+      } else {
+        list = list.filter((id: string) => id !== post.id);
+      }
+      localStorage.setItem('fxzone_saved_posts', JSON.stringify(list));
+
+      const res = await api.post(`/api/social/posts/${post.id}/bookmark`, {});
+      if (res && typeof res.is_bookmarked === 'boolean') {
+        setIsBookmarked(res.is_bookmarked);
+      }
+    } catch (err) {
+      console.error('Bookmark error:', err);
+    } finally {
+      setBookmarkLoading(false);
+    }
+  };
+
+  // Share Dialog & Copy Link
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareUsers, setShareUsers] = useState<any[]>([]);
   const [loadingShareUsers, setLoadingShareUsers] = useState(false);
   const [sharedSent, setSharedSent] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const openShareModal = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShareModalOpen(true);
     setLoadingShareUsers(true);
-    api.get('/api/social/users?limit=30')
+    api
+      .get('/api/social/users?limit=30')
       .then((res: any) => {
         if (Array.isArray(res)) {
           setShareUsers(res.filter((u: any) => u.id !== user?.id));
@@ -164,32 +257,31 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       .finally(() => setLoadingShareUsers(false));
   };
 
-  const handleShareToUser = async (targetUser: any) => {
-    try {
-      await api.post('/api/chat/conversations', { recipient_id: targetUser.id });
-      setSharedSent(targetUser.username);
-      setTimeout(() => setSharedSent(null), 3000);
-    } catch (err) {
-      console.error('Failed to reshare post:', err);
-    }
+  const handleCopyLink = () => {
+    const postUrl = `${window.location.origin}/feed#post-${post.id}`;
+    navigator.clipboard.writeText(postUrl).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    });
   };
 
-  const handleBookmark = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const nextSaved = !isBookmarked;
-    setIsBookmarked(nextSaved);
+  const handleShareToUser = async (targetUser: any) => {
     try {
-      const stored = localStorage.getItem('fxzone_saved_posts') || '[]';
-      let list = JSON.parse(stored);
-      if (nextSaved) {
-        if (!list.includes(post.id)) list.push(post.id);
-      } else {
-        list = list.filter((id: string) => id !== post.id);
+      const conv = await api.post('/api/chat/conversations', {
+        participant_ids: [targetUser.id],
+        is_group: false,
+      });
+      if (conv && conv.id) {
+        const shareText = `[Shared Post] "${post.content.slice(0, 100)}..." (${window.location.origin}/feed#post-${post.id})`;
+        await api.post(`/api/chat/conversations/${conv.id}/messages`, {
+          content: shareText,
+          message_type: 'text',
+        });
+        setSharedSent(targetUser.username);
+        setTimeout(() => setSharedSent(null), 3000);
       }
-      localStorage.setItem('fxzone_saved_posts', JSON.stringify(list));
-      api.post(`/api/social/posts/${post.id}/bookmark`, {}).catch(() => {});
     } catch (err) {
-      console.error(err);
+      console.error('Failed to reshare post to chat:', err);
     }
   };
 
@@ -216,16 +308,17 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   };
 
   return (
-    <Card 
+    <Card
+      id={`post-${post.id}`}
       onClick={() => onSelect?.(post)}
-      className="p-4 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer"
+      className="p-4 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer rounded-xl"
     >
       <div className="flex gap-3">
         {/* User Avatar */}
         <div className="shrink-0">
-          <Avatar 
-            src={postUser.avatarUrl} 
-            alt={postUser.displayName || postUser.username} 
+          <Avatar
+            src={postUser.avatarUrl}
+            alt={postUser.displayName || postUser.username}
             size="md"
           />
         </div>
@@ -235,15 +328,20 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
           {/* Header */}
           <div className="flex items-center justify-between gap-2 mb-1.5 select-none">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-semibold text-white truncate max-w-[120px]">
+              <span className="text-xs font-semibold text-white truncate max-w-[140px]">
                 {postUser.displayName || postUser.username}
               </span>
-              <span className="text-[10px] text-zinc-500 truncate max-w-[80px]">
+              <span className="text-[10px] text-zinc-500 truncate max-w-[90px]">
                 @{postUser.username}
               </span>
-              
+
               {postUser.role && postUser.role !== 'trader' && (
-                <span className={cn('text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider', getRoleBadgeColor(postUser.role))}>
+                <span
+                  className={cn(
+                    'text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider',
+                    getRoleBadgeColor(postUser.role)
+                  )}
+                >
                   {postUser.role.replace('_', ' ')}
                 </span>
               )}
@@ -251,7 +349,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                 <CheckCircle2 size={10} className="text-blue-500 fill-blue-500/20" />
               )}
             </div>
-            
+
             <div className="flex items-center gap-2 shrink-0">
               {isStory && (
                 <span className="flex items-center gap-1 text-[9px] font-bold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
@@ -259,7 +357,14 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                   Story
                   {expiresAt && (
                     <span className="text-purple-500/70 ml-0.5">
-                      · {(() => { try { return formatDistanceToNow(new Date(expiresAt), { addSuffix: false }); } catch { return ''; } })()}
+                      ·{' '}
+                      {(() => {
+                        try {
+                          return formatDistanceToNow(new Date(expiresAt), { addSuffix: false });
+                        } catch {
+                          return '';
+                        }
+                      })()}
                     </span>
                   )}
                 </span>
@@ -278,10 +383,12 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
               {isOwner && (
                 <button
                   onClick={handlePin}
-                  title={pinned ? "Unpin post" : "Pin post"}
+                  title={pinned ? 'Unpin post' : 'Pin post'}
                   className={cn(
-                    "p-1 rounded transition-colors",
-                    pinned ? "text-amber-400 bg-amber-500/10" : "text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10"
+                    'p-1 rounded transition-colors',
+                    pinned
+                      ? 'text-amber-400 bg-amber-500/10'
+                      : 'text-zinc-500 hover:text-amber-400 hover:bg-amber-500/10'
                   )}
                 >
                   <Pin size={13} />
@@ -294,13 +401,13 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                   title="Delete post"
                   className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                 >
-                  <Trash2 size={13} className={cn(deleting && "animate-spin")} />
+                  <Trash2 size={13} className={cn(deleting && 'animate-spin')} />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Text content - with auto-linked URLs */}
+          {/* Text Content */}
           <div className="text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap mb-3 break-words">
             {post.content.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
               if (/^https?:\/\//.test(part)) {
@@ -321,34 +428,17 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             })}
           </div>
 
-          {/* Inline image from URL in content */}
-          {!imageUrl && (() => {
-            const urlMatch = post.content.match(/(https?:\/\/[^\s]+\.(?:png|jpg|jpeg|gif|webp|svg)|https:\/\/images\.unsplash\.com\/[^\s]+)/i);
-            if (urlMatch) {
-              return (
-                <div className="relative rounded-xl border border-zinc-800/60 overflow-hidden mb-3 bg-zinc-900/60 max-h-96 flex items-center justify-center">
-                  <img
-                    src={urlMatch[1]}
-                    alt="Shared post attachment"
-                    className="w-full max-h-96 object-cover rounded-xl hover:opacity-95 transition-opacity"
-                    loading="lazy"
-                    onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
-                  />
-                </div>
-              );
-            }
-            return null;
-          })()}
-
-          {/* Uploaded image attachment */}
+          {/* Inline Attachment / Uploaded Image */}
           {imageUrl && (
             <div className="relative rounded-xl border border-zinc-800/60 overflow-hidden mb-3 bg-zinc-900/60 max-h-96 flex items-center justify-center">
-              <img 
-                src={imageUrl} 
-                alt="Post attachment" 
+              <img
+                src={imageUrl}
+                alt="Post attachment"
                 className="w-full max-h-96 object-cover rounded-xl hover:opacity-95 transition-opacity"
                 loading="lazy"
-                onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).parentElement!.style.display = 'none';
+                }}
               />
             </div>
           )}
@@ -376,39 +466,60 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
           <div className="flex items-center justify-between border-t border-zinc-850/50 pt-2.5 mt-2 max-w-sm select-none">
             {!isBot && (
               <>
-                {/* Comment Button */}
-                <button 
-                  className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 transition-colors focus:outline-none"
+                {/* Comment Toggle Button */}
+                <button
+                  onClick={handleToggleComments}
+                  className={cn(
+                    'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                    showComments
+                      ? 'text-blue-400 bg-blue-500/10'
+                      : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-850/40'
+                  )}
+                  title="View and post comments"
                 >
                   <MessageSquare size={13} className="group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] font-medium">{post.commentsCount}</span>
+                  <span className="text-[10px] font-medium">{commentsCount}</span>
                 </button>
 
-                {/* Repost Button */}
-                <button 
+                {/* Repost / Reshare Button */}
+                <button
                   onClick={handleRepost}
+                  disabled={repostLoading}
                   className={cn(
-                    'group flex items-center gap-1.5 transition-colors focus:outline-none',
-                    isReposted ? 'text-emerald-400' : 'text-zinc-500 hover:text-emerald-400'
+                    'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                    isReposted
+                      ? 'text-emerald-400 bg-emerald-500/10'
+                      : 'text-zinc-500 hover:text-emerald-400 hover:bg-zinc-850/40'
                   )}
+                  title={isReposted ? 'Remove repost' : 'Repost to feed'}
                 >
-                  <Repeat2 size={13} className={cn('group-hover:rotate-180 transition-transform duration-300', isReposted && 'scale-110')} />
+                  <Repeat2
+                    size={13}
+                    className={cn(
+                      'group-hover:rotate-180 transition-transform duration-300',
+                      isReposted && 'scale-110'
+                    )}
+                  />
                   <span className="text-[10px] font-medium">{reposts}</span>
                 </button>
               </>
             )}
 
             {/* Like Button */}
-            <button 
+            <button
               onClick={handleLike}
+              disabled={likeLoading}
               className={cn(
-                'group flex items-center gap-1.5 transition-colors focus:outline-none',
-                isLiked ? 'text-rose-500' : 'text-zinc-500 hover:text-rose-500'
+                'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                isLiked
+                  ? 'text-rose-500 bg-rose-500/10'
+                  : 'text-zinc-500 hover:text-rose-500 hover:bg-zinc-850/40'
               )}
+              title={isLiked ? 'Unlike post' : 'Like post'}
             >
               <motion.div whileTap={{ scale: 1.4 }}>
-                <Heart 
-                  size={13} 
+                <Heart
+                  size={13}
                   className={cn(
                     'transition-transform',
                     isLiked ? 'fill-rose-500 stroke-rose-500' : 'group-hover:scale-110'
@@ -420,88 +531,147 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
 
             {!isBot && (
               <>
-                {/* Bookmark */}
-                <button 
+                {/* Bookmark / Save Button */}
+                <button
                   onClick={handleBookmark}
+                  disabled={bookmarkLoading}
                   className={cn(
-                    'group flex items-center transition-colors focus:outline-none',
-                    isBookmarked ? 'text-yellow-500' : 'text-zinc-500 hover:text-yellow-500'
+                    'group flex items-center transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                    isBookmarked
+                      ? 'text-yellow-500 bg-yellow-500/10'
+                      : 'text-zinc-500 hover:text-yellow-500 hover:bg-zinc-850/40'
                   )}
+                  title={isBookmarked ? 'Remove from Saved' : 'Save / Bookmark post'}
                 >
-                  <Bookmark 
-                    size={13} 
+                  <Bookmark
+                    size={13}
                     className={cn(
                       'transition-transform',
-                      isBookmarked ? 'fill-yellow-500 stroke-yellow-500' : 'group-hover:scale-110'
+                      isBookmarked
+                        ? 'fill-yellow-500 stroke-yellow-500'
+                        : 'group-hover:scale-110'
                     )}
                   />
                 </button>
-                {/* Share / Reshare to User Button */}
+
+                {/* Share Button */}
                 <button
                   onClick={openShareModal}
-                  className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 transition-colors focus:outline-none"
-                  title="Reshare post to another user"
+                  className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 hover:bg-zinc-850/40 px-1.5 py-1 rounded-md transition-colors focus:outline-none"
+                  title="Share post"
                 >
                   <Share2 size={13} className="group-hover:scale-110 transition-transform" />
                 </button>
               </>
             )}
           </div>
+
+          {/* Inline Comment Thread */}
+          <AnimatePresence>
+            {showComments && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={(e) => e.stopPropagation()}
+                className="overflow-hidden"
+              >
+                <CommentThread
+                  postId={post.id}
+                  onCommentAdded={() => setCommentsCount((prev) => prev + 1)}
+                  onCommentDeleted={() => setCommentsCount((prev) => Math.max(0, prev - 1))}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* Reshare Post Modal */}
+      {/* Share / Reshare Post Modal */}
       {shareModalOpen && (
         <Modal
           isOpen={shareModalOpen}
           onClose={() => setShareModalOpen(false)}
-          title="Reshare Post"
+          title="Share Post"
         >
-          <div className="space-y-4">
+          <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-850 text-xs text-zinc-300">
               <span className="text-zinc-500 font-bold block mb-1">@{postUser.username}:</span>
-              <p className="line-clamp-3 italic">"{post.content}"</p>
+              <p className="line-clamp-3 italic">&quot;{post.content}&quot;</p>
             </div>
 
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                onClick={handleCopyLink}
+                variant="outline"
+                className="w-full text-xs flex items-center justify-center gap-1.5 bg-zinc-900 hover:bg-zinc-850 border-zinc-800"
+              >
+                {copiedLink ? (
+                  <>
+                    <Check size={14} className="text-emerald-400" />
+                    <span className="text-emerald-400 font-bold">Link Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </Button>
+
               <Button
                 onClick={(e) => {
                   handleRepost(e);
                   setShareModalOpen(false);
                 }}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-xs flex items-center justify-center gap-2"
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-xs flex items-center justify-center gap-1.5 font-bold"
               >
-                <Repeat2 size={14} /> Repost to My Social Feed
+                <Repeat2 size={14} />
+                <span>{isReposted ? 'Remove Repost' : 'Repost to Feed'}</span>
               </Button>
             </div>
 
             <div className="border-t border-zinc-850 pt-3">
               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">
-                Reshare Directly to a Trader
+                Send Direct Message to Trader
               </p>
               {loadingShareUsers ? (
-                <div className="py-6 text-center text-xs text-zinc-500">Loading traders...</div>
+                <div className="py-6 text-center text-xs text-zinc-500">
+                  <Loader2 size={16} className="animate-spin mx-auto text-blue-500 mb-1" />
+                  Loading traders...
+                </div>
+              ) : shareUsers.length === 0 ? (
+                <p className="text-[11px] text-zinc-500 italic text-center py-4">
+                  No other traders available.
+                </p>
               ) : (
-                <div className="max-h-48 overflow-y-auto space-y-1.5">
+                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
                   {shareUsers.map((u: any) => (
                     <div
                       key={u.id}
-                      className="p-2 rounded bg-zinc-900/60 border border-zinc-850 flex items-center justify-between"
+                      className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-850 flex items-center justify-between"
                     >
-                      <div className="flex items-center gap-2">
-                        <Avatar src={u.avatar_url} name={u.display_name || u.username} size="sm" />
-                        <div>
-                          <span className="text-xs font-bold text-white block leading-none">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar
+                          src={u.avatar_url}
+                          name={u.display_name || u.username}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-white block truncate leading-none">
                             {u.display_name || u.username}
                           </span>
-                          <span className="text-[9px] text-zinc-500">@{u.username}</span>
+                          <span className="text-[9px] text-zinc-500 block truncate">
+                            @{u.username}
+                          </span>
                         </div>
                       </div>
                       <Button
                         size="sm"
                         onClick={() => handleShareToUser(u)}
                         variant="ghost"
-                        className="h-6 text-[10px] px-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-bold"
+                        className="h-6 text-[10px] px-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-bold shrink-0"
                       >
                         {sharedSent === u.username ? 'Sent!' : 'Send Chat'}
                       </Button>

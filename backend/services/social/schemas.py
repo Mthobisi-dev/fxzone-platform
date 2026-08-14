@@ -67,6 +67,9 @@ class PostResponse(camel_model):
     is_pinned: Optional[bool] = False
     expires_at: Optional[datetime] = None
     created_at: datetime
+    is_liked_by_user: Optional[bool] = False
+    is_reposted_by_user: Optional[bool] = False
+    is_bookmarked_by_user: Optional[bool] = False
 
 
 class CommentCreate(BaseModel):

@@ -324,6 +324,23 @@ async def pin_post(
     return post
 
 
+@router.post("/posts/{post_id}/repost")
+async def repost_post(
+    post_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Toggle repost/reshare of a post for the authenticated user."""
+    service = SocialService(db)
+    try:
+        return await service.toggle_repost(user_id=current_user.id, post_id=post_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
 @router.post("/posts/{post_id}/bookmark")
 async def toggle_bookmark_post(
     post_id: str,
@@ -345,7 +362,33 @@ async def get_saved_posts(
     """Fetch user's bookmarked/saved posts."""
     service = SocialService(db)
     posts = await service.get_saved_posts(user_id=current_user.id, limit=limit, offset=offset)
-    return [format_post(p, current_user_id=current_user.id) for p in posts]
+    formatted = []
+    for p in posts:
+        formatted.append({
+            "id": p.id,
+            "user_id": p.user_id,
+            "user": {
+                "id": p.user.id,
+                "username": p.user.username,
+                "display_name": p.user.display_name or p.user.username,
+                "avatar_url": p.user.avatar_url,
+                "role": p.user.role.value if hasattr(p.user.role, 'value') else p.user.role
+            },
+            "content": p.content,
+            "image_url": p.image_url,
+            "asset_tags": [a.symbol for a in p.tagged_assets] if hasattr(p, 'tagged_assets') and p.tagged_assets else [],
+            "likes_count": p.likes_count or 0,
+            "comments_count": p.comments_count or 0,
+            "reposts_count": p.reposts_count or 0,
+            "is_story": p.is_story or False,
+            "is_pinned": getattr(p, "is_pinned", False),
+            "expires_at": p.expires_at,
+            "created_at": p.created_at,
+            "is_liked_by_user": False,
+            "is_reposted_by_user": False,
+            "is_bookmarked_by_user": True
+        })
+    return formatted
 
 
 @router.delete("/users/me")
