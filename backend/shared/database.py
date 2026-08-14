@@ -561,7 +561,11 @@ async def init_all_databases():
     
     # 1. Initialize Postgres / SQLite Fallback
     use_sqlite = _use_sqlite
-    
+
+    # If DATABASE_URL is explicitly set via environment variable, NEVER fall back to SQLite.
+    # Silent SQLite fallback on a misconfigured Postgres connection causes schema drift in production.
+    _db_url_is_explicit = bool(os.environ.get("DATABASE_URL"))
+
     if not use_sqlite:
         try:
             # Quick ping test to see if PostgreSQL is reachable
@@ -569,9 +573,20 @@ async def init_all_databases():
                 await conn.execute(text("SELECT 1"))
             logger.info("Connected to PostgreSQL database successfully.")
         except Exception as e:
-            logger.warning(f"Failed to connect to PostgreSQL ({e}). Falling back to SQLite...")
-            use_sqlite = True
-        
+            if _db_url_is_explicit:
+                # Explicit DATABASE_URL configured → raise instead of silently using SQLite
+                logger.error(
+                    f"DATABASE_URL is set but PostgreSQL connection failed: {e}. "
+                    "Fix the DATABASE_URL or database credentials. "
+                    "NOT falling back to SQLite to protect production data."
+                )
+                raise RuntimeError(
+                    f"Cannot connect to configured PostgreSQL database: {e}"
+                ) from e
+            else:
+                logger.warning(f"Failed to connect to PostgreSQL ({e}). Falling back to SQLite...")
+                use_sqlite = True
+
     if use_sqlite:
         sqlite_url = "sqlite+aiosqlite:///../fxzone.db"
         engine = create_async_engine(
@@ -593,15 +608,55 @@ async def init_all_databases():
             await conn.execute(text("PRAGMA temp_store=MEMORY;"))
             from shared.models import Base as ModelsBase
             await conn.run_sync(ModelsBase.metadata.create_all)
-            try:
-                await conn.execute(text("ALTER TABLE live_sessions ADD COLUMN requires_approval BOOLEAN DEFAULT 1"))
-            except Exception:
-                pass
-            try:
-                await conn.execute(text("ALTER TABLE posts ADD COLUMN is_pinned BOOLEAN DEFAULT 0"))
-            except Exception:
-                pass
-        logger.info("SQLite database configured with WAL mode & busy timeout 30s.")
+
+            # ── Safe column migrations (ADD COLUMN IF NOT EXISTS equivalent for SQLite) ──
+            # SQLite does not support IF NOT EXISTS on ALTER TABLE, so we catch the error.
+
+            # live_sessions
+            for col_sql in [
+                "ALTER TABLE live_sessions ADD COLUMN requires_approval BOOLEAN DEFAULT 1",
+                "ALTER TABLE live_sessions ADD COLUMN viewer_count INTEGER DEFAULT 0",
+                "ALTER TABLE live_sessions ADD COLUMN started_at DATETIME",
+                "ALTER TABLE live_sessions ADD COLUMN ended_at DATETIME",
+            ]:
+                try:
+                    await conn.execute(text(col_sql))
+                except Exception:
+                    pass
+
+            # posts
+            for col_sql in [
+                "ALTER TABLE posts ADD COLUMN is_pinned BOOLEAN DEFAULT 0",
+                "ALTER TABLE posts ADD COLUMN is_story BOOLEAN DEFAULT 0",
+                "ALTER TABLE posts ADD COLUMN expires_at DATETIME",
+                "ALTER TABLE posts ADD COLUMN reposts_count INTEGER DEFAULT 0",
+            ]:
+                try:
+                    await conn.execute(text(col_sql))
+                except Exception:
+                    pass
+
+            # conversations  ← THIS IS THE FIX for the production error
+            for col_sql in [
+                "ALTER TABLE conversations ADD COLUMN description TEXT",
+                "ALTER TABLE conversations ADD COLUMN creator_id TEXT REFERENCES users(id)",
+            ]:
+                try:
+                    await conn.execute(text(col_sql))
+                except Exception:
+                    pass
+
+            # users
+            for col_sql in [
+                "ALTER TABLE users ADD COLUMN followers_count INTEGER DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN following_count INTEGER DEFAULT 0",
+            ]:
+                try:
+                    await conn.execute(text(col_sql))
+                except Exception:
+                    pass
+
+        logger.info("SQLite database configured with WAL mode & busy timeout 30s. All column migrations applied.")
         await seed_sqlite_if_empty()
 
     # 2. Initialize Redis / Mock Redis fallback
