@@ -19,6 +19,10 @@ import {
   Check,
   Send,
   Loader2,
+  Mic,
+  Film,
+  Play,
+  ExternalLink,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -165,7 +169,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       }
     } catch (err) {
       console.error('Like toggle error:', err);
-      // Revert optimistic state
       setIsLiked(!nextLiked);
       setLikes((prev) => (!nextLiked ? prev + 1 : Math.max(0, prev - 1)));
     } finally {
@@ -214,7 +217,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     setIsBookmarked(nextSaved);
 
     try {
-      // Local storage sync for instant offline reference
       const stored = localStorage.getItem('fxzone_saved_posts') || '[]';
       let list = JSON.parse(stored);
       if (nextSaved) {
@@ -306,6 +308,23 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
         return 'text-zinc-400 bg-zinc-800 border-zinc-700/50';
     }
   };
+
+  // Media Detection Helpers
+  const isVideoUrl = (url?: string) => {
+    if (!url) return false;
+    return /\.(mp4|webm|mov|m4v|mkv)(\?.*)?$/i.test(url);
+  };
+
+  const isAudioUrl = (url?: string) => {
+    if (!url) return false;
+    return /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(url) || url.includes('voice-memo');
+  };
+
+  // YouTube match in content
+  const youtubeMatch = post.content.match(
+    /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
+  );
+  const youtubeId = youtubeMatch ? youtubeMatch[1] : null;
 
   return (
     <Card
@@ -407,7 +426,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             </div>
           </div>
 
-          {/* Text Content */}
+          {/* Text Content with Viewable Link Highlights */}
           <div className="text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap mb-3 break-words">
             {post.content.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
               if (/^https?:\/\//.test(part)) {
@@ -418,9 +437,10 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all"
+                    className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all bg-blue-500/10 px-1.5 py-0.5 rounded font-mono text-[11px]"
                   >
-                    {part}
+                    <span>{part}</span>
+                    <ExternalLink size={10} className="shrink-0" />
                   </a>
                 );
               }
@@ -428,8 +448,53 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             })}
           </div>
 
-          {/* Inline Attachment / Uploaded Image */}
-          {imageUrl && (
+          {/* YouTube Video Player Embed */}
+          {youtubeId && (
+            <div className="relative w-full aspect-video rounded-xl overflow-hidden mb-3 border border-zinc-800 bg-black shadow-lg">
+              <iframe
+                src={`https://www.youtube.com/embed/${youtubeId}`}
+                title="YouTube Video Player"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full border-0"
+              />
+            </div>
+          )}
+
+          {/* Video Attachment Player */}
+          {imageUrl && isVideoUrl(imageUrl) && (
+            <div className="relative rounded-xl border border-zinc-800/80 overflow-hidden mb-3 bg-black max-h-96 flex items-center justify-center shadow-lg">
+              <video
+                src={imageUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full max-h-96 rounded-xl object-contain bg-black"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
+
+          {/* Audio / Voice Memo Player */}
+          {imageUrl && isAudioUrl(imageUrl) && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-zinc-950/90 border border-purple-500/30 rounded-xl p-3 flex items-center gap-3 mb-3 shadow-md"
+            >
+              <div className="h-9 w-9 rounded-full bg-purple-600/20 text-purple-400 flex items-center justify-center shrink-0">
+                <Mic size={16} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-[9px] font-bold text-purple-400 uppercase tracking-wider block mb-1">
+                  Audio / Voice Memo
+                </span>
+                <audio src={imageUrl} controls className="w-full h-8" />
+              </div>
+            </div>
+          )}
+
+          {/* Image Attachment (when not video/audio) */}
+          {imageUrl && !isVideoUrl(imageUrl) && !isAudioUrl(imageUrl) && (
             <div className="relative rounded-xl border border-zinc-800/60 overflow-hidden mb-3 bg-zinc-900/60 max-h-96 flex items-center justify-center">
               <img
                 src={imageUrl}
@@ -605,7 +670,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
               <Button
                 onClick={handleCopyLink}
                 variant="outline"
-                className="w-full text-xs flex items-center justify-center gap-1.5 bg-zinc-900 hover:bg-zinc-850 border-zinc-800"
+                className="w-full text-xs flex items-center justify-center gap-1.5 bg-zinc-900 hover:bg-zinc-850 border-zinc-850"
               >
                 {copiedLink ? (
                   <>
