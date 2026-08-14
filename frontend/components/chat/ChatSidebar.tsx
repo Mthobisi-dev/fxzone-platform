@@ -58,6 +58,7 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'chats' | 'people'>('chats');
+  const [chatFilter, setChatFilter] = useState<'all' | 'direct' | 'groups'>('all');
 
   const getConversationDetails = (conv: Conversation) => {
     if (!conv.isGroup) {
@@ -73,17 +74,24 @@ export function ChatSidebar({
       name: conv.name || 'Group Chat',
       avatarUrl: undefined,
       isOnline: false,
-      icon: <Users size={12} className="text-blue-400" />,
+      icon: <Users size={12} className="text-purple-400" />,
     };
   };
 
-  // Filter conversations by search and hide bot
+  // Filter conversations by search and type
   const filteredConversations = conversations.filter((conv) => {
     const details = getConversationDetails(conv);
     const matchesSearch = details.name.toLowerCase().includes(search.toLowerCase());
     const isBot = details.name.toLowerCase().includes('fxzone_bot') || details.name.toLowerCase().includes('fxzone bot');
-    return matchesSearch && !isBot;
+    if (!matchesSearch || isBot) return false;
+
+    if (chatFilter === 'direct') return !conv.isGroup;
+    if (chatFilter === 'groups') return conv.isGroup;
+    return true;
   });
+
+  const groupCount = conversations.filter((c) => c.isGroup).length;
+  const directCount = conversations.filter((c) => !c.isGroup).length;
 
   const filteredPeople = suggestedUsers.filter((u) => {
     if (String(u.id) === String(currentUserId)) return false;
@@ -102,10 +110,11 @@ export function ChatSidebar({
         <h3 className="text-sm font-bold text-white tracking-wide">Messages</h3>
         <button
           onClick={onNewChat}
-          className="p-1.5 bg-blue-600/10 border border-blue-500/30 text-blue-400 hover:bg-blue-600/20 rounded-lg transition-colors focus:outline-none"
-          title="New group chat"
+          className="p-1.5 bg-blue-600/10 border border-blue-500/30 text-blue-400 hover:bg-blue-600/20 rounded-lg transition-colors focus:outline-none flex items-center gap-1 text-[11px] font-semibold px-2"
+          title="New Chat / Group"
         >
           <Plus size={14} />
+          <span>New Chat</span>
         </button>
       </div>
 
@@ -121,7 +130,7 @@ export function ChatSidebar({
           )}
         >
           <MessageSquare size={12} />
-          Chats
+          Chats ({conversations.length})
           {conversations.some((c) => c.unreadCount > 0) && (
             <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
           )}
@@ -144,6 +153,46 @@ export function ChatSidebar({
           )}
         </button>
       </div>
+
+      {/* Sub-filter chips for chats */}
+      {activeTab === 'chats' && (
+        <div className="px-3 pt-2.5 pb-1 flex gap-1.5 select-none">
+          <button
+            onClick={() => setChatFilter('all')}
+            className={cn(
+              'px-2.5 py-0.5 rounded-md text-[10px] font-semibold transition-colors',
+              chatFilter === 'all'
+                ? 'bg-zinc-800 text-white'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
+            )}
+          >
+            All ({conversations.length})
+          </button>
+          <button
+            onClick={() => setChatFilter('direct')}
+            className={cn(
+              'px-2.5 py-0.5 rounded-md text-[10px] font-semibold transition-colors',
+              chatFilter === 'direct'
+                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
+            )}
+          >
+            Direct ({directCount})
+          </button>
+          <button
+            onClick={() => setChatFilter('groups')}
+            className={cn(
+              'px-2.5 py-0.5 rounded-md text-[10px] font-semibold transition-colors flex items-center gap-1',
+              chatFilter === 'groups'
+                ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
+            )}
+          >
+            <Users size={10} />
+            Groups ({groupCount})
+          </button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="p-3">
@@ -169,12 +218,14 @@ export function ChatSidebar({
                 <div className="h-10 w-10 mx-auto rounded-xl bg-zinc-900 border border-zinc-850 flex items-center justify-center text-zinc-550 mb-2">
                   <MessageSquare size={16} />
                 </div>
-                <p className="text-[10px] text-zinc-550">No conversations yet.</p>
+                <p className="text-[10px] text-zinc-550">
+                  {chatFilter === 'groups' ? 'No group chats yet.' : 'No conversations yet.'}
+                </p>
                 <button
-                  onClick={() => setActiveTab('people')}
-                  className="text-[10px] text-blue-400 hover:text-blue-300 mt-1.5 font-semibold"
+                  onClick={onNewChat}
+                  className="text-[10px] text-blue-400 hover:text-blue-300 mt-1.5 font-semibold block mx-auto"
                 >
-                  Browse People →
+                  + Start a Chat or Create Group
                 </button>
               </div>
             ) : (
@@ -192,12 +243,18 @@ export function ChatSidebar({
                     )}
                   >
                     <div className="relative shrink-0 select-none">
-                      <Avatar
-                        src={details.avatarUrl}
-                        alt={details.name}
-                        size="sm"
-                        className="h-9 w-9"
-                      />
+                      {conv.isGroup ? (
+                        <div className="h-9 w-9 rounded-full bg-purple-950/60 border border-purple-800/40 flex items-center justify-center text-purple-400">
+                          <Users size={16} />
+                        </div>
+                      ) : (
+                        <Avatar
+                          src={details.avatarUrl}
+                          alt={details.name}
+                          size="sm"
+                          className="h-9 w-9"
+                        />
+                      )}
                       {details.isOnline && (
                         <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-emerald-500 border-2 border-zinc-950 rounded-full" />
                       )}
@@ -207,7 +264,11 @@ export function ChatSidebar({
                       <div className="flex justify-between items-center gap-2 select-none">
                         <span className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
                           {details.name}
-                          {details.icon}
+                          {conv.isGroup && (
+                            <span className="text-[8px] bg-purple-500/15 text-purple-300 border border-purple-500/20 px-1 py-0.2 rounded font-bold uppercase">
+                              Group ({conv.members.length})
+                            </span>
+                          )}
                         </span>
                         {conv.lastMessage && (
                           <span className="text-[8px] text-zinc-500 shrink-0">

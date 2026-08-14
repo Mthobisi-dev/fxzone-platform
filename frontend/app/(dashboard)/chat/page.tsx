@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { api } from '@/lib/api';
-import { Loader2, MessageSquare, Search } from 'lucide-react';
+import { Loader2, MessageSquare, Search, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function ChatPage() {
@@ -28,7 +28,14 @@ export default function ChatPage() {
   const [eligibleUsers, setEligibleUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [userSearch, setUserSearch] = useState('');
-  
+
+  // Group creation modal states
+  const [modalTab, setModalTab] = useState<'direct' | 'group'>('direct');
+  const [groupName, setGroupName] = useState('');
+  const [groupDescription, setGroupDescription] = useState('');
+  const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+
   // WebSocket hook for real-time chat sync
   const socketRef = useWebSocket(
     activeConvId ? `/ws/chat/${activeConvId}` : '',
@@ -173,6 +180,14 @@ export default function ChatPage() {
     fetchEligibleUsers();
   }, [user]);
 
+  // Periodic sidebar sync: refresh conversation list every 4 seconds to catch new groups & messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchConversations();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Track whether WS connected successfully
   const [wsConnected, setWsConnected] = useState(false);
 
@@ -291,6 +306,39 @@ export default function ChatPage() {
     }
   };
 
+  const toggleGroupMember = (userId: string) => {
+    setSelectedGroupMembers((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleCreateGroupChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!groupName.trim() || selectedGroupMembers.length === 0 || creatingGroup) return;
+    setCreatingGroup(true);
+
+    try {
+      const response = await api.post('/api/chat/conversations', {
+        name: groupName.trim(),
+        description: groupDescription.trim() || undefined,
+        participant_ids: selectedGroupMembers,
+        is_group: true,
+      });
+      if (response && response.id) {
+        setGroupName('');
+        setGroupDescription('');
+        setSelectedGroupMembers([]);
+        setNewChatOpen(false);
+        await fetchConversations();
+        setActiveConvId(response.id);
+      }
+    } catch (err) {
+      console.error('Failed to create group chat:', err);
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
   const activeConv = conversations.find((c) => String(c.id) === String(activeConvId));
   const activeDetails = activeConv
     ? activeConv.isGroup
@@ -349,7 +397,10 @@ export default function ChatPage() {
             onSelectConversation={setActiveConvId}
             onStartChatWithUser={handleStartChatWithUser}
             startingChatUserId={startingUserId}
-            onNewChat={() => setNewChatOpen(true)}
+            onNewChat={() => {
+              setModalTab('direct');
+              setNewChatOpen(true);
+            }}
             currentUserId={user?.id || ''}
           />
 
@@ -385,83 +436,229 @@ export default function ChatPage() {
         <Modal
           isOpen={newChatOpen}
           onClose={() => setNewChatOpen(false)}
-          title="Open New Chat Channel"
+          title="Start Conversation"
         >
-          <div className="space-y-4">
-            {/* User Search & Selection */}
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1">Select an operator you follow or who follows you</label>
-              
-              <div className="relative mb-2">
-                <Search size={12} className="absolute left-2.5 top-2.5 text-zinc-500" />
-                <input
-                  type="text"
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Search operator by name or handle..."
-                  className="w-full h-8 pl-8 pr-3 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
-                />
-              </div>
+          <div className="space-y-4 select-none">
+            {/* Tab switch between Direct Message and Create Group Chat */}
+            <div className="flex border-b border-zinc-800 pb-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setModalTab('direct')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  modalTab === 'direct'
+                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                <MessageSquare size={13} />
+                <span>Direct Message</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('group')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  modalTab === 'group'
+                    ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                <Users size={13} />
+                <span>Create Group Chat</span>
+              </button>
+            </div>
 
-              {loadingUsers ? (
-                <div className="h-32 flex items-center justify-center">
-                  <Loader2 className="animate-spin text-blue-500" size={16} />
-                </div>
-              ) : filteredUsers.length === 0 ? (
-                <div className="py-6 text-center border border-dashed border-zinc-850 rounded-xl bg-zinc-950/20 text-zinc-500 text-[10px] italic">
-                  {userSearch ? 'No matching operators found.' : 'No follow relationships established yet.'}
-                </div>
-              ) : (
-                <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                  {filteredUsers.map((u) => (
-                    <div
-                      key={u.id}
-                      onClick={() => handleStartChatWithUser(u)}
-                      className="w-full p-2 hover:bg-zinc-900/60 border border-transparent hover:border-zinc-850 rounded-xl flex items-center justify-between cursor-pointer transition-all group"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Avatar name={u.displayName || u.display_name || u.username} src={u.avatarUrl || u.avatar_url} size="sm" className="h-8 w-8" />
-                        <div>
-                          <span className="text-[11px] font-bold text-white block leading-tight">{u.displayName || u.display_name || u.username}</span>
-                          <span className="text-[9px] text-zinc-550 block">@{u.username}</span>
-                        </div>
-                      </div>
-                      
-                      <span className="text-[8px] bg-blue-600/10 text-blue-400 group-hover:bg-blue-600 group-hover:text-white border border-blue-500/20 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider transition-all select-none">
-                        Chat
-                      </span>
+            {modalTab === 'direct' ? (
+              /* ─── DIRECT MESSAGE TAB ─── */
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] text-zinc-400 block mb-1">Select an operator</label>
+                  
+                  <div className="relative mb-2">
+                    <Search size={12} className="absolute left-2.5 top-2.5 text-zinc-500" />
+                    <input
+                      type="text"
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      placeholder="Search operator by name or handle..."
+                      className="w-full h-8 pl-8 pr-3 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                    />
+                  </div>
+
+                  {loadingUsers ? (
+                    <div className="h-32 flex items-center justify-center">
+                      <Loader2 className="animate-spin text-blue-500" size={16} />
                     </div>
-                  ))}
+                  ) : filteredUsers.length === 0 ? (
+                    <div className="py-6 text-center border border-dashed border-zinc-850 rounded-xl bg-zinc-950/20 text-zinc-500 text-[10px] italic">
+                      {userSearch ? 'No matching operators found.' : 'No operators found.'}
+                    </div>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                      {filteredUsers.map((u) => (
+                        <div
+                          key={u.id}
+                          onClick={() => handleStartChatWithUser(u)}
+                          className="w-full p-2 hover:bg-zinc-900/60 border border-transparent hover:border-zinc-850 rounded-xl flex items-center justify-between cursor-pointer transition-all group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Avatar name={u.displayName || u.display_name || u.username} src={u.avatarUrl || u.avatar_url} size="sm" className="h-8 w-8" />
+                            <div>
+                              <span className="text-[11px] font-bold text-white block leading-tight">{u.displayName || u.display_name || u.username}</span>
+                              <span className="text-[9px] text-zinc-550 block">@{u.username}</span>
+                            </div>
+                          </div>
+                          
+                          <span className="text-[8px] bg-blue-600/10 text-blue-400 group-hover:bg-blue-600 group-hover:text-white border border-blue-500/20 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider transition-all select-none">
+                            Chat
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div className="border-t border-zinc-850 my-2 pt-2 text-center text-[9px] text-zinc-550">
-              OR ENTER USERNAME MANUALLY
-            </div>
+                <div className="border-t border-zinc-850 my-2 pt-2 text-center text-[9px] text-zinc-550">
+                  OR ENTER USERNAME MANUALLY
+                </div>
 
-            <form onSubmit={handleCreateChatManual} className="space-y-3">
-              <div>
-                <input
-                  type="text"
-                  value={targetUsername}
-                  onChange={(e) => setTargetUsername(e.target.value)}
-                  placeholder="Enter exact operator username... (e.g. alpha_trader)"
-                  className="w-full h-8 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
-                  required
-                  disabled={creatingChat}
-                />
+                <form onSubmit={handleCreateChatManual} className="space-y-3">
+                  <div>
+                    <input
+                      type="text"
+                      value={targetUsername}
+                      onChange={(e) => setTargetUsername(e.target.value)}
+                      placeholder="Enter exact operator username... (e.g. alpha_trader)"
+                      className="w-full h-8 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
+                      required
+                      disabled={creatingChat}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button size="sm" variant="ghost" onClick={() => setNewChatOpen(false)} disabled={creatingChat}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" className="bg-blue-600 hover:bg-blue-500" type="submit" disabled={creatingChat || !targetUsername.trim()}>
+                      {creatingChat ? 'Connecting...' : 'Start Chat'}
+                    </Button>
+                  </div>
+                </form>
               </div>
+            ) : (
+              /* ─── CREATE GROUP CHAT TAB ─── */
+              <form onSubmit={handleCreateGroupChat} className="space-y-3">
+                <div>
+                  <label className="text-[10px] text-zinc-400 block mb-1">Group Name *</label>
+                  <input
+                    type="text"
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    placeholder="e.g. Gold Traders VIP Circle"
+                    className="w-full h-8 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                    required
+                    disabled={creatingGroup}
+                  />
+                </div>
 
-              <div className="flex justify-end gap-2 pt-1">
-                <Button size="sm" variant="ghost" onClick={() => setNewChatOpen(false)} disabled={creatingChat}>
-                  Cancel
-                </Button>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-500" type="submit" disabled={creatingChat || !targetUsername.trim()}>
-                  {creatingChat ? 'Authorizing...' : 'Manual Connect'}
-                </Button>
-              </div>
-            </form>
+                <div>
+                  <label className="text-[10px] text-zinc-400 block mb-1">Description (Optional)</label>
+                  <input
+                    type="text"
+                    value={groupDescription}
+                    onChange={(e) => setGroupDescription(e.target.value)}
+                    placeholder="e.g. Daily market analysis and strategy discussion"
+                    className="w-full h-8 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                    disabled={creatingGroup}
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[10px] text-zinc-400">Select Members *</label>
+                    <span className="text-[9px] text-purple-400 font-semibold">
+                      {selectedGroupMembers.length} selected
+                    </span>
+                  </div>
+
+                  <div className="relative mb-2">
+                    <Search size={12} className="absolute left-2.5 top-2.5 text-zinc-500" />
+                    <input
+                      type="text"
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      placeholder="Search operators to add..."
+                      className="w-full h-7 pl-8 pr-3 bg-zinc-950 border border-zinc-850 rounded-lg text-[11px] text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                    />
+                  </div>
+
+                  {loadingUsers ? (
+                    <div className="h-28 flex items-center justify-center">
+                      <Loader2 className="animate-spin text-purple-500" size={16} />
+                    </div>
+                  ) : filteredUsers.length === 0 ? (
+                    <div className="py-4 text-center border border-dashed border-zinc-850 rounded-xl bg-zinc-950/20 text-zinc-500 text-[10px] italic">
+                      No operators found.
+                    </div>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1 divide-y divide-zinc-850/40">
+                      {filteredUsers.map((u) => {
+                        const isSelected = selectedGroupMembers.includes(u.id);
+                        return (
+                          <div
+                            key={u.id}
+                            onClick={() => toggleGroupMember(u.id)}
+                            className={`w-full p-2 rounded-lg flex items-center justify-between cursor-pointer transition-colors ${
+                              isSelected ? 'bg-purple-950/40 border border-purple-800/40' : 'hover:bg-zinc-900/60'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Avatar name={u.displayName || u.display_name || u.username} src={u.avatarUrl || u.avatar_url} size="sm" className="h-7 w-7" />
+                              <div>
+                                <span className="text-[11px] font-bold text-white block leading-tight">
+                                  {u.displayName || u.display_name || u.username}
+                                </span>
+                                <span className="text-[9px] text-zinc-550 block">@{u.username}</span>
+                              </div>
+                            </div>
+
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="rounded border-zinc-700 bg-zinc-900 text-purple-600 focus:ring-0 cursor-pointer h-4 w-4"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-zinc-850">
+                  <Button size="sm" variant="ghost" onClick={() => setNewChatOpen(false)} disabled={creatingGroup}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-500 text-white flex items-center gap-1.5"
+                    type="submit"
+                    disabled={creatingGroup || !groupName.trim() || selectedGroupMembers.length === 0}
+                  >
+                    {creatingGroup ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin" />
+                        <span>Creating Group...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Users size={12} />
+                        <span>Create Group ({selectedGroupMembers.length})</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
         </Modal>
       )}
