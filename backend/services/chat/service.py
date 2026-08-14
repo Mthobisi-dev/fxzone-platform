@@ -49,8 +49,17 @@ class ChatService:
         else:
             raise ValueError("Either participant_ids or username must be provided.")
 
-        # De-duplicate
-        participant_ids = list(set(participant_ids))
+        # Ensure all participant_ids are UUID objects if valid
+        clean_participants = []
+        for p in participant_ids:
+            try:
+                clean_participants.append(uuid.UUID(str(p)))
+            except ValueError:
+                clean_participants.append(p)
+        participant_ids = list(dict.fromkeys(clean_participants))
+
+        if not data.is_group and len(participant_ids) < 2:
+            raise ValueError("Please select another operator to start a chat.")
 
         # Check target user restrictions (FxZone Bot only)
         for target_id in participant_ids:
@@ -60,8 +69,6 @@ class ChatService:
                 t_user = t_res.scalar_one_or_none()
                 if t_user and (t_user.username == 'fxzone_bot' or t_user.email == 'bot@fxzone.com'):
                     raise ValueError("Direct messaging with FxZone Bot is restricted. Use the AI Analyst panel instead.")
-
-
 
         # Check for existing DM between these two users
         if not data.is_group and len(participant_ids) == 2:
@@ -106,6 +113,7 @@ class ChatService:
         # 1. Create conversation record
         conv = Conversation(
             name=data.name,
+            description=data.description if hasattr(data, 'description') else None,
             is_group=data.is_group,
             creator_id=creator_uuid,
             created_at=now,

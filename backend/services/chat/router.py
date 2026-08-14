@@ -64,7 +64,14 @@ async def create_new_conversation(
             "updated_at": conv.updated_at,
             "members": members
         }
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve)
+        )
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(f"Error creating conversation: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create conversation: {str(e)}"

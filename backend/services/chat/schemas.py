@@ -10,6 +10,7 @@ from services.social.schemas import UserShort, camel_model
 class ConversationCreate(BaseModel):
     """Schema to create a new DM or group chat room."""
     name: Optional[str] = Field(None, max_length=100, description="Optional name of the conversation (mostly for group chats).")
+    description: Optional[str] = Field(None, max_length=500, description="Optional description of the group.")
     is_group: bool = Field(False, description="Flag indicating if this is a group chat or 1:1 DM.")
     participant_ids: Optional[List[str]] = Field(None, description="List of participant user IDs to include.")
     username: Optional[str] = Field(None, description="Optional username to start 1:1 DM directly by username.")

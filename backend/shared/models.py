@@ -286,8 +286,8 @@ class Conversation(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    creator = relationship("User", foreign_keys=[creator_id])
-    members = relationship("ConversationMember", back_populates="conversation", cascade="all, delete-orphan")
+    creator = relationship("User", foreign_keys=[creator_id], lazy="joined")
+    members = relationship("ConversationMember", back_populates="conversation", cascade="all, delete-orphan", lazy="selectin")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
 
 
@@ -305,7 +305,7 @@ class ConversationMember(Base):
     last_read_at = Column(DateTime(timezone=True), default=utcnow)
 
     conversation = relationship("Conversation", back_populates="members")
-    user = relationship("User")
+    user = relationship("User", lazy="joined")
 
 
 # ============================================================
