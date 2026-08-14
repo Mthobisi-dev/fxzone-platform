@@ -239,5 +239,6 @@ async def get_ws_user(websocket: WebSocket) -> Optional[dict]:
             "role": payload.get("role", "trader"),
             "username": payload.get("username", ""),
         })
-    except HTTPException:
+    except Exception as e:
+        logger.warning(f"WebSocket auth verification failed: {e}")
         return None

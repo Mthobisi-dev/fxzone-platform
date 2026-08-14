@@ -17,34 +17,42 @@ router = APIRouter(tags=["Chat WebSockets"])
 async def chat_websocket_endpoint(websocket: WebSocket, conversation_id: str):
     """WebSocket endpoint for real-time messaging, typing, and read statuses."""
     # 1. Authenticate user
-    user = await get_ws_user(websocket)
-    if not user:
-        logger.warning("Unauthenticated WebSocket connection attempt in chat.")
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    user_id = str(user["user_id"])
-    channel_name = f"chat_{conversation_id}"
-
-    # 2. Check if user is a member of the conversation
-    async with AsyncSessionLocal() as db:
-        chat_service = ChatService(db)
-        is_member = await chat_service.verify_membership(user_id, conversation_id)
-        if not is_member:
-            logger.warning(f"User {user_id} unauthorized to join conversation {conversation_id}.")
+    try:
+        user = await get_ws_user(websocket)
+        if not user:
+            logger.warning("Unauthenticated WebSocket connection attempt in chat.")
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
-    # 3. Connect to the WebSocket manager
-    await manager.connect(websocket, channel_name, str(user_id))
+        user_id = str(user["user_id"])
+        channel_name = f"chat_{conversation_id}"
 
-    # Broadcast user joined status
-    await manager.broadcast(channel_name, {
-        "type": "status",
-        "user_id": user_id,
-        "username": user["username"],
-        "status": "online"
-    })
+        # 2. Check if user is a member of the conversation
+        async with AsyncSessionLocal() as db:
+            chat_service = ChatService(db)
+            is_member = await chat_service.verify_membership(user_id, conversation_id)
+            if not is_member:
+                logger.warning(f"User {user_id} unauthorized to join conversation {conversation_id}.")
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+
+        # 3. Connect to the WebSocket manager
+        await manager.connect(websocket, channel_name, str(user_id))
+
+        # Broadcast user joined status
+        await manager.broadcast(channel_name, {
+            "type": "status",
+            "user_id": user_id,
+            "username": user["username"],
+            "status": "online"
+        })
+    except Exception as auth_err:
+        logger.error(f"Error initializing chat websocket: {auth_err}")
+        try:
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+        except Exception:
+            pass
+        return
 
     try:
         while True:

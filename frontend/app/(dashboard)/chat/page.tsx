@@ -139,7 +139,12 @@ export default function ChatPage() {
               }
             : undefined,
         }));
-        setMessages(mapped);
+        setMessages((prev) => {
+          const pending = prev.filter((m) => String(m.id).startsWith('temp-'));
+          const confirmedIds = new Set(mapped.map((m: any) => String(m.id)));
+          const remainingPending = pending.filter((m) => !confirmedIds.has(String(m.id)));
+          return [...mapped, ...remainingPending];
+        });
       } else {
         setMessages([]);
       }
@@ -202,14 +207,14 @@ export default function ChatPage() {
     }
   }, [activeConvId]);
 
-  // Polling fallback: refresh messages every 3 seconds when WebSocket is not connected
+  // Active chat message polling: sync messages every 2.5 seconds to guarantee message delivery
   useEffect(() => {
-    if (!activeConvId || wsConnected) return;
+    if (!activeConvId) return;
     const interval = setInterval(() => {
       fetchMessages(activeConvId);
-    }, 3000);
+    }, 2500);
     return () => clearInterval(interval);
-  }, [activeConvId, wsConnected]);
+  }, [activeConvId]);
 
   useEffect(() => {
     if (newChatOpen) {
@@ -220,7 +225,7 @@ export default function ChatPage() {
   const handleSendMessage = async (text: string) => {
     if (!activeConvId || !user) return;
 
-    const tempId = Math.random().toString();
+    const tempId = `temp-${Date.now()}`;
     const optimisticMsg = {
       id: tempId,
       conversationId: activeConvId,
@@ -250,7 +255,11 @@ export default function ChatPage() {
       });
       if (res && res.id) {
         setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? { ...m, id: res.id } : m))
+          prev.map((m) => (m.id === tempId ? {
+            ...m,
+            id: res.id,
+            createdAt: res.created_at || res.createdAt || m.createdAt,
+          } : m))
         );
       }
     } catch (err) {
