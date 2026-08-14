@@ -314,5 +314,5 @@ class ChatService:
             return False
 
         await self.db.delete(msg)
-        await self.db.flush()
+        await self.db.commit()
         return True

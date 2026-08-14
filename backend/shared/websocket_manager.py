@@ -7,6 +7,15 @@ from fastapi import WebSocket
 logger = logging.getLogger(__name__)
 
 
+def json_serial(obj: Any) -> Any:
+    """JSON serializer for objects not serializable by default json code (UUID, datetime, Enum)."""
+    if hasattr(obj, 'isoformat'):
+        return obj.isoformat()
+    if hasattr(obj, 'value'):
+        return obj.value
+    return str(obj)
+
+
 class ConnectionManager:
     """Manages WebSocket connections across channels."""
 
@@ -53,7 +62,7 @@ class ConnectionManager:
         if channel not in self._channels:
             return
 
-        data = json.dumps(message) if not isinstance(message, str) else message
+        data = json.dumps(message, default=json_serial) if not isinstance(message, str) else message
         disconnected = set()
 
         for ws in self._channels[channel]:
@@ -70,7 +79,7 @@ class ConnectionManager:
         if user_id not in self._user_connections:
             return
 
-        data = json.dumps(message) if not isinstance(message, str) else message
+        data = json.dumps(message, default=json_serial) if not isinstance(message, str) else message
         disconnected = set()
 
         for ws in self._user_connections[user_id]:

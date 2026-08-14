@@ -33,7 +33,9 @@ async def get_user_conversations(
         formatted.append({
             "id": conv.id,
             "name": conv.name,
+            "description": getattr(conv, "description", None),
             "is_group": conv.is_group,
+            "creator_id": getattr(conv, "creator_id", None),
             "created_at": conv.created_at,
             "updated_at": conv.updated_at,
             "members": members
@@ -55,7 +57,9 @@ async def create_new_conversation(
         return {
             "id": conv.id,
             "name": conv.name,
+            "description": getattr(conv, "description", None),
             "is_group": conv.is_group,
+            "creator_id": getattr(conv, "creator_id", None),
             "created_at": conv.created_at,
             "updated_at": conv.updated_at,
             "members": members

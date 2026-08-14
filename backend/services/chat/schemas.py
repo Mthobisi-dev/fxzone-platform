@@ -19,7 +19,9 @@ class ConversationResponse(camel_model):
     """Schema representing a chat conversation folder."""
     id: Union[UUID, str]
     name: Optional[str] = None
+    description: Optional[str] = None
     is_group: bool
+    creator_id: Optional[Union[UUID, str]] = None
     created_at: datetime
     updated_at: datetime
     members: List[UserShort] = []
