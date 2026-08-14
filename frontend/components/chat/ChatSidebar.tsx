@@ -85,18 +85,9 @@ export function ChatSidebar({
     return matchesSearch && !isBot;
   });
 
-  // Filter suggested users by search, and exclude users who already have a DM conversation
-  const existingDmUserIds = new Set(
-    conversations
-      .filter((c) => !c.isGroup)
-      .flatMap((c) => c.members.map((m) => String(m.userId || (m as any).id)))
-      .filter((id: string) => String(id) !== String(currentUserId))
-  );
-
   const filteredPeople = suggestedUsers.filter((u) => {
-    if (existingDmUserIds.has(u.id)) return false;
-    const isAdminUser = u.role === 'admin' || u.username === 'admin' || u.username === 'fxadmin';
-    if (isAdminUser) return false;
+    if (String(u.id) === String(currentUserId)) return false;
+    if (u.username === 'fxzone_bot') return false;
     const term = search.toLowerCase();
     return (
       u.username.toLowerCase().includes(term) ||

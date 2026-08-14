@@ -298,15 +298,10 @@ export default function DiscoverPage() {
                   onClick={() => handleStartDM(u)}
                   size="sm"
                   variant="ghost"
-                  className={`h-7 px-2 text-[10px] border border-zinc-800 hover:bg-zinc-800/50 ${
-                    u.is_following || u.is_follower
-                      ? 'text-zinc-400 hover:text-white'
-                      : 'text-zinc-600 opacity-40 cursor-not-allowed'
-                  }`}
-                  disabled={!(u.is_following || u.is_follower)}
-                  title={u.is_following || u.is_follower ? 'Start Direct Message' : 'Follow relationship required to chat'}
+                  className="h-7 px-2 text-[10px] border border-zinc-800 hover:bg-zinc-800/50 text-zinc-300 hover:text-white hover:border-zinc-700"
+                  title="Send Direct Message"
                 >
-                  <MessageCircle size={12} />
+                  <MessageCircle size={12} className="text-blue-400" />
                 </Button>
               </div>
               )}

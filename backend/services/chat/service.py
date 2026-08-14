@@ -52,22 +52,14 @@ class ChatService:
         # De-duplicate
         participant_ids = list(set(participant_ids))
 
-        # Check target user restrictions (FxZone Bot & Admin)
+        # Check target user restrictions (FxZone Bot only)
         for target_id in participant_ids:
             if str(target_id) != str(creator_id):
                 t_stmt = select(User).where(User.id == target_id)
                 t_res = await self.db.execute(t_stmt)
                 t_user = t_res.scalar_one_or_none()
-                if t_user:
-                    if t_user.username == 'fxzone_bot' or t_user.email == 'bot@fxzone.com':
-                        raise ValueError("Direct messaging with FxZone Bot is restricted. Use the AI Analyst panel instead.")
-                    if t_user.username == 'admin' or t_user.email == 'mthobisimzimela031@gmail.com' or t_user.role == 'admin':
-                        # Check if creator is admin
-                        c_stmt = select(User).where(User.id == creator_uuid)
-                        c_res = await self.db.execute(c_stmt)
-                        c_user = c_res.scalar_one_or_none()
-                        if not (c_user and (c_user.username == 'admin' or c_user.role == 'admin' or c_user.email == 'mthobisimzimela031@gmail.com')):
-                            raise ValueError("Direct messaging with FxZone Admin is restricted.")
+                if t_user and (t_user.username == 'fxzone_bot' or t_user.email == 'bot@fxzone.com'):
+                    raise ValueError("Direct messaging with FxZone Bot is restricted. Use the AI Analyst panel instead.")
 
 
 
@@ -273,6 +265,7 @@ class ChatService:
         except Exception as e:
             logger.error(f"Error dispatching chat notification: {e}")
 
+        await self.db.commit()
         return saved_msg
 
     async def verify_membership(self, user_id: str, conversation_id: str) -> bool:

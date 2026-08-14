@@ -222,14 +222,6 @@ export default function ChatPage() {
   const handleStartChatWithUser = async (targetUser: any) => {
     if (creatingChat) return;
 
-    const isAdminTarget = targetUser.email === 'mthobisimzimela031@gmail.com' || targetUser.role === 'admin' || targetUser.username === 'admin';
-    const isCurrentUserAdmin = user?.email === 'mthobisimzimela031@gmail.com' || user?.role === 'admin' || user?.username === 'admin';
-
-    if (isAdminTarget && !isCurrentUserAdmin) {
-      const confirmApproval = confirm("Chatting directly with FxZone Admin requires an approval request. Send chat access request to Admin?");
-      if (!confirmApproval) return;
-    }
-
     setCreatingChat(true);
     setStartingUserId(targetUser.id);
 
@@ -343,6 +335,8 @@ export default function ChatPage() {
               conversationName={activeDetails.name}
               conversationAvatar={activeDetails.avatarUrl}
               isGroup={activeDetails.isGroup}
+              members={activeConv?.members || []}
+              conversationData={activeConv}
               onSendMessage={handleSendMessage}
               onStartLiveCall={handleStartLiveCall}
             />

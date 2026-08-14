@@ -1,18 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { PostCard, Post } from '@/components/social/PostCard';
-import { CheckCircle2, UserPlus, UserMinus, Loader2, Sparkles, Edit3, Camera } from 'lucide-react';
+import { CheckCircle2, UserPlus, UserMinus, Loader2, Sparkles, Edit3, Camera, MessageSquare } from 'lucide-react';
 import { api } from '@/lib/api';
 
 export default function ProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const { user: currentUser } = useAuth();
   const userId = params.id as string;
 
@@ -154,6 +155,29 @@ export default function ProfilePage() {
     }
   };
 
+  const [startingChat, setStartingChat] = useState(false);
+
+  const handleDirectMessage = async () => {
+    if (startingChat || !profile?.id) return;
+    setStartingChat(true);
+    try {
+      const response = await api.post('/api/chat/conversations', {
+        participant_ids: [profile.id],
+        is_group: false,
+      });
+      if (response?.id) {
+        router.push(`/chat?conv=${response.id}`);
+      } else {
+        router.push('/chat');
+      }
+    } catch (err) {
+      console.error('Failed to start conversation:', err);
+      router.push('/chat');
+    } finally {
+      setStartingChat(false);
+    }
+  };
+
   const isSelf = currentUser?.id === userId;
 
   if (loading && !profile) {
@@ -210,26 +234,45 @@ export default function ProfilePage() {
                 <span>Edit Profile</span>
               </Button>
             ) : profile?.username !== 'fxzone_bot' && profile?.role !== 'bot' ? (
-              <Button
-                onClick={handleFollowToggle}
-                variant={profile?.isFollowing ? 'outline' : 'primary'}
-                className="h-8 text-xs font-semibold px-4 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500"
-                disabled={followLoading}
-              >
-                {followLoading ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : profile?.isFollowing ? (
-                  <>
-                    <UserMinus size={12} />
-                    <span>Unfollow</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus size={12} />
-                    <span>Follow</span>
-                  </>
-                )}
-              </Button>
+              <>
+                <Button
+                  onClick={handleFollowToggle}
+                  variant={profile?.isFollowing ? 'outline' : 'primary'}
+                  className="h-8 text-xs font-semibold px-4 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500"
+                  disabled={followLoading}
+                >
+                  {followLoading ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : profile?.isFollowing ? (
+                    <>
+                      <UserMinus size={12} />
+                      <span>Unfollow</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={12} />
+                      <span>Follow</span>
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  onClick={handleDirectMessage}
+                  variant="outline"
+                  className="h-8 text-xs font-semibold px-3 flex items-center gap-1.5 border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white"
+                  disabled={startingChat}
+                  title="Direct Message"
+                >
+                  {startingChat ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <>
+                      <MessageSquare size={12} className="text-purple-400" />
+                      <span>Message</span>
+                    </>
+                  )}
+                </Button>
+              </>
             ) : null}
           </div>
         </div>
