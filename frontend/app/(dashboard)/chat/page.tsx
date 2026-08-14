@@ -199,10 +199,37 @@ export default function ChatPage() {
   useEffect(() => {
     if (activeConvId) {
       fetchMessages(activeConvId);
+      // If conversation is not in list, fetch its metadata directly
+      if (!conversations.some((c) => String(c.id) === String(activeConvId))) {
+        api.get(`/api/chat/conversations/${activeConvId}`).then((conv) => {
+          if (conv && conv.id) {
+            const mapped = {
+              id: conv.id,
+              name: conv.name,
+              isGroup: conv.is_group ?? conv.isGroup ?? false,
+              unreadCount: 0,
+              createdAt: conv.created_at || conv.createdAt,
+              updatedAt: conv.updated_at || conv.updatedAt,
+              members: Array.isArray(conv.members)
+                ? conv.members.map((m: any) => ({
+                    userId: m.id || m.userId,
+                    username: m.username,
+                    displayName: m.display_name || m.displayName || m.username,
+                    avatarUrl: m.avatar_url || m.avatarUrl,
+                  }))
+                : [],
+            };
+            setConversations((prev) => {
+              if (prev.some((c) => String(c.id) === String(conv.id))) return prev;
+              return [mapped, ...prev];
+            });
+          }
+        }).catch((e) => console.error('Could not fetch active conv:', e));
+      }
       setWsConnected(false);
       // Mark read
       setConversations((prev) =>
-        prev.map((c) => (c.id === activeConvId ? { ...c, unreadCount: 0 } : c))
+        prev.map((c) => (String(c.id) === String(activeConvId) ? { ...c, unreadCount: 0 } : c))
       );
     }
   }, [activeConvId]);
@@ -270,23 +297,25 @@ export default function ChatPage() {
 
   // Start chat directly using selected User object/ID (works from sidebar People tab AND modal)
   const handleStartChatWithUser = async (targetUser: any) => {
-    if (creatingChat) return;
+    const targetId = targetUser.id || targetUser.userId || targetUser.user_id;
+    if (!targetId || creatingChat) return;
 
     setCreatingChat(true);
-    setStartingUserId(targetUser.id);
+    setStartingUserId(targetId);
 
     try {
       const response = await api.post('/api/chat/conversations', {
-        participant_ids: [targetUser.id],
+        participant_ids: [targetId],
         is_group: false,
       });
       if (response && response.id) {
         setNewChatOpen(false);
-        await fetchConversations();
         setActiveConvId(response.id);
+        await fetchConversations();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create chat with selected user:', err);
+      alert(err?.detail || err?.message || 'Unable to open chat channel with user.');
     } finally {
       setCreatingChat(false);
       setStartingUserId(null);
@@ -301,15 +330,17 @@ export default function ChatPage() {
     try {
       const response = await api.post('/api/chat/conversations', {
         username: targetUsername.trim(),
+        is_group: false,
       });
       if (response && response.id) {
         setTargetUsername('');
         setNewChatOpen(false);
-        await fetchConversations();
         setActiveConvId(response.id);
+        await fetchConversations();
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Failed to start chat by username:', err);
+      alert(err?.detail || err?.message || 'Unable to find or start chat with user.');
     } finally {
       setCreatingChat(false);
     }
@@ -338,11 +369,12 @@ export default function ChatPage() {
         setGroupDescription('');
         setSelectedGroupMembers([]);
         setNewChatOpen(false);
-        await fetchConversations();
         setActiveConvId(response.id);
+        await fetchConversations();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create group chat:', err);
+      alert(err?.detail || err?.message || 'Failed to create group chat.');
     } finally {
       setCreatingGroup(false);
     }
@@ -360,7 +392,9 @@ export default function ChatPage() {
           avatarUrl: activeConv.members.find((m) => String(m.userId || (m as any).id) !== String(user?.id))?.avatarUrl,
           isGroup: false,
         }
-    : null;
+    : activeConvId
+      ? { name: 'Direct Message', avatarUrl: undefined, isGroup: false }
+      : null;
 
   // Filter list by search query
   const filteredUsers = eligibleUsers.filter((u) => {

@@ -43,6 +43,39 @@ async def get_user_conversations(
     return formatted
 
 
+@router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
+async def get_single_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve details for a single conversation."""
+    service = ChatService(db)
+    is_member = await service.verify_membership(current_user.id, conversation_id)
+    if not is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to view this conversation."
+        )
+    conv = await service.get_conversation_by_id(conversation_id)
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found."
+        )
+    members = [member.user for member in conv.members if member.user is not None]
+    return {
+        "id": conv.id,
+        "name": conv.name,
+        "description": getattr(conv, "description", None),
+        "is_group": conv.is_group,
+        "creator_id": getattr(conv, "creator_id", None),
+        "created_at": conv.created_at,
+        "updated_at": conv.updated_at,
+        "members": members
+    }
+
+
 @router.post("/conversations", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_conversation(
     request: ConversationCreate,

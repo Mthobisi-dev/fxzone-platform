@@ -139,11 +139,29 @@ class ChatService:
             select(Conversation)
             .where(Conversation.id == conv.id)
             .options(
-                selectinload(Conversation.members).selectinload(ConversationMember.user)
+                selectinload(Conversation.members).joinedload(ConversationMember.user)
             )
         )
         res = await self.db.execute(query)
         return res.scalar_one()
+
+    async def get_conversation_by_id(self, conversation_id: str) -> Optional[Conversation]:
+        """Fetch a single conversation with members loaded."""
+        import uuid
+        try:
+            conv_uuid = uuid.UUID(str(conversation_id))
+        except ValueError:
+            conv_uuid = conversation_id
+
+        query = (
+            select(Conversation)
+            .where(Conversation.id == conv_uuid)
+            .options(
+                selectinload(Conversation.members).joinedload(ConversationMember.user)
+            )
+        )
+        res = await self.db.execute(query)
+        return res.scalar_one_or_none()
 
     async def get_user_conversations(self, user_id: str) -> List[Conversation]:
         """Fetch list of conversations the current user is active in."""
