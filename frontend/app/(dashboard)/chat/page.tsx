@@ -33,6 +33,15 @@ export default function ChatPage() {
   const socketRef = useWebSocket(
     activeConvId ? `/ws/chat/${activeConvId}` : '',
     {
+      open: () => {
+        setWsConnected(true);
+      },
+      close: () => {
+        setWsConnected(false);
+      },
+      error: () => {
+        setWsConnected(false);
+      },
       message: (payload) => {
         const msg = payload;
         const convId = msg.conversation_id || msg.conversationId;
@@ -41,17 +50,21 @@ export default function ChatPage() {
         if (String(senderId) === String(user?.id)) return;
 
         if (String(convId) === String(activeConvId)) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: msg.id,
-              conversationId: convId,
-              senderId: senderId,
-              content: msg.content,
-              createdAt: msg.created_at || msg.createdAt,
-              sender: msg.sender,
-            },
-          ]);
+          setMessages((prev) => {
+            // Deduplicate: skip if already exists
+            if (prev.some((m) => String(m.id) === String(msg.id))) return prev;
+            return [
+              ...prev,
+              {
+                id: msg.id,
+                conversationId: convId,
+                senderId: senderId,
+                content: msg.content,
+                createdAt: msg.created_at || msg.createdAt,
+                sender: msg.sender,
+              },
+            ];
+          });
         }
 
         setConversations((prev) =>
@@ -160,15 +173,28 @@ export default function ChatPage() {
     fetchEligibleUsers();
   }, [user]);
 
+  // Track whether WS connected successfully
+  const [wsConnected, setWsConnected] = useState(false);
+
   useEffect(() => {
     if (activeConvId) {
       fetchMessages(activeConvId);
+      setWsConnected(false);
       // Mark read
       setConversations((prev) =>
         prev.map((c) => (c.id === activeConvId ? { ...c, unreadCount: 0 } : c))
       );
     }
   }, [activeConvId]);
+
+  // Polling fallback: refresh messages every 3 seconds when WebSocket is not connected
+  useEffect(() => {
+    if (!activeConvId || wsConnected) return;
+    const interval = setInterval(() => {
+      fetchMessages(activeConvId);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeConvId, wsConnected]);
 
   useEffect(() => {
     if (newChatOpen) {

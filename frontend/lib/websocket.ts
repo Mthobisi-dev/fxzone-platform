@@ -20,19 +20,17 @@ export class FxZoneWebSocket {
     if (path.startsWith('ws://') || path.startsWith('wss://')) {
       this.url = path;
     } else {
-      // Use NEXT_PUBLIC_API_URL in production, else derive from window.location
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-      if (apiUrl) {
-        // Convert http(s) URL to ws(s) URL
-        const wsUrl = apiUrl.replace(/^http/, 'ws');
-        this.url = `${wsUrl}${path.startsWith('/') ? path : '/' + path}`;
-      } else {
-        const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8000';
-        // Direct WebSocket connections to the backend port (8000) in development
-        const wsHost = host.includes('localhost') ? 'localhost:8000' : host;
-        this.url = `${protocol}//${wsHost}${path.startsWith('/') ? path : '/' + path}`;
-      }
+      // IMPORTANT: Vercel cannot proxy WebSocket connections.
+      // We MUST connect directly to the backend WS URL, never through the Vercel proxy.
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL ||
+        (typeof window !== 'undefined' && window.location.host.includes('localhost')
+          ? 'http://localhost:8000'
+          : 'https://fxzone-backend.onrender.com');
+
+      // Convert http(s) → ws(s)
+      const wsUrl = apiUrl.replace(/^http/, 'ws');
+      this.url = `${wsUrl}${path.startsWith('/') ? path : '/' + path}`;
     }
   }
 
