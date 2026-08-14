@@ -115,6 +115,7 @@ class ChatService:
         conv = Conversation(
             name=data.name,
             is_group=data.is_group,
+            creator_id=creator_uuid,
             created_at=now,
             updated_at=now
         )
@@ -131,7 +132,7 @@ class ChatService:
             )
             self.db.add(member)
         
-        await self.db.flush()
+        await self.db.commit()
         
         # 3. Retrieve conversation with loaded members
         query = (

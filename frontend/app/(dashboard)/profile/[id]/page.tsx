@@ -20,7 +20,29 @@ export default function ProfilePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'posts' | 'about'>('posts');
+  const [savedPosts, setSavedPosts] = useState<Post[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'about'>('posts');
+
+  const fetchSavedPosts = async () => {
+    setLoadingSaved(true);
+    try {
+      const res = await api.get('/api/social/posts/saved');
+      if (Array.isArray(res)) {
+        setSavedPosts(res);
+      }
+    } catch (e) {
+      console.error('Failed to load saved posts:', e);
+    } finally {
+      setLoadingSaved(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'saved') {
+      fetchSavedPosts();
+    }
+  }, [activeTab]);
 
   // Edit profile state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -250,6 +272,14 @@ export default function ProfilePage() {
           Trading Ideas
         </button>
         <button
+          onClick={() => setActiveTab('saved')}
+          className={`text-xs font-bold pb-2 transition-colors border-b-2 -mb-[9px] px-2 ${
+            activeTab === 'saved' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+          }`}
+        >
+          Saved Setups
+        </button>
+        <button
           onClick={() => setActiveTab('about')}
           className={`text-xs font-bold pb-2 transition-colors border-b-2 -mb-[9px] px-2 ${
             activeTab === 'about' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'
@@ -268,6 +298,20 @@ export default function ProfilePage() {
             </div>
           ) : (
             posts.map((post) => <PostCard key={post.id} post={post} />)
+          )}
+        </div>
+      ) : activeTab === 'saved' ? (
+        <div className="space-y-4">
+          {loadingSaved ? (
+            <div className="py-12 flex justify-center text-xs text-zinc-500">
+              <Loader2 className="animate-spin text-purple-500" size={20} />
+            </div>
+          ) : savedPosts.length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-zinc-900 rounded-xl bg-zinc-950/10">
+              <p className="text-xs text-zinc-500 italic">No saved posts found. Bookmark market setups to access them here!</p>
+            </div>
+          ) : (
+            savedPosts.map((post) => <PostCard key={post.id} post={post} />)
           )}
         </div>
       ) : (

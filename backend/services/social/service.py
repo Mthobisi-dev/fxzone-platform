@@ -287,7 +287,7 @@ class SocialService:
             except Exception as e:
                 logger.error(f"Error dispatching follow notification: {e}")
 
-        await self.db.flush()
+        await self.db.commit()
 
         # Calculate counts
         followers_count = await self.db.scalar(
@@ -296,6 +296,11 @@ class SocialService:
         following_count = await self.db.scalar(
             select(func.count(Follow.id)).where(Follow.follower_id == follower_id)
         )
+
+        # Update User model stats
+        await self.db.execute(update(User).where(User.id == following_id).values(followers_count=followers_count or 0))
+        await self.db.execute(update(User).where(User.id == follower_id).values(following_count=following_count or 0))
+        await self.db.commit()
 
         return {
             "follower_id": follower_id,
@@ -530,4 +535,54 @@ class SocialService:
             logger.error(f"Error in delete_user_account for user {user_id}: {e}")
             await self.db.rollback()
             raise e
+
+    async def toggle_bookmark(self, user_id: Any, post_id: Any) -> Dict[str, Any]:
+        """Bookmark/save or unsave a post for the authenticated user."""
+        import uuid
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
+
+        try:
+            p_uuid = uuid.UUID(str(post_id))
+        except ValueError:
+            p_uuid = post_id
+
+        from shared.models import Bookmark
+        stmt = select(Bookmark).where(and_(Bookmark.user_id == u_uuid, Bookmark.post_id == p_uuid))
+        res = await self.db.execute(stmt)
+        b = res.scalar_one_or_none()
+
+        is_bookmarked = False
+        if b:
+            await self.db.delete(b)
+        else:
+            new_b = Bookmark(user_id=u_uuid, post_id=p_uuid)
+            self.db.add(new_b)
+            is_bookmarked = True
+
+        await self.db.commit()
+        return {"post_id": str(post_id), "is_bookmarked": is_bookmarked}
+
+    async def get_saved_posts(self, user_id: Any, limit: int = 20, offset: int = 0) -> List[Post]:
+        """Fetch all posts bookmarked/saved by user."""
+        import uuid
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
+
+        from shared.models import Bookmark
+        stmt = (
+            select(Post)
+            .join(Bookmark, Bookmark.post_id == Post.id)
+            .where(Bookmark.user_id == u_uuid)
+            .options(selectinload(Post.user), selectinload(Post.tagged_assets))
+            .order_by(Bookmark.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        res = await self.db.execute(stmt)
+        return list(res.scalars().all())
 

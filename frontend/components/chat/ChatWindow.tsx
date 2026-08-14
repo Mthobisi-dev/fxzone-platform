@@ -28,6 +28,8 @@ interface ChatWindowProps {
   conversationName: string;
   conversationAvatar?: string;
   isGroup: boolean;
+  members?: any[];
+  conversationData?: any;
   onSendMessage: (text: string) => Promise<void>;
   onDeleteMessage?: (messageId: string) => void;
   onStartLiveCall?: () => void;
@@ -41,6 +43,8 @@ export function ChatWindow({
   conversationName,
   conversationAvatar,
   isGroup,
+  members = [],
+  conversationData = {},
   onSendMessage,
   onDeleteMessage,
   onStartLiveCall,
@@ -310,48 +314,68 @@ export function ChatWindow({
             </div>
           </div>
 
-          {/* Group Actions */}
+          {/* Group Actions & Member List */}
           {isGroup && (
-            <div className="p-3 border-b border-zinc-800/50 space-y-2 select-none">
-              <button
-                onClick={() => setSettingsModalOpen(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors font-medium"
-              >
-                <Settings className="h-3.5 w-3.5 text-purple-400" />
-                Group Settings
-              </button>
-              <button
-                onClick={handleOpenAddMembers}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors font-medium"
-              >
-                <UserPlus className="h-3.5 w-3.5 text-blue-400" />
-                Add Members {addedMembers.length > 0 && `(${addedMembers.length} added)`}
-              </button>
-              <button
-                onClick={handleLeaveGroup}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors font-medium"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Leave Group
-              </button>
+            <div className="flex-1 flex flex-col min-h-0 overflow-y-auto divide-y divide-zinc-800/40 select-none">
+              <div className="p-3 space-y-2">
+                <button
+                  onClick={() => setSettingsModalOpen(true)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors font-medium"
+                >
+                  <Settings className="h-3.5 w-3.5 text-purple-400" />
+                  Group Settings
+                </button>
+                <button
+                  onClick={handleOpenAddMembers}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 rounded-lg transition-colors font-medium"
+                >
+                  <UserPlus className="h-3.5 w-3.5 text-blue-400" />
+                  Add Members {addedMembers.length > 0 && `(${addedMembers.length} added)`}
+                </button>
+                <button
+                  onClick={handleLeaveGroup}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors font-medium"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Leave Group
+                </button>
+              </div>
+
+              {/* Real Group Members List */}
+              <div className="p-3 space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Group Accounts ({members.length})</p>
+                  <span className="text-[9px] text-purple-400 font-medium">Real Roster</span>
+                </div>
+                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                  {members.map((m: any, idx: number) => {
+                    const mUser = m.user || m;
+                    const uId = m.user_id || mUser.id;
+                    const creatorId = conversationData?.creator_id || conversationData?.creatorId || members[0]?.user_id || members[0]?.user?.id;
+                    const isGroupCreator = String(uId) === String(creatorId) || idx === 0;
+                    return (
+                      <div key={m.id || idx} className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-850/80 flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar src={mUser.avatar_url || mUser.avatarUrl} name={mUser.display_name || mUser.displayName || mUser.username} size="sm" />
+                          <div className="min-w-0">
+                            <span className="text-[11px] font-semibold text-white block truncate leading-tight">
+                              {mUser.display_name || mUser.displayName || mUser.username}
+                            </span>
+                            <span className="text-[9px] text-zinc-500 block truncate">@{mUser.username}</span>
+                          </div>
+                        </div>
+                        {isGroupCreator && (
+                          <span className="text-[8px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400 px-1.5 py-0.5 rounded shrink-0">
+                            Group Admin
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
-
-          {/* Shared Media Section (placeholder) */}
-          <div className="p-3 border-t border-zinc-800/50 mt-auto">
-            <p className="text-[10px] text-zinc-500 uppercase font-medium tracking-wider mb-2">Shared Media</p>
-            <div className="grid grid-cols-3 gap-1">
-              <div className="aspect-square bg-zinc-800/50 rounded-lg flex items-center justify-center">
-                <Image className="h-4 w-4 text-zinc-600" />
-              </div>
-              <div className="aspect-square bg-zinc-800/50 rounded-lg flex items-center justify-center">
-                <Image className="h-4 w-4 text-zinc-600" />
-              </div>
-              <div className="aspect-square bg-zinc-800/50 rounded-lg flex items-center justify-center">
-                <Image className="h-4 w-4 text-zinc-600" />
-              </div>
-            </div>
-          </div>
         </div>
       )}
 

@@ -13,8 +13,31 @@ export function ScreenShare({ stream, presenterName, isLocal = false }: ScreenSh
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (stream) {
+      video.srcObject = stream;
+      // Explicitly call play() — autoPlay alone can be suppressed by the browser
+      video.play().catch((err) => {
+        console.warn('ScreenShare auto-play suppressed, retrying on user interaction:', err);
+      });
+
+      // Clear display when the presenter stops sharing
+      const handleTrackEnded = () => {
+        video.srcObject = null;
+      };
+      stream.getVideoTracks().forEach((track) => {
+        track.addEventListener('ended', handleTrackEnded);
+      });
+
+      return () => {
+        stream.getVideoTracks().forEach((track) => {
+          track.removeEventListener('ended', handleTrackEnded);
+        });
+      };
+    } else {
+      video.srcObject = null;
     }
   }, [stream]);
 

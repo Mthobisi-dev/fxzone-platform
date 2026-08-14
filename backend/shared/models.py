@@ -238,6 +238,22 @@ class Reaction(Base):
 
 
 # ============================================================
+# BOOKMARK (Saved Posts)
+# ============================================================
+class Bookmark(Base):
+    __tablename__ = "bookmarks"
+    __table_args__ = (UniqueConstraint("user_id", "post_id"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    post_id = Column(UUID(as_uuid=True), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    post = relationship("Post")
+    user = relationship("User")
+
+
+# ============================================================
 # FOLLOW
 # ============================================================
 class Follow(Base):
@@ -264,10 +280,13 @@ class Conversation(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
     is_group = Column(Boolean, default=False)
+    creator_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
+    creator = relationship("User", foreign_keys=[creator_id])
     members = relationship("ConversationMember", back_populates="conversation", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
 

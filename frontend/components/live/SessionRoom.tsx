@@ -40,6 +40,25 @@ export function SessionRoom({
   const [participants, setParticipants] = useState<any[]>([]);
   const [shareTimeLeft, setShareTimeLeft] = useState<number | null>(null);
 
+  // Admin override detection
+  const isAdmin = !!(user && (
+    user.role === 'admin' ||
+    (user.role as any)?.value === 'admin' ||
+    user.username === 'admin' ||
+    user.email === 'admin@fxzone.io'
+  ));
+
+  // Admin hard-cutoff: terminate any session regardless of host role
+  const handleEndSessionAdmin = async () => {
+    if (!isAdmin) return;
+    try {
+      await api.delete(`/api/sessions/${sessionId}`);
+      onLeave();
+    } catch (e) {
+      console.error('Admin cutoff failed:', e);
+    }
+  };
+
   // WebSocket signaling channel
   const socketRef = useWebSocket(`/ws/session/${sessionId}`, {
     chat_message: (payload) => {
@@ -238,6 +257,15 @@ export function SessionRoom({
         </div>
 
         <div className="flex items-center gap-4 text-xs font-semibold text-zinc-300">
+          {isAdmin && (
+            <button
+              onClick={handleEndSessionAdmin}
+              className="flex items-center gap-1 text-[9px] bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg transition-colors shadow-lg"
+              title="Cut off live stream (Admin Override)"
+            >
+              <X size={11} /> End Session (Admin)
+            </button>
+          )}
           {shareTimeLeft !== null && (
             <div className="flex items-center gap-1.5 text-amber-500 bg-amber-500/15 border border-amber-500/20 px-2.5 py-1 rounded-lg">
               <Clock size={12} className="animate-pulse" />

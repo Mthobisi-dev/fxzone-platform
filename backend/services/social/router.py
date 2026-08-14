@@ -324,6 +324,30 @@ async def pin_post(
     return post
 
 
+@router.post("/posts/{post_id}/bookmark")
+async def toggle_bookmark_post(
+    post_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Bookmark/save or unsave a post for the authenticated user."""
+    service = SocialService(db)
+    return await service.toggle_bookmark(user_id=current_user.id, post_id=post_id)
+
+
+@router.get("/posts/saved", response_model=List[PostResponse])
+async def get_saved_posts(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Fetch user's bookmarked/saved posts."""
+    service = SocialService(db)
+    posts = await service.get_saved_posts(user_id=current_user.id, limit=limit, offset=offset)
+    return [format_post(p, current_user_id=current_user.id) for p in posts]
+
+
 @router.delete("/users/me")
 async def delete_my_account(
     current_user: User = Depends(get_current_user),

@@ -198,16 +198,22 @@ async def end_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Host-only endpoint to terminate a live session and log session end times."""
+    """Host or admin endpoint to terminate a live session."""
     service = LiveSessionService(db)
+    is_admin = (
+        getattr(current_user, 'role', None) == 'admin'
+        or (hasattr(current_user.role, 'value') and current_user.role.value == 'admin')
+        or getattr(current_user, 'username', '') == 'admin'
+        or getattr(current_user, 'email', '') == 'admin@fxzone.io'
+    )
     try:
-        s = await service.end_session(host_id=current_user.id, session_id=session_id)
+        s = await service.end_session(host_id=current_user.id, session_id=session_id, is_admin=is_admin)
         # Broadcast ended status over WebSocket
         channel_name = f"session_chat_{session_id}"
         await manager.broadcast(channel_name, {
             "type": "session_ended",
             "session_id": session_id,
-            "message": "The host has terminated this session."
+            "message": "The session has been terminated."
         })
         return {
             "id": s.id,
@@ -341,10 +347,18 @@ async def clear_session_history(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Clear all ended sessions from the live session history."""
+    """Admin-only: clear all ended sessions and their participant history."""
+    is_admin = (
+        getattr(current_user, 'role', None) == 'admin'
+        or (hasattr(current_user.role, 'value') and current_user.role.value == 'admin')
+        or getattr(current_user, 'username', '') == 'admin'
+        or getattr(current_user, 'email', '') == 'admin@fxzone.io'
+    )
+    if not is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only platform admins can clear session history.")
     service = LiveSessionService(db)
     count = await service.clear_ended_sessions(user_id=current_user.id)
-    return {"status": "success", "message": f"Cleared {count} ended sessions from history."}
+    return {"status": "success", "message": f"Cleared {count} ended sessions and their participant history."}
 
 
 @router.delete("/{session_id}")
@@ -353,15 +367,24 @@ async def delete_single_session(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a live session by ID."""
+    """Delete a live session by ID (admin can delete any session)."""
     service = LiveSessionService(db)
-    deleted = await service.delete_session(session_id=session_id, user_id=current_user.id)
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found or unauthorized to delete."
-        )
-    return {"status": "success", "message": "Session deleted successfully."}
+    is_admin = (
+        getattr(current_user, 'role', None) == 'admin'
+        or (hasattr(current_user.role, 'value') and current_user.role.value == 'admin')
+        or getattr(current_user, 'username', '') == 'admin'
+        or getattr(current_user, 'email', '') == 'admin@fxzone.io'
+    )
+    try:
+        deleted = await service.delete_session(session_id=session_id, user_id=current_user.id, is_admin=is_admin)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found."
+            )
+        return {"status": "success", "message": "Session deleted successfully."}
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.websocket("/ws/session/{session_id}")

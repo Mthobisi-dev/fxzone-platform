@@ -182,8 +182,8 @@ class LiveSessionService:
         await self.db.execute(stmt)
         await self.db.commit()
 
-    async def end_session(self, host_id: Any, session_id: Any) -> LiveSession:
-        """End a live session (host privilege only), marking all participants as left."""
+    async def end_session(self, host_id: Any, session_id: Any, is_admin: bool = False) -> LiveSession:
+        """End a live session. Host or platform admin can terminate any session."""
         import uuid
         try:
             s_uuid = uuid.UUID(str(session_id))
@@ -198,14 +198,14 @@ class LiveSessionService:
         if not session:
             raise ValueError("Session not found.")
 
-        if str(session.host_id) != str(h_uuid):
-            raise PermissionError("Only the session host can terminate a session.")
+        if not is_admin and str(session.host_id) != str(h_uuid):
+            raise PermissionError("Only the session host or a platform admin can terminate a session.")
 
         now = datetime.utcnow()
         session.status = "ended"
         session.ended_at = now
 
-        # Update all active participants to left_at = now
+        # Mark all active participants as left
         stmt = (
             update(SessionParticipant)
             .where(
@@ -322,24 +322,42 @@ class LiveSessionService:
         return True
 
     async def clear_ended_sessions(self, user_id: Any) -> int:
-        """Clear all ended sessions from history."""
+        """Clear all ended sessions and their participant history from the database."""
         from sqlalchemy import delete
-        stmt = delete(LiveSession).where(LiveSession.status == "ended")
-        res = await self.db.execute(stmt)
+        # First purge participant records for ended sessions to avoid FK violations
+        ended_stmt = select(LiveSession.id).where(LiveSession.status == "ended")
+        ended_res = await self.db.execute(ended_stmt)
+        ended_ids = ended_res.scalars().all()
+        if ended_ids:
+            purge_participants = delete(SessionParticipant).where(SessionParticipant.session_id.in_(ended_ids))
+            await self.db.execute(purge_participants)
+        purge_sessions = delete(LiveSession).where(LiveSession.status == "ended")
+        res = await self.db.execute(purge_sessions)
         await self.db.commit()
         return res.rowcount
 
-    async def delete_session(self, session_id: Any, user_id: Any) -> bool:
-        """Delete a single session by ID."""
+    async def delete_session(self, session_id: Any, user_id: Any, is_admin: bool = False) -> bool:
+        """Delete a single session and its participant history (admin or host only)."""
         import uuid
         try:
             s_uuid = uuid.UUID(str(session_id))
         except ValueError:
             s_uuid = session_id
+        try:
+            u_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            u_uuid = user_id
 
         session = await self.get_session_by_id(s_uuid)
         if not session:
             return False
+
+        if not is_admin and str(session.host_id) != str(u_uuid):
+            raise PermissionError("Only the session host or a platform admin can delete this session.")
+
+        from sqlalchemy import delete as sa_delete
+        # Purge participant rows first
+        await self.db.execute(sa_delete(SessionParticipant).where(SessionParticipant.session_id == s_uuid))
         await self.db.delete(session)
         await self.db.commit()
         return True
