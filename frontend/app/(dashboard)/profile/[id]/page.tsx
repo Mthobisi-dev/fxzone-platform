@@ -369,13 +369,18 @@ export default function ProfilePage() {
                   if (confirm('Are you absolutely sure you want to delete your account? All your posts, comments, messages, and profile data will be permanently purged!')) {
                     try {
                       await api.delete('/api/social/users/me');
-                      window.location.href = '/';
-                    } catch (err) {
-                      alert('Failed to delete account. Please try again.');
+                      localStorage.removeItem('fxzone_access_token');
+                      localStorage.removeItem('fxzone_user');
+                      alert('Your account and all associated data have been permanently deleted.');
+                      window.location.href = '/login';
+                    } catch (err: any) {
+                      console.error('Account deletion error:', err);
+                      const errMsg = err?.detail || err?.message || 'Failed to delete account. Please try again.';
+                      alert(`Account Deletion Error: ${errMsg}`);
                     }
                   }
                 }}
-                className="text-[10px] text-red-500 hover:text-red-400 font-bold underline"
+                className="text-[10px] text-rose-500 hover:text-rose-400 font-bold underline"
               >
                 Delete Account
               </button>
