@@ -159,25 +159,30 @@ class NewsIngester:
         return inserted
 
     async def _fetch_rss_feeds(self) -> int:
-        """Fetch and parse real RSS feeds from financial news sources."""
+        """Fetch and parse real RSS feeds concurrently from all configured sources."""
         if self.mongo_db is None:
             return 0
 
         collection = self.mongo_db.news_articles
         total_inserted = 0
 
-        for feed_config in RSS_FEEDS:
-            try:
-                articles = await self._parse_single_feed(feed_config)
-                for article in articles:
-                    # Deduplicate by title
-                    exists = await collection.find_one({"title": article["title"]})
-                    if not exists:
-                        await collection.insert_one(article)
-                        total_inserted += 1
-            except Exception as e:
-                logger.warning(f"Failed to fetch RSS from {feed_config['source']}: {e}")
-                continue
+        # Fetch all feeds in parallel with individual error isolation
+        feed_results = await asyncio.gather(
+            *[self._parse_single_feed(feed_config) for feed_config in RSS_FEEDS],
+            return_exceptions=True
+        )
+
+        for result in feed_results:
+            if isinstance(result, list):
+                for article in result:
+                    try:
+                        # Deduplicate by title
+                        exists = await collection.find_one({"title": article["title"]})
+                        if not exists:
+                            await collection.insert_one(article)
+                            total_inserted += 1
+                    except Exception as e:
+                        logger.debug(f"Article insertion notice: {e}")
 
         return total_inserted
 

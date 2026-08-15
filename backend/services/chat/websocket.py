@@ -122,15 +122,18 @@ async def chat_websocket_endpoint(websocket: WebSocket, conversation_id: str):
                 })
 
     except WebSocketDisconnect:
-        # Clean up connection
-        await manager.disconnect(websocket, channel_name)
-        # Broadcast offline status
-        await manager.broadcast(channel_name, {
-            "type": "status",
-            "user_id": user_id,
-            "username": user["username"],
-            "status": "offline"
-        })
+        logger.info(f"Chat WebSocket disconnected normally: user {user_id}")
     except Exception as e:
         logger.error(f"WebSocket error in chat endpoint: {e}")
-        await manager.disconnect(websocket, channel_name)
+    finally:
+        # Always clean up connection from manager and broadcast offline
+        try:
+            await manager.disconnect(websocket, channel_name)
+            await manager.broadcast(channel_name, {
+                "type": "status",
+                "user_id": user_id,
+                "username": user.get("username", "user"),
+                "status": "offline"
+            })
+        except Exception as cleanup_err:
+            logger.debug(f"Error during chat websocket cleanup: {cleanup_err}")

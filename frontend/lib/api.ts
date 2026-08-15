@@ -9,14 +9,24 @@ interface RequestOptions extends RequestInit {
 }
 
 let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
+let refreshSubscribers: Array<{
+  resolve: (token: string) => void;
+  reject: (err: any) => void;
+}> = [];
 
-function subscribeTokenRefresh(cb: (token: string) => void) {
-  refreshSubscribers.push(cb);
+function subscribeTokenRefresh(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    refreshSubscribers.push({ resolve, reject });
+  });
 }
 
 function onRefreshed(token: string) {
-  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers.forEach(({ resolve }) => resolve(token));
+  refreshSubscribers = [];
+}
+
+function onRefreshFailed(err: any) {
+  refreshSubscribers.forEach(({ reject }) => reject(err));
   refreshSubscribers = [];
 }
 
@@ -30,9 +40,14 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
   if (options.params) {
     const searchParams = new URLSearchParams();
     Object.entries(options.params).forEach(([key, val]) => {
-      searchParams.append(key, String(val));
+      if (val !== undefined && val !== null) {
+        searchParams.append(key, String(val));
+      }
     });
-    url += `?${searchParams.toString()}`;
+    const qs = searchParams.toString();
+    if (qs) {
+      url += `?${qs}`;
+    }
   }
 
   // Inject authorization headers
@@ -84,41 +99,57 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
 
           if (refreshRes.ok) {
             const data = await refreshRes.json();
-            localStorage.setItem('fxzone_access_token', data.access_token);
+            const newToken = data.access_token;
+            localStorage.setItem('fxzone_access_token', newToken);
             if (data.refresh_token) {
               localStorage.setItem('fxzone_refresh_token', data.refresh_token);
             }
             
             isRefreshing = false;
-            onRefreshed(data.access_token);
+            onRefreshed(newToken);
+
+            // Directly retry the initiating request with the new token
+            headers.set('Authorization', `Bearer ${newToken}`);
+            const retryRes = await fetch(url, { ...options, headers });
+            if (!retryRes.ok) {
+              const errBody = await retryRes.json().catch(() => null);
+              const err = new Error(errBody?.detail || errBody?.message || `HTTP ${retryRes.status}`);
+              Object.assign(err, errBody || {}, { status: retryRes.status });
+              throw err;
+            }
+            return retryRes.json();
           } else {
             // Refresh token invalid, clear tokens and redirect to login
             localStorage.removeItem('fxzone_access_token');
             localStorage.removeItem('fxzone_refresh_token');
             isRefreshing = false;
+            const sessionErr = new Error('Session expired. Please log in again.');
+            onRefreshFailed(sessionErr);
             window.location.href = '/login';
-            throw new Error('Session expired. Please log in again.');
+            throw sessionErr;
           }
         } catch (err) {
           isRefreshing = false;
+          onRefreshFailed(err);
           throw err;
         }
+      } else {
+        // Wait for active refresh to complete, then retry the request
+        try {
+          const newToken = await subscribeTokenRefresh();
+          headers.set('Authorization', `Bearer ${newToken}`);
+          const retryRes = await fetch(url, { ...options, headers });
+          if (!retryRes.ok) {
+            const errBody = await retryRes.json().catch(() => null);
+            const err = new Error(errBody?.detail || errBody?.message || `HTTP ${retryRes.status}`);
+            Object.assign(err, errBody || {}, { status: retryRes.status });
+            throw err;
+          }
+          return retryRes.json();
+        } catch (subErr) {
+          throw subErr;
+        }
       }
-
-      // Wait for refresh to complete, then retry the request
-      return new Promise((resolve) => {
-        subscribeTokenRefresh((token) => {
-          headers.set('Authorization', `Bearer ${token}`);
-          resolve(
-            fetch(url, { ...options, headers }).then((res) => {
-              if (!res.ok) {
-                return res.json().then((err) => Promise.reject(err)).catch(() => Promise.reject(new Error(`HTTP ${res.status}`)));
-              }
-              return res.json();
-            })
-          );
-        });
-      });
     }
   }
 
@@ -134,7 +165,6 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
     });
     throw error;
   }
-
 
   return response.json();
 }

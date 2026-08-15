@@ -74,13 +74,16 @@ async def rtc_signaling_endpoint(websocket: WebSocket, session_id: str):
             })
 
     except WebSocketDisconnect:
-        await manager.disconnect(websocket, channel_name)
-        # Broadcast peer left signaling channel
-        await manager.broadcast(channel_name, {
-            "type": "peer_left",
-            "user_id": user_id,
-            "username": user["username"]
-        })
+        logger.info(f"WebRTC signaling disconnected normally: user {user_id}")
     except Exception as e:
         logger.error(f"WebRTC signaling socket exception: {e}")
-        await manager.disconnect(websocket, channel_name)
+    finally:
+        try:
+            await manager.disconnect(websocket, channel_name)
+            await manager.broadcast(channel_name, {
+                "type": "peer_left",
+                "user_id": user_id,
+                "username": user.get("username", "user")
+            })
+        except Exception as cleanup_err:
+            logger.debug(f"Error during WebRTC signaling cleanup: {cleanup_err}")

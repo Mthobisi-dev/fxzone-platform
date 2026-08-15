@@ -87,6 +87,19 @@ class BaseProvider(ABC):
         return []
 
 
+def _clean_history_cache(cache: Dict[str, Dict[str, Any]], max_size: int = 150):
+    """Prune expired or excess history cache entries to prevent memory growth."""
+    if len(cache) > max_size:
+        now = time.time()
+        expired_keys = [k for k, v in cache.items() if (now - v.get("ts", 0)) > 3600]
+        for k in expired_keys:
+            cache.pop(k, None)
+        if len(cache) > max_size:
+            sorted_keys = sorted(cache.keys(), key=lambda k: cache[k].get("ts", 0))
+            for k in sorted_keys[: len(cache) - max_size]:
+                cache.pop(k, None)
+
+
 # ── CoinGecko Provider (Crypto) ────────────────────────────────────────────
 
 class CoinGeckoProvider:
@@ -193,6 +206,7 @@ class CoinGeckoProvider:
                     "volume": 0,
                 })
 
+            _clean_history_cache(self._history_cache)
             self._history_cache[cache_key] = {"data": candles, "ts": now}
             logger.info(f"CoinGecko: fetched {len(candles)} OHLC candles for {symbol}")
             return candles
@@ -354,6 +368,7 @@ class YahooFinanceProvider:
                 None, self._fetch_history_sync, symbol, yahoo_ticker, period, interval
             )
             if candles:
+                _clean_history_cache(self._history_cache)
                 self._history_cache[cache_key] = {"data": candles, "ts": now}
             return candles
         except Exception as e:

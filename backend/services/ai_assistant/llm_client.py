@@ -93,13 +93,13 @@ class OpenAIClient(LLMClient):
                                 continue
             except Exception as e:
                 logger.error(f"OpenAI stream error: {e}")
-                yield f"Error calling OpenAI API: {str(e)}"
+                raise e
 
 
 class GeminiClient(LLMClient):
-    """Google Gemini API wrapper using httpx — supports gemini-3.5-flash with auto-retry."""
+    """Google Gemini API wrapper using httpx — supports gemini-1.5-flash with auto-retry."""
 
-    def __init__(self, api_key: str, model: str = "gemini-3.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
         self.api_key = api_key
         self.model = model
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
@@ -458,21 +458,18 @@ class FallbackClient(LLMClient):
             return await self.fallback.generate(prompt, system_prompt)
 
     async def stream(self, prompt: str, system_prompt: str = "") -> AsyncGenerator[str, None]:
+        has_yielded = False
         try:
-            # We want to check if the generator works.
-            # Generators are lazy, so we execute __anext__() to see if it immediately raises an exception.
-            gen = self.primary.stream(prompt, system_prompt)
-            first_chunk = await gen.__anext__()
-            yield first_chunk
-            async for chunk in gen:
+            async for chunk in self.primary.stream(prompt, system_prompt):
+                has_yielded = True
                 yield chunk
-        except StopAsyncIteration:
-            # Generator was empty, which is valid.
-            return
         except Exception as e:
-            logger.warning(f"Primary LLM client stream failed, falling back to MockClient: {e}")
-            async for chunk in self.fallback.stream(prompt, system_prompt):
-                yield chunk
+            logger.warning(f"Primary LLM client stream failed (has_yielded={has_yielded}): {e}")
+            if not has_yielded:
+                async for chunk in self.fallback.stream(prompt, system_prompt):
+                    yield chunk
+            else:
+                yield "\n\n*(AI Stream connection interrupted)*"
 
 
 def get_llm_client() -> LLMClient:

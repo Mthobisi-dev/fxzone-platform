@@ -87,15 +87,18 @@ class NewsService:
             return []
 
     async def search_news(self, search_query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search news articles using regex matching on title or content."""
-        if self.mongo_db is None:
+        """Search news articles using sanitized regex matching on title, content, or tags."""
+        if self.mongo_db is None or not search_query or not search_query.strip():
             return []
+
+        import re
+        safe_query = re.escape(search_query.strip())
 
         query = {
             "$or": [
-                {"title": {"$regex": search_query, "$options": "i"}},
-                {"content": {"$regex": search_query, "$options": "i"}},
-                {"asset_tags": {"$regex": search_query, "$options": "i"}}
+                {"title": {"$regex": safe_query, "$options": "i"}},
+                {"content": {"$regex": safe_query, "$options": "i"}},
+                {"asset_tags": {"$regex": safe_query, "$options": "i"}}
             ]
         }
 
@@ -108,5 +111,5 @@ class NewsService:
             )
             return await cursor.to_list(length=limit)
         except Exception as e:
-            logger.error(f"Error searching news: {e}")
+            logger.error(f"Error searching news for query '{search_query}': {e}")
             return []

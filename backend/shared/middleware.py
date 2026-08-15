@@ -1,5 +1,6 @@
 """FxZone middleware - rate limiting and request logging."""
 import time
+import hashlib
 import logging
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -10,41 +11,51 @@ logger = logging.getLogger(__name__)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Redis-based sliding window rate limiter."""
+    """Redis-based fixed window rate limiter with atomic counter."""
 
-    def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):
+    def __init__(self, app, max_requests: int = 180, window_seconds: int = 60):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
 
     async def dispatch(self, request: Request, call_next):
-        # Skip rate limiting for WebSocket upgrades and health checks
-        if request.url.path in ("/health", "/docs", "/openapi.json") or request.url.path.startswith("/ws"):
+        # Skip rate limiting for CORS preflight, health checks, docs, uploads, and WebSocket upgrades
+        if (
+            request.method == "OPTIONS"
+            or request.url.path in ("/health", "/docs", "/openapi.json", "/")
+            or request.url.path.startswith("/ws")
+            or request.url.path.startswith("/uploads")
+        ):
             return await call_next(request)
 
         redis = get_redis()
         if not redis:
             return await call_next(request)
 
-        # Use IP + path as rate limit key
+        # Build stable rate limit key using client IP or hashed Authorization token
         client_ip = request.client.host if request.client else "unknown"
         auth_header = request.headers.get("authorization", "")
-        identifier = auth_header[-8:] if auth_header else client_ip
+        if auth_header:
+            token_hash = hashlib.sha256(auth_header.encode("utf-8")).hexdigest()[:16]
+            identifier = f"user_{token_hash}"
+        else:
+            identifier = f"ip_{client_ip}"
+
         key = f"rate_limit:{identifier}"
 
         try:
-            current = await redis.get(key)
-            if current and int(current) >= self.max_requests:
+            current = await redis.incr(key)
+            if current == 1:
+                await redis.expire(key, self.window_seconds)
+
+            if current > self.max_requests:
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Rate limit exceeded. Please try again later."},
+                    headers={"Retry-After": str(self.window_seconds)}
                 )
-            pipe = redis.pipeline()
-            pipe.incr(key)
-            pipe.expire(key, self.window_seconds)
-            await pipe.execute()
-        except Exception:
-            pass  # Don't block requests if Redis is down
+        except Exception as e:
+            logger.debug(f"Rate limiter bypass notice: {e}")
 
         return await call_next(request)
 

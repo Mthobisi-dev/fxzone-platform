@@ -14,7 +14,7 @@ async def market_websocket_handler(websocket: WebSocket):
     """Handle WebSocket connections for live market data.
     
     Clients send: {"action": "subscribe", "symbols": ["EURUSD", "BTCUSD"]}
-    Server pushes: price updates every 1 second for subscribed symbols
+    Server pushes: price updates periodically for subscribed symbols
     """
     user = await get_ws_user(websocket)
     user_id = user["user_id"] if user else "anonymous"
@@ -22,11 +22,19 @@ async def market_websocket_handler(websocket: WebSocket):
 
     await manager.connect(websocket, channel, user_id)
     subscribed_symbols = set()
+    send_lock = asyncio.Lock()
+
+    async def _safe_send(payload: dict):
+        async with send_lock:
+            try:
+                await websocket.send_text(json.dumps(payload))
+            except Exception:
+                pass
 
     try:
         # Start a background task to push prices
         price_task = asyncio.create_task(
-            _push_prices(websocket, subscribed_symbols, channel)
+            _push_prices(websocket, subscribed_symbols, _safe_send)
         )
 
         while True:
@@ -38,24 +46,24 @@ async def market_websocket_handler(websocket: WebSocket):
                 if action == "subscribe":
                     symbols = msg.get("symbols", [])
                     subscribed_symbols.update(s.upper() for s in symbols)
-                    await websocket.send_text(json.dumps({
+                    await _safe_send({
                         "type": "subscribed",
                         "symbols": list(subscribed_symbols),
-                    }))
+                    })
 
                 elif action == "unsubscribe":
                     symbols = msg.get("symbols", [])
                     subscribed_symbols -= set(s.upper() for s in symbols)
-                    await websocket.send_text(json.dumps({
+                    await _safe_send({
                         "type": "unsubscribed",
                         "symbols": list(subscribed_symbols),
-                    }))
+                    })
 
             except json.JSONDecodeError:
-                await websocket.send_text(json.dumps({
+                await _safe_send({
                     "type": "error",
                     "message": "Invalid JSON",
-                }))
+                })
 
     except WebSocketDisconnect:
         pass
@@ -66,17 +74,20 @@ async def market_websocket_handler(websocket: WebSocket):
         await manager.disconnect(websocket, channel)
 
 
-async def _push_prices(websocket: WebSocket, symbols: set, channel: str):
-    """Background task to push price updates every second."""
+async def _push_prices(websocket: WebSocket, symbols: set, send_func):
+    """Background task to push price updates periodically."""
     while True:
         try:
-            if symbols:
-                prices = await price_engine.get_prices(list(symbols))
+            current_symbols = list(symbols.copy())
+            if current_symbols:
+                prices = await price_engine.get_prices(current_symbols)
                 if prices:
-                    await websocket.send_text(json.dumps({
+                    await send_func({
                         "type": "prices",
                         "data": prices,
-                    }))
-            await asyncio.sleep(10)  # 10s interval for real API data (cached 30-60s)
-        except Exception:
+                    })
+            await asyncio.sleep(5)  # 5s interval for real-time market polling
+        except asyncio.CancelledError:
             break
+        except Exception:
+            await asyncio.sleep(5)
