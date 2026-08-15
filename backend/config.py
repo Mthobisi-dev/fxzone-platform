@@ -45,6 +45,16 @@ class Settings(BaseSettings):
         return origins
 
     @property
+    def async_database_url(self) -> str:
+        """Ensure the DATABASE_URL uses the asyncpg driver dialect for SQLAlchemy."""
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
+    @property
     def use_supabase(self) -> bool:
         """Check if Supabase credentials are configured."""
         return bool(self.SUPABASE_URL and self.SUPABASE_ANON_KEY)

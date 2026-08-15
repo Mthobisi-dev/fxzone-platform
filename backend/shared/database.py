@@ -408,21 +408,24 @@ class MockRedis:
 
 
 # ============================================================
-# SQLAlchemy Engine (Supabase PostgreSQL / local PostgreSQL / SQLite fallback)
+# SQLAlchemy Engine (Supabase PostgreSQL / Render PostgreSQL / SQLite fallback)
 # ============================================================
 _use_sqlite = False
 _db_source = "local"
 
 try:
     import asyncpg
-    db_url = settings.DATABASE_URL
+    db_url = settings.async_database_url
 
     # Detect Supabase connection
     if settings.use_supabase and "supabase" in db_url:
         _db_source = "supabase"
         logger.info(f"Database configured for Supabase PostgreSQL: {settings.SUPABASE_URL}")
+    elif "render.com" in db_url or "dpg-" in db_url:
+        _db_source = "render_postgres"
+        logger.info("Database configured for Render Managed PostgreSQL.")
     else:
-        logger.info("Database configured for local PostgreSQL.")
+        logger.info("Database configured for PostgreSQL.")
 
 except (ImportError, ModuleNotFoundError):
     logger.warning("asyncpg driver not available. Forcing SQLite fallback.")
@@ -436,8 +439,8 @@ if _use_sqlite:
     )
 else:
     connect_args = {}
-    # Supabase requires SSL connections
-    if _db_source == "supabase":
+    # Supabase / cloud PostgreSQL requires SSL
+    if _db_source in ("supabase", "render_postgres") or "sslmode=require" in settings.DATABASE_URL:
         try:
             import ssl
             ssl_ctx = ssl.create_default_context()
@@ -473,7 +476,6 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
@@ -501,7 +503,11 @@ def get_redis():
 
 # Seeding for SQLite fallback
 async def seed_sqlite_if_empty():
-    """Seed the SQLite database with initial model entities if it is empty."""
+    """Seed the SQLite database with initial model entities ONLY in development if empty."""
+    if settings.APP_ENV == "production" or os.environ.get("RENDER"):
+        logger.info("Production environment detected — skipping automatic seed injection.")
+        return
+
     from shared.models import User
     from sqlalchemy import select
     
@@ -510,7 +516,7 @@ async def seed_sqlite_if_empty():
             result = await session.execute(select(User).limit(1))
             user = result.scalars().first()
             if user is not None:
-                logger.info("SQLite database already has data, skipping seeding.")
+                logger.info("Database already has data, skipping seeding.")
                 return
         except Exception as e:
             logger.error(f"Failed to query users table during seeding check: {e}")
@@ -542,11 +548,11 @@ async def seed_sqlite_if_empty():
             try:
                 await session.execute(text(cleaned_stmt))
             except Exception as e:
-                logger.error(f"Error executing statement in SQLite: {cleaned_stmt[:60]}... -> {e}")
+                logger.debug(f"Statement notice in seed: {e}")
 
         try:
             await session.commit()
-            logger.info("SQLite database seeded successfully.")
+            logger.info("SQLite database initial seed applied successfully.")
         except Exception as e:
             await session.rollback()
             logger.error(f"Failed to commit seeded SQLite database: {e}")
@@ -556,25 +562,52 @@ async def seed_sqlite_if_empty():
 # Lifecycle
 # ============================================================
 async def init_all_databases():
-    """Initialize all database connections with fallback logic."""
+    """Initialize all database connections with fallback logic and auto-migrations."""
     global engine, AsyncSessionLocal, _redis_client, _mongo_client, _mongo_db
     
     # 1. Initialize Postgres / SQLite Fallback
     use_sqlite = _use_sqlite
 
     # If DATABASE_URL is explicitly set via environment variable, NEVER fall back to SQLite.
-    # Silent SQLite fallback on a misconfigured Postgres connection causes schema drift in production.
     _db_url_is_explicit = bool(os.environ.get("DATABASE_URL"))
 
     if not use_sqlite:
         try:
-            # Quick ping test to see if PostgreSQL is reachable
+            # Test PostgreSQL connectivity
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
             logger.info("Connected to PostgreSQL database successfully.")
+            
+            # Ensure PostgreSQL tables and columns exist idempotently
+            async with engine.begin() as conn:
+                from shared.models import Base as ModelsBase
+                await conn.run_sync(ModelsBase.metadata.create_all)
+                
+                # Safe PostgreSQL column additions
+                pg_migrations = [
+                    "ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN DEFAULT TRUE;",
+                    "ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS viewer_count INTEGER DEFAULT 0;",
+                    "ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;",
+                    "ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;",
+                    "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;",
+                    "ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_story BOOLEAN DEFAULT FALSE;",
+                    "ALTER TABLE posts ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;",
+                    "ALTER TABLE posts ADD COLUMN IF NOT EXISTS reposts_count INTEGER DEFAULT 0;",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS description TEXT;",
+                    "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS creator_id UUID REFERENCES users(id) ON DELETE CASCADE;",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS followers_count INTEGER DEFAULT 0;",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS following_count INTEGER DEFAULT 0;",
+                ]
+                for stmt_sql in pg_migrations:
+                    try:
+                        await conn.execute(text(stmt_sql))
+                    except Exception as e:
+                        logger.debug(f"PostgreSQL column migration notice: {e}")
+                        
+            logger.info("PostgreSQL database tables and schema verified successfully.")
+            
         except Exception as e:
             if _db_url_is_explicit:
-                # Explicit DATABASE_URL configured → raise instead of silently using SQLite
                 logger.error(
                     f"DATABASE_URL is set but PostgreSQL connection failed: {e}. "
                     "Fix the DATABASE_URL or database credentials. "
@@ -584,7 +617,7 @@ async def init_all_databases():
                     f"Cannot connect to configured PostgreSQL database: {e}"
                 ) from e
             else:
-                logger.warning(f"Failed to connect to PostgreSQL ({e}). Falling back to SQLite...")
+                logger.warning(f"Failed to connect to PostgreSQL ({e}). Falling back to SQLite for local development...")
                 use_sqlite = True
 
     if use_sqlite:
@@ -609,45 +642,18 @@ async def init_all_databases():
             from shared.models import Base as ModelsBase
             await conn.run_sync(ModelsBase.metadata.create_all)
 
-            # ── Safe column migrations (ADD COLUMN IF NOT EXISTS equivalent for SQLite) ──
-            # SQLite does not support IF NOT EXISTS on ALTER TABLE, so we catch the error.
-
-            # live_sessions
+            # Safe column migrations for SQLite
             for col_sql in [
                 "ALTER TABLE live_sessions ADD COLUMN requires_approval BOOLEAN DEFAULT 1",
                 "ALTER TABLE live_sessions ADD COLUMN viewer_count INTEGER DEFAULT 0",
                 "ALTER TABLE live_sessions ADD COLUMN started_at DATETIME",
                 "ALTER TABLE live_sessions ADD COLUMN ended_at DATETIME",
-            ]:
-                try:
-                    await conn.execute(text(col_sql))
-                except Exception:
-                    pass
-
-            # posts
-            for col_sql in [
                 "ALTER TABLE posts ADD COLUMN is_pinned BOOLEAN DEFAULT 0",
                 "ALTER TABLE posts ADD COLUMN is_story BOOLEAN DEFAULT 0",
                 "ALTER TABLE posts ADD COLUMN expires_at DATETIME",
                 "ALTER TABLE posts ADD COLUMN reposts_count INTEGER DEFAULT 0",
-            ]:
-                try:
-                    await conn.execute(text(col_sql))
-                except Exception:
-                    pass
-
-            # conversations  ← THIS IS THE FIX for the production error
-            for col_sql in [
                 "ALTER TABLE conversations ADD COLUMN description TEXT",
                 "ALTER TABLE conversations ADD COLUMN creator_id TEXT REFERENCES users(id)",
-            ]:
-                try:
-                    await conn.execute(text(col_sql))
-                except Exception:
-                    pass
-
-            # users
-            for col_sql in [
                 "ALTER TABLE users ADD COLUMN followers_count INTEGER DEFAULT 0",
                 "ALTER TABLE users ADD COLUMN following_count INTEGER DEFAULT 0",
             ]:
@@ -656,7 +662,7 @@ async def init_all_databases():
                 except Exception:
                     pass
 
-        logger.info("SQLite database configured with WAL mode & busy timeout 30s. All column migrations applied.")
+        logger.info("SQLite database configured with WAL mode & busy timeout 30s.")
         await seed_sqlite_if_empty()
 
     # 2. Initialize Redis / Mock Redis fallback

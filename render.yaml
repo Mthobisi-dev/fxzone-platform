@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: fxzone-backend
+    runtime: python
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fxzone-postgres
+          property: connectionString
+      - key: SECRET_KEY
+        value: fxzone-production-secure-key-2026-auth-jwt
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "30"
+      - key: CORS_ORIGINS
+        value: '["http://localhost:3000","https://fxzone-platform-4dqe.vercel.app","https://fxzone-platform.vercel.app"]'
+
+databases:
+  - name: fxzone-postgres
+    databaseName: fxzone_db
+    user: fxzone_admin
+    plan: free
+    ipAllowList: []
