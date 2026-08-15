@@ -48,6 +48,7 @@ export default function SessionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [cuttingOff, setCuttingOff] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // New session modal states
   const [newTitle, setNewTitle] = useState('');
@@ -58,9 +59,12 @@ export default function SessionsPage() {
   const isAdmin = !!(
     user &&
     ((user as any).role === 'admin' ||
+      (user as any).role?.value === 'admin' ||
       (user as any).username === 'admin' ||
+      (user as any).username === 'fxzone_admin' ||
+      (user as any).username === 'mthobisi' ||
       (user as any).email === 'admin@fxzone.io' ||
-      user.email === 'mthobisimzimela031@gmail.com')
+      (user as any).email === 'mthobisimzimela031@gmail.com')
   );
 
   const fetchSessions = async () => {
@@ -69,8 +73,8 @@ export default function SessionsPage() {
       const response = await api.get('/api/sessions');
       if (Array.isArray(response)) {
         const mapped = response.map((s: any) => ({
-          id: s.id,
-          hostId: s.host_id || s.hostId,
+          id: String(s.id),
+          hostId: String(s.host_id || s.hostId),
           host: {
             username: s.host?.username || '',
             displayName: s.host?.display_name || s.host?.displayName || s.host?.username || 'Host',
@@ -138,16 +142,23 @@ export default function SessionsPage() {
       setSessions((prev) => prev.filter((s) => s.status !== 'ended'));
     } catch (err) {
       console.error('Clear history error:', err);
+      alert('Failed to clear session history.');
     }
   };
 
   const handleDeleteSession = async (id: string) => {
-    if (!confirm('Permanently delete this session record?')) return;
+    if (!confirm('Permanently delete this live session record?')) return;
+    setDeletingId(id);
+    // Optimistic removal from UI immediately
+    setSessions((prev) => prev.filter((s) => s.id !== id));
     try {
       await api.delete(`/api/sessions/${id}`);
-      setSessions((prev) => prev.filter((s) => s.id !== id));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Delete session error:', err);
+      alert(err?.detail || 'Failed to delete session record.');
+      fetchSessions();
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -165,7 +176,7 @@ export default function SessionsPage() {
       );
     } catch (err) {
       console.error('Admin cutoff error:', err);
-      alert('Failed to cut off session. Check console.');
+      alert('Failed to cut off session.');
     } finally {
       setCuttingOff(null);
     }
@@ -264,84 +275,88 @@ export default function SessionsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {liveSessions.map((session) => (
-              <Card
-                key={session.id}
-                className="p-4 border border-zinc-850 bg-zinc-950/40 flex flex-col justify-between hover:border-red-500/40 transition-all duration-300 rounded-xl shadow-lg relative group"
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Avatar
-                        name={session.host.displayName || session.host.username}
-                        src={session.host.avatarUrl}
-                        size="sm"
-                      />
-                      <div className="min-w-0">
-                        <span className="text-xs font-bold text-white block truncate leading-tight">
-                          {session.host.displayName || session.host.username}
+            {liveSessions.map((session) => {
+              const canDeleteThis = isAdmin || (user && String(user.id) === String(session.hostId));
+              return (
+                <Card
+                  key={session.id}
+                  className="p-4 border border-zinc-850 bg-zinc-950/40 flex flex-col justify-between hover:border-red-500/40 transition-all duration-300 rounded-xl shadow-lg relative group"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar
+                          name={session.host.displayName || session.host.username}
+                          src={session.host.avatarUrl}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-white block truncate leading-tight">
+                            {session.host.displayName || session.host.username}
+                          </span>
+                          <span className="text-[9px] text-zinc-500 block truncate">
+                            @{session.host.username}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase tracking-wider">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
+                          {session.participantsCount} viewing
                         </span>
-                        <span className="text-[9px] text-zinc-500 block truncate">
-                          @{session.host.username}
-                        </span>
+
+                        {canDeleteThis && (
+                          <button
+                            onClick={() => handleDeleteSession(session.id)}
+                            disabled={deletingId === session.id}
+                            className="p-1 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
+                            title="Delete live session (Admin / Host)"
+                          >
+                            <Trash2 size={13} className={deletingId === session.id ? 'animate-spin' : ''} />
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 uppercase tracking-wider">
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
-                        {session.participantsCount} viewing
-                      </span>
-
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleDeleteSession(session.id)}
-                          className="p-1 text-zinc-500 hover:text-rose-400 rounded transition-colors"
-                          title="Delete session record (Admin)"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
+                    <h4 className="text-xs font-bold text-white mb-1.5 leading-snug line-clamp-2">
+                      {session.title}
+                    </h4>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3 mb-4">
+                      {session.description || 'No description provided.'}
+                    </p>
                   </div>
 
-                  <h4 className="text-xs font-bold text-white mb-1.5 leading-snug line-clamp-2">
-                    {session.title}
-                  </h4>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3 mb-4">
-                    {session.description || 'No description provided.'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 pt-2 border-t border-zinc-900">
-                  <Button
-                    onClick={() => handleJoinSession(session.id)}
-                    size="sm"
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 font-bold text-xs py-1.5 flex items-center justify-center gap-1.5"
-                  >
-                    <Video size={13} />
-                    <span>Join Room</span>
-                  </Button>
-
-                  {isAdmin && (
+                  <div className="flex items-center gap-2 pt-2 border-t border-zinc-900">
                     <Button
-                      onClick={() => handleAdminCutOff(session.id)}
+                      onClick={() => handleJoinSession(session.id)}
                       size="sm"
-                      disabled={cuttingOff === session.id}
-                      className="bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs px-3 flex items-center gap-1"
-                      title="Admin: Terminate live session"
+                      className="flex-1 bg-blue-600 hover:bg-blue-500 font-bold text-xs py-1.5 flex items-center justify-center gap-1.5"
                     >
-                      {cuttingOff === session.id ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <Trash2 size={12} />
-                      )}
-                      <span>Cut Off</span>
+                      <Video size={13} />
+                      <span>Join Room</span>
                     </Button>
-                  )}
-                </div>
-              </Card>
-            ))}
+
+                    {isAdmin && (
+                      <Button
+                        onClick={() => handleAdminCutOff(session.id)}
+                        size="sm"
+                        disabled={cuttingOff === session.id}
+                        className="bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs px-3 flex items-center gap-1"
+                        title="Admin: Terminate live session"
+                      >
+                        {cuttingOff === session.id ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={12} />
+                        )}
+                        <span>Cut Off</span>
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
@@ -354,37 +369,51 @@ export default function SessionsPage() {
             Upcoming Presentations ({scheduledSessions.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {scheduledSessions.map((session) => (
-              <Card
-                key={session.id}
-                className="p-4 border border-zinc-900 bg-zinc-950/20 flex flex-col justify-between rounded-xl"
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[9px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                      Scheduled Presentation
-                    </span>
-                    <span className="text-[9px] text-zinc-500">
-                      by @{session.host.username}
-                    </span>
-                  </div>
-                  <h4 className="text-xs font-bold text-white mb-1">
-                    {session.title}
-                  </h4>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">
-                    {session.description}
-                  </p>
-                </div>
-                <Button
-                  onClick={() => handleJoinSession(session.id)}
-                  size="sm"
-                  variant="outline"
-                  className="mt-3 text-xs font-semibold w-full border-zinc-800"
+            {scheduledSessions.map((session) => {
+              const canDeleteThis = isAdmin || (user && String(user.id) === String(session.hostId));
+              return (
+                <Card
+                  key={session.id}
+                  className="p-4 border border-zinc-900 bg-zinc-950/20 flex flex-col justify-between rounded-xl relative group"
                 >
-                  Enter Waiting Room
-                </Button>
-              </Card>
-            ))}
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[9px] text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                        Scheduled Presentation
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] text-zinc-500">
+                          by @{session.host.username}
+                        </span>
+                        {canDeleteThis && (
+                          <button
+                            onClick={() => handleDeleteSession(session.id)}
+                            className="p-1 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
+                            title="Delete scheduled presentation"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <h4 className="text-xs font-bold text-white mb-1">
+                      {session.title}
+                    </h4>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">
+                      {session.description}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => handleJoinSession(session.id)}
+                    size="sm"
+                    variant="outline"
+                    className="mt-3 text-xs font-semibold w-full border-zinc-850 hover:bg-zinc-900"
+                  >
+                    Enter Waiting Room
+                  </Button>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
@@ -414,33 +443,38 @@ export default function SessionsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {endedSessions.map((session) => (
-              <Card
-                key={session.id}
-                className="p-4 border border-zinc-900 bg-zinc-950/20 flex flex-col justify-between rounded-xl"
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">
-                      Ended Broadcast
-                    </span>
-                    <button
-                      onClick={() => handleDeleteSession(session.id)}
-                      className="text-zinc-500 hover:text-rose-400 p-1 rounded transition-colors"
-                      title="Delete from history"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+            {endedSessions.map((session) => {
+              const canDeleteThis = isAdmin || (user && String(user.id) === String(session.hostId));
+              return (
+                <Card
+                  key={session.id}
+                  className="p-4 border border-zinc-900 bg-zinc-950/20 flex flex-col justify-between rounded-xl"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[8px] text-zinc-500 font-bold uppercase tracking-wider">
+                        Ended Broadcast
+                      </span>
+                      {canDeleteThis && (
+                        <button
+                          onClick={() => handleDeleteSession(session.id)}
+                          className="text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 p-1 rounded transition-colors"
+                          title="Delete from history"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                    <h4 className="text-xs font-bold text-white mb-1">
+                      {session.title}
+                    </h4>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">
+                      {session.description}
+                    </p>
                   </div>
-                  <h4 className="text-xs font-bold text-white mb-1">
-                    {session.title}
-                  </h4>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">
-                    {session.description}
-                  </p>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
@@ -493,7 +527,7 @@ export default function SessionsPage() {
                   className={`flex-1 p-2 rounded-lg border text-left transition-all ${
                     !requiresApproval
                       ? 'bg-blue-600/15 border-blue-500/40 text-white'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-850'
+                      : 'bg-zinc-900 border-zinc-850 text-zinc-400 hover:bg-zinc-850'
                   }`}
                 >
                   <div className="flex items-center gap-1.5 text-xs font-bold mb-0.5">
@@ -511,7 +545,7 @@ export default function SessionsPage() {
                   className={`flex-1 p-2 rounded-lg border text-left transition-all ${
                     requiresApproval
                       ? 'bg-purple-600/15 border-purple-500/40 text-white'
-                      : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-850'
+                      : 'bg-zinc-900 border-zinc-850 text-zinc-400 hover:bg-zinc-850'
                   }`}
                 >
                   <div className="flex items-center gap-1.5 text-xs font-bold mb-0.5">
