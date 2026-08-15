@@ -57,6 +57,13 @@ class PostCreate(BaseModel):
     allow_share: Optional[bool] = Field(True, description="Whether users can share this post.")
 
 
+class RepostAuthor(camel_model):
+    """Author who reshared/reposted this post."""
+    id: Union[UUID, str]
+    username: str
+    display_name: Optional[str] = None
+
+
 class PostResponse(camel_model):
     """Schema representing a post in the feed."""
     id: Union[UUID, str]
@@ -80,6 +87,7 @@ class PostResponse(camel_model):
     is_liked_by_user: Optional[bool] = False
     is_reposted_by_user: Optional[bool] = False
     is_bookmarked_by_user: Optional[bool] = False
+    reposted_by: Optional[RepostAuthor] = None
 
 
 class CommentCreate(BaseModel):

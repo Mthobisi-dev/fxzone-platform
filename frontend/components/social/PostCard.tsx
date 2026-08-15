@@ -66,6 +66,11 @@ export interface Post {
   isStory?: boolean;
   expiresAt?: string;
   createdAt: string;
+  repostedBy?: {
+    id: string;
+    username: string;
+    display_name?: string;
+  } | null;
 }
 
 interface PostCardProps {
@@ -200,8 +205,10 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       const res = await api.post(`/api/social/posts/${post.id}/repost`, {});
       if (res && typeof res.reposts_count === 'number') {
         setReposts(res.reposts_count);
-        setIsReposted(res.is_reposted);
+        setIsReposted(res.is_reposted ?? nextReposted);
       }
+      // Refresh the feed so reshared posts appear immediately
+      window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
     } catch (err) {
       console.error('Repost error:', err);
       setIsReposted(!nextReposted);
@@ -341,13 +348,34 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   );
   const youtubeId = youtubeMatch ? youtubeMatch[1] : null;
 
+  const repostedBy = (post as any).repostedBy || (post as any).reposted_by;
+
   return (
     <Card
       id={`post-${post.id}`}
       onClick={() => onSelect?.(post)}
-      className="p-4 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer rounded-xl"
+      className="p-0 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer rounded-xl overflow-hidden"
     >
-      <div className="flex gap-3">
+      {/* Repost Banner */}
+      {repostedBy && (
+        <div className="flex items-center gap-1.5 px-4 pt-2.5 pb-1 bg-emerald-500/5 border-b border-emerald-500/10">
+          <Repeat2 size={11} className="text-emerald-400 shrink-0" />
+          <span className="text-[10px] text-emerald-400 font-semibold truncate">
+            Reshared by{' '}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.location.href = `/profile/${repostedBy.id || repostedBy.username}`;
+              }}
+              className="hover:underline font-bold"
+            >
+              @{repostedBy.username}
+            </button>
+          </span>
+        </div>
+      )}
+      <div className="flex gap-3 p-4">
         {/* User Avatar - clickable to view profile */}
         <div
           className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"

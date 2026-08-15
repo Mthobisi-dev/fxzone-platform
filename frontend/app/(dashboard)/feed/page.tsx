@@ -107,6 +107,7 @@ export default function SocialFeedPage() {
             p.is_bookmarked_by_user ?? p.isBookmarkedByUser ?? false,
           isPinned: p.is_pinned ?? p.isPinned ?? false,
           createdAt: p.created_at || p.createdAt || new Date().toISOString(),
+          repostedBy: p.reposted_by || p.repostedBy || null,
         }));
 
         // Deduplicate posts strictly by ID to prevent any duplicate UI render

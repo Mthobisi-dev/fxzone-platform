@@ -139,8 +139,8 @@ class SocialService:
             "is_bookmarked_by_user": is_bookmarked
         }
 
-    async def get_feed(self, user_id: Any, limit: int = 15, offset: int = 0) -> List[Dict[str, Any]]:
-        """Retrieve the community social feed ranked by engagement and time decay."""
+    async def get_feed(self, user_id: Any, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+        """Retrieve the community social feed including original and reshared/reposted posts."""
         u_uuid = to_uuid(user_id)
 
         # Fetch active standard posts (not stories)
@@ -157,13 +157,22 @@ class SocialService:
         result = await self.db.execute(query)
         raw_posts = list(result.scalars().all())
 
-        # Deduplicate posts by ID
-        seen_ids = set()
-        posts = []
-        for p in raw_posts:
-            if p.id not in seen_ids:
-                seen_ids.add(p.id)
-                posts.append(p)
+        # Fetch active repost reactions
+        repost_query = (
+            select(Reaction)
+            .where(Reaction.reaction_type == "repost")
+            .options(
+                selectinload(Reaction.user),
+                selectinload(Reaction.post).selectinload(Post.user),
+                selectinload(Reaction.post).selectinload(Post.tagged_assets),
+                selectinload(Reaction.post).selectinload(Post.reactions),
+                selectinload(Reaction.post).selectinload(Post.comments)
+            )
+            .order_by(Reaction.created_at.desc())
+            .limit(limit * 2)
+        )
+        repost_res = await self.db.execute(repost_query)
+        raw_reposts = list(repost_res.scalars().all())
 
         # Bookmarks for user
         bm_query = select(Bookmark.post_id).where(Bookmark.user_id == u_uuid)
@@ -179,36 +188,75 @@ class SocialService:
 
         now = datetime.utcnow()
 
-        def compute_score(p: Post) -> float:
-            created_at = p.created_at or now
-            if created_at.tzinfo is not None:
-                created_at = created_at.replace(tzinfo=None)
-            hours_age = max(0, (now - created_at).total_seconds() / 3600.0)
+        feed_items = []
+        seen_feed_keys = set()
+
+        # Add original posts
+        for p in raw_posts:
+            if not p.id:
+                continue
+            feed_key = f"orig_{p.id}"
+            if feed_key not in seen_feed_keys:
+                seen_feed_keys.add(feed_key)
+                feed_items.append({
+                    "post": p,
+                    "reposted_by": None,
+                    "event_time": p.created_at or now,
+                    "is_pinned": getattr(p, 'is_pinned', False),
+                    "unique_feed_id": str(p.id)
+                })
+
+        # Add reshared / reposted posts
+        for r in raw_reposts:
+            if r.post and not r.post.is_story and r.user:
+                feed_key = f"repost_{r.post.id}_{r.user.id}"
+                if feed_key not in seen_feed_keys:
+                    seen_feed_keys.add(feed_key)
+                    feed_items.append({
+                        "post": r.post,
+                        "reposted_by": {
+                            "id": str(r.user.id),
+                            "username": r.user.username,
+                            "display_name": r.user.display_name or r.user.username
+                        },
+                        "event_time": r.created_at or now,
+                        "is_pinned": False,
+                        "unique_feed_id": f"{r.post.id}_repost_{r.user.id}"
+                    })
+
+        def compute_item_score(item: Dict[str, Any]) -> float:
+            p = item["post"]
+            event_time = item["event_time"]
+            if event_time.tzinfo is not None:
+                event_time = event_time.replace(tzinfo=None)
+            hours_age = max(0, (now - event_time).total_seconds() / 3600.0)
             likes = p.likes_count or (len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else 0)
             comments = p.comments_count or (len(p.comments) if p.comments else 0)
             reposts = p.reposts_count or (len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else 0)
             engagement = (likes * 3) + (comments * 5) + (reposts * 7)
-            return engagement / ((hours_age + 2.0) ** 1.5)
+            # Fresh reposts get a high initial decay rank
+            return (engagement + 10) / ((hours_age + 2.0) ** 1.5)
 
-        posts.sort(key=lambda p: (1 if getattr(p, 'is_pinned', False) else 0, compute_score(p)), reverse=True)
-        sliced = posts[offset:offset + limit]
+        feed_items.sort(key=lambda it: (1 if it["is_pinned"] else 0, compute_item_score(it)), reverse=True)
+        sliced = feed_items[offset:offset + limit]
 
         formatted = []
-        for p in sliced:
+        for it in sliced:
+            p = it["post"]
             p_id_str = str(p.id)
             actual_likes = len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else (p.likes_count or 0)
             actual_comments = len(p.comments) if p.comments else (p.comments_count or 0)
             actual_reposts = len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else (p.reposts_count or 0)
-            
+
             formatted.append({
-                "id": str(p.id),
+                "id": it["unique_feed_id"],
                 "user_id": str(p.user_id),
                 "user": {
                     "id": str(p.user.id),
                     "username": p.user.username,
                     "display_name": p.user.display_name or p.user.username,
                     "avatar_url": p.user.avatar_url,
-                    "role": p.user.role.value if hasattr(p.user.role, 'value') else p.user.role
+                    "role": p.user.role.value if hasattr(p.user.role, 'value') else str(p.user.role)
                 },
                 "content": p.content,
                 "image_url": p.image_url,
@@ -224,15 +272,16 @@ class SocialService:
                 "allow_save": getattr(p, "allow_save", True) if getattr(p, "allow_save", None) is not None else True,
                 "allow_share": getattr(p, "allow_share", True) if getattr(p, "allow_share", None) is not None else True,
                 "expires_at": p.expires_at,
-                "created_at": p.created_at,
+                "created_at": it["event_time"],
                 "is_liked_by_user": p_id_str in liked_post_ids,
                 "is_reposted_by_user": p_id_str in reposted_post_ids,
-                "is_bookmarked_by_user": p_id_str in bookmarked_post_ids
+                "is_bookmarked_by_user": p_id_str in bookmarked_post_ids,
+                "reposted_by": it["reposted_by"]
             })
         return formatted
 
-    async def get_user_posts(self, user_id: Any, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
-        """Retrieve standard posts authored by a specific user."""
+    async def get_user_posts(self, user_id: Any, limit: int = 30, offset: int = 0) -> List[Dict[str, Any]]:
+        """Retrieve standard posts authored by or reshared/reposted by a specific user."""
         u_uuid = to_uuid(user_id)
 
         # Lookup user if passed as username
@@ -242,6 +291,7 @@ class SocialService:
             if found_id:
                 u_uuid = found_id
 
+        # 1. Authored posts
         query = (
             select(Post)
             .where(and_(Post.user_id == u_uuid, Post.is_story == False))
@@ -251,27 +301,74 @@ class SocialService:
                 selectinload(Post.reactions),
                 selectinload(Post.comments)
             )
-            .order_by(Post.created_at.desc())
-            .offset(offset)
-            .limit(limit)
         )
         result = await self.db.execute(query)
-        posts = list(result.scalars().all())
+        authored_posts = list(result.scalars().all())
+
+        # 2. Reshared / Reposted posts by this user
+        reposts_query = (
+            select(Reaction)
+            .where(and_(Reaction.user_id == u_uuid, Reaction.reaction_type == "repost"))
+            .options(
+                selectinload(Reaction.user),
+                selectinload(Reaction.post).selectinload(Post.user),
+                selectinload(Reaction.post).selectinload(Post.tagged_assets),
+                selectinload(Reaction.post).selectinload(Post.reactions),
+                selectinload(Reaction.post).selectinload(Post.comments)
+            )
+        )
+        repost_res = await self.db.execute(reposts_query)
+        user_reposts = list(repost_res.scalars().all())
+
+        user_items = []
+        seen = set()
+
+        for p in authored_posts:
+            if not p.id or str(p.id) in seen:
+                continue
+            seen.add(str(p.id))
+            user_items.append({
+                "post": p,
+                "reposted_by": None,
+                "event_time": p.created_at or datetime.utcnow(),
+                "unique_id": str(p.id)
+            })
+
+        for r in user_reposts:
+            if r.post and not r.post.is_story and r.user:
+                rep_key = f"rep_{r.post.id}"
+                if rep_key not in seen:
+                    seen.add(rep_key)
+                    user_items.append({
+                        "post": r.post,
+                        "reposted_by": {
+                            "id": str(r.user.id),
+                            "username": r.user.username,
+                            "display_name": r.user.display_name or r.user.username
+                        },
+                        "event_time": r.created_at or datetime.utcnow(),
+                        "unique_id": f"{r.post.id}_repost_{r.user.id}"
+                    })
+
+        # Sort newest first
+        user_items.sort(key=lambda it: it["event_time"] or datetime.min, reverse=True)
+        sliced = user_items[offset:offset + limit]
 
         formatted = []
-        for p in posts:
+        for it in sliced:
+            p = it["post"]
             actual_likes = len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else (p.likes_count or 0)
             actual_comments = len(p.comments) if p.comments else (p.comments_count or 0)
             actual_reposts = len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else (p.reposts_count or 0)
             formatted.append({
-                "id": str(p.id),
+                "id": it["unique_id"],
                 "user_id": str(p.user_id),
                 "user": {
                     "id": str(p.user.id),
                     "username": p.user.username,
                     "display_name": p.user.display_name or p.user.username,
                     "avatar_url": p.user.avatar_url,
-                    "role": p.user.role.value if hasattr(p.user.role, 'value') else p.user.role
+                    "role": p.user.role.value if hasattr(p.user.role, 'value') else str(p.user.role)
                 },
                 "content": p.content,
                 "image_url": p.image_url,
@@ -287,10 +384,11 @@ class SocialService:
                 "allow_save": getattr(p, "allow_save", True) if getattr(p, "allow_save", None) is not None else True,
                 "allow_share": getattr(p, "allow_share", True) if getattr(p, "allow_share", None) is not None else True,
                 "expires_at": p.expires_at,
-                "created_at": p.created_at,
+                "created_at": it["event_time"],
                 "is_liked_by_user": False,
-                "is_reposted_by_user": False,
-                "is_bookmarked_by_user": False
+                "is_reposted_by_user": it["reposted_by"] is not None,
+                "is_bookmarked_by_user": False,
+                "reposted_by": it["reposted_by"]
             })
         return formatted
 
@@ -857,24 +955,66 @@ class SocialService:
         await self.db.commit()
         return {"post_id": str(post_id), "is_bookmarked": is_bookmarked}
 
-    async def get_saved_posts(self, user_id: Any, limit: int = 20, offset: int = 0) -> List[Post]:
-        """Fetch all posts bookmarked/saved by user."""
+    async def get_saved_posts(self, user_id: Any, limit: int = 30, offset: int = 0) -> List[Dict[str, Any]]:
+        """Fetch all posts bookmarked/saved by user with complete author and metadata."""
         u_uuid = to_uuid(user_id)
 
         stmt = (
             select(Post)
             .join(Bookmark, Bookmark.post_id == Post.id)
             .where(Bookmark.user_id == u_uuid)
-            .options(selectinload(Post.user), selectinload(Post.tagged_assets))
+            .options(
+                selectinload(Post.user),
+                selectinload(Post.tagged_assets),
+                selectinload(Post.reactions),
+                selectinload(Post.comments)
+            )
             .order_by(Bookmark.created_at.desc())
             .offset(offset)
             .limit(limit)
         )
         res = await self.db.execute(stmt)
-        return list(res.scalars().all())
+        posts = list(res.scalars().all())
+
+        formatted = []
+        for p in posts:
+            actual_likes = len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else (p.likes_count or 0)
+            actual_comments = len(p.comments) if p.comments else (p.comments_count or 0)
+            actual_reposts = len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else (p.reposts_count or 0)
+            formatted.append({
+                "id": str(p.id),
+                "user_id": str(p.user_id),
+                "user": {
+                    "id": str(p.user.id),
+                    "username": p.user.username,
+                    "display_name": p.user.display_name or p.user.username,
+                    "avatar_url": p.user.avatar_url,
+                    "role": p.user.role.value if hasattr(p.user.role, 'value') else str(p.user.role)
+                },
+                "content": p.content,
+                "image_url": p.image_url,
+                "asset_tags": [a.symbol for a in p.tagged_assets] if p.tagged_assets else [],
+                "likes_count": max(p.likes_count or 0, actual_likes),
+                "comments_count": max(p.comments_count or 0, actual_comments),
+                "reposts_count": max(p.reposts_count or 0, actual_reposts),
+                "is_story": p.is_story or False,
+                "is_pinned": getattr(p, "is_pinned", False),
+                "show_comments_count": getattr(p, "show_comments_count", True) if getattr(p, "show_comments_count", None) is not None else True,
+                "show_likes_count": getattr(p, "show_likes_count", True) if getattr(p, "show_likes_count", None) is not None else True,
+                "allow_reshare": getattr(p, "allow_reshare", True) if getattr(p, "allow_reshare", None) is not None else True,
+                "allow_save": getattr(p, "allow_save", True) if getattr(p, "allow_save", None) is not None else True,
+                "allow_share": getattr(p, "allow_share", True) if getattr(p, "allow_share", None) is not None else True,
+                "expires_at": p.expires_at,
+                "created_at": p.created_at,
+                "is_liked_by_user": False,
+                "is_reposted_by_user": False,
+                "is_bookmarked_by_user": True,
+                "reposted_by": None
+            })
+        return formatted
 
     async def get_featured_experts(self, limit: int = 5) -> List[Dict[str, Any]]:
-        """Fetch real registered experts and analysts with real follower counts from database."""
+        """Fetch featured experts and analysts from database, ensuring FxZone Bot is included."""
         stmt = (
             select(User)
             .where(User.is_active == True)
@@ -885,8 +1025,11 @@ class SocialService:
         users = list(res.scalars().all())
 
         experts = []
+        has_bot = False
+
         for u in users:
-            # Count actual followers from Follow table if exists
+            if u.username == "fxzone_bot":
+                has_bot = True
             f_count = await self.db.scalar(select(func.count(Follow.id)).where(Follow.following_id == u.id)) or u.followers_count or 0
             experts.append({
                 "id": str(u.id),
@@ -896,7 +1039,19 @@ class SocialService:
                 "role": u.role.value if hasattr(u.role, 'value') else str(u.role),
                 "followers": f_count,
             })
-        return experts
+
+        # Ensure FxZone Bot is always included as official AI market analyst
+        if not has_bot:
+            experts.insert(0, {
+                "id": "fxzone-bot-expert",
+                "name": "FxZone Bot",
+                "handle": "fxzone_bot",
+                "avatar_url": "https://api.dicebear.com/8.x/bottts/svg?seed=FxZoneBot",
+                "role": "analyst",
+                "followers": 0,
+            })
+
+        return experts[:limit]
 
     async def get_trending_symbols(self, limit: int = 5) -> List[Dict[str, Any]]:
         """Fetch top active market symbols with real post discussion activity."""
