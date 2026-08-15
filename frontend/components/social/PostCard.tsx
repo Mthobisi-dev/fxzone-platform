@@ -24,7 +24,7 @@ import {
   Play,
   ExternalLink,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format, parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -287,14 +287,19 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     }
   };
 
-  const timeAgo = () => {
+  const getTimestamps = () => {
     try {
-      if (!createdAt) return 'recently';
-      return formatDistanceToNow(new Date(createdAt), { addSuffix: true });
+      if (!createdAt) return { rel: 'recently', exact: '' };
+      const d = typeof createdAt === 'string' ? parseISO(createdAt) : new Date(createdAt);
+      if (isNaN(d.getTime())) return { rel: 'recently', exact: '' };
+      const rel = formatDistanceToNow(d, { addSuffix: true });
+      const exact = format(d, "MMM d, yyyy 'at' h:mm a");
+      return { rel, exact };
     } catch {
-      return 'recently';
+      return { rel: 'recently', exact: '' };
     }
   };
+  const { rel: timeRel, exact: timeExact } = getTimestamps();
 
   const getRoleBadgeColor = (role: string) => {
     switch (role?.toLowerCase()) {
@@ -418,7 +423,15 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                   <Pin size={10} className="fill-amber-400" /> Pinned
                 </span>
               )}
-              <span className="text-[10px] text-zinc-500">{timeAgo()}</span>
+              <span
+                className="text-[10px] text-zinc-500 cursor-default flex flex-col items-end"
+                title={timeExact || undefined}
+              >
+                <span>{timeRel}</span>
+                {timeExact && (
+                  <span className="text-[9px] text-zinc-600 leading-tight hidden sm:block">{timeExact}</span>
+                )}
+              </span>
               {isOwner && (
                 <button
                   onClick={handlePin}

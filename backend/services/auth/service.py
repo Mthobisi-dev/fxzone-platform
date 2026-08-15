@@ -1,5 +1,6 @@
 """FxZone Auth Service - Business logic."""
 import uuid
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from shared.models import User
@@ -54,12 +55,18 @@ async def register_user(db: AsyncSession, data: UserCreate) -> User:
 
 
 async def authenticate_user(db: AsyncSession, data: UserLogin) -> dict:
-    """Authenticate a user and return tokens."""
+    """Authenticate a user by email or username and return tokens."""
+    # Try email first
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
+    # Fallback: treat data.email field as a username if no email match found
+    if not user:
+        result = await db.execute(select(User).where(User.username == data.email))
+        user = result.scalar_one_or_none()
+
     if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid email/username or password")
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")

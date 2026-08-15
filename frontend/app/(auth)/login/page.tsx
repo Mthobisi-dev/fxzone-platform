@@ -22,8 +22,8 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Please fill in all credentials.');
+    if (!email.trim() || !password) {
+      setError('Please enter your email/username and password.');
       return;
     }
 
@@ -95,11 +95,11 @@ export default function LoginPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
-                  label="Email"
-                  type="email"
+                  label="Email or Username"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
+                  placeholder="email@company.com or username"
                   disabled={loading}
                 />
                 
