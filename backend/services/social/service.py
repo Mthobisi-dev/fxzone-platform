@@ -742,7 +742,7 @@ class SocialService:
         return post
 
     async def delete_user_account(self, user_id: Any) -> bool:
-        """Cascade purge all user data (posts, comments, reactions, messages, sessions) and delete user."""
+        """Cascade purge all user data (posts, comments, reactions, messages, sessions, preferences) and delete user."""
         u_uuid = to_uuid(user_id)
 
         stmt = select(User).where(User.id == u_uuid)
@@ -751,17 +751,31 @@ class SocialService:
         if not u:
             return False
 
-        from shared.models import Message, ConversationMember, LiveSession, SessionParticipant, Watchlist, WatchlistItem
+        from shared.models import (
+            Post, Comment, Reaction, Bookmark, Follow,
+            Message, Conversation, ConversationMember,
+            LiveSession, SessionParticipant,
+            Watchlist, WatchlistItem, post_asset_tags,
+            Notification, NotificationPreference,
+            UserBehaviorEvent, UserCategoryPreference, UserPreferenceVector
+        )
 
         try:
-            # 1. Purge watchlists
+            # 1. Preferences & ML events
+            await self.db.execute(delete(UserBehaviorEvent).where(UserBehaviorEvent.user_id == u_uuid))
+            await self.db.execute(delete(UserCategoryPreference).where(UserCategoryPreference.user_id == u_uuid))
+            await self.db.execute(delete(UserPreferenceVector).where(UserPreferenceVector.user_id == u_uuid))
+            await self.db.execute(delete(NotificationPreference).where(NotificationPreference.user_id == u_uuid))
+            await self.db.execute(delete(Notification).where(Notification.user_id == u_uuid))
+
+            # 2. Watchlists
             user_watchlists = await self.db.execute(select(Watchlist.id).where(Watchlist.user_id == u_uuid))
             wl_ids = user_watchlists.scalars().all()
             if wl_ids:
                 await self.db.execute(delete(WatchlistItem).where(WatchlistItem.watchlist_id.in_(wl_ids)))
                 await self.db.execute(delete(Watchlist).where(Watchlist.user_id == u_uuid))
 
-            # 2. Delete comments & reactions on user's posts
+            # 3. Posts & associations authored by user
             user_posts = await self.db.execute(select(Post.id).where(Post.user_id == u_uuid))
             post_ids = user_posts.scalars().all()
             if post_ids:
@@ -771,27 +785,30 @@ class SocialService:
                 await self.db.execute(delete(post_asset_tags).where(post_asset_tags.c.post_id.in_(post_ids)))
                 await self.db.execute(delete(Post).where(Post.id.in_(post_ids)))
 
-            # 3. Delete comments, reactions & bookmarks authored by user
+            # 4. Comments, reactions & bookmarks created by user on other posts
             await self.db.execute(delete(Comment).where(Comment.user_id == u_uuid))
             await self.db.execute(delete(Reaction).where(Reaction.user_id == u_uuid))
             await self.db.execute(delete(Bookmark).where(Bookmark.user_id == u_uuid))
 
-            # 4. Delete follows involving user
+            # 5. Follows
             await self.db.execute(delete(Follow).where(or_(Follow.follower_id == u_uuid, Follow.following_id == u_uuid)))
 
-            # 5. Delete messages & conversation memberships
-            await self.db.execute(delete(Message).where(Message.sender_id == u_uuid))
-            await self.db.execute(delete(ConversationMember).where(ConversationMember.user_id == u_uuid))
-
-            # 6. Delete hosted sessions & session participations
+            # 6. Live sessions & participations
+            await self.db.execute(delete(SessionParticipant).where(SessionParticipant.user_id == u_uuid))
             user_sessions = await self.db.execute(select(LiveSession.id).where(LiveSession.host_id == u_uuid))
             ls_ids = user_sessions.scalars().all()
             if ls_ids:
                 await self.db.execute(delete(SessionParticipant).where(SessionParticipant.session_id.in_(ls_ids)))
-                await self.db.execute(delete(LiveSession).where(LiveSession.host_id.in_(ls_ids)))
-            await self.db.execute(delete(SessionParticipant).where(SessionParticipant.user_id == u_uuid))
+                await self.db.execute(delete(LiveSession).where(LiveSession.id.in_(ls_ids)))
 
-            # 7. Delete user record
+            # 7. Messages & Conversations
+            await self.db.execute(delete(Message).where(Message.sender_id == u_uuid))
+            await self.db.execute(delete(ConversationMember).where(ConversationMember.user_id == u_uuid))
+            user_convs = await self.db.execute(select(Conversation).where(Conversation.creator_id == u_uuid))
+            for conv in user_convs.scalars().all():
+                conv.creator_id = None
+
+            # 8. Delete user record
             await self.db.delete(u)
             await self.db.commit()
             return True

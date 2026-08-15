@@ -1,5 +1,5 @@
 """FxZone Auth Service - API Router."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from shared.database import get_db
 from shared.security import get_current_user
@@ -115,3 +115,21 @@ async def update_me(
         is_active=user.is_active, followers_count=user.followers_count,
         following_count=user.following_count, created_at=user.created_at,
     )
+
+
+@router.delete("/me")
+async def delete_me(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete the authenticated user's account and all associated data."""
+    from services.social.service import SocialService
+    social_service = SocialService(db)
+    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    success = await social_service.delete_user_account(user_id=user_id)
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="User account not found."
+        )
+    return {"status": "success", "message": "Account permanently deleted."}

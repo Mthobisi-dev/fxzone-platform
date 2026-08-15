@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -18,14 +18,16 @@ import {
   Camera,
   MessageSquare,
   Bookmark,
-  Share2,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
 export default function ProfilePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, logout } = useAuth();
   const rawId = params.id as string;
   const targetId = rawId === 'me' && currentUser?.id ? String(currentUser.id) : rawId;
 
@@ -37,6 +39,17 @@ export default function ProfilePage() {
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'about'>('posts');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Delete account state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  useEffect(() => {
+    if (searchParams?.get('action') === 'delete') {
+      setDeleteModalOpen(true);
+    }
+  }, [searchParams]);
 
   const fetchSavedPosts = async () => {
     setLoadingSaved(true);
@@ -227,6 +240,24 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.trim().toLowerCase() !== 'delete') {
+      alert('Please type "delete" to confirm account deletion.');
+      return;
+    }
+    setDeletingAccount(true);
+    try {
+      // Execute account deletion
+      await api.delete('/api/auth/me').catch(() => api.delete('/api/social/users/me'));
+      logout();
+      window.location.href = '/login';
+    } catch (err: any) {
+      console.error('Account deletion error:', err);
+      alert(err?.detail || err?.message || 'Failed to delete account. Please try again.');
+      setDeletingAccount(false);
+    }
+  };
+
   const isSelf =
     targetId === 'me' ||
     String(currentUser?.id) === String(targetId) ||
@@ -302,7 +333,7 @@ export default function ProfilePage() {
                 onClick={openEditModal}
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs font-semibold flex items-center gap-1.5 border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+                className="h-8 text-xs font-semibold flex items-center gap-1.5 border-zinc-850 hover:border-zinc-700 bg-zinc-900"
               >
                 <Edit3 size={13} />
                 <span>Edit Profile</span>
@@ -314,7 +345,7 @@ export default function ProfilePage() {
                   disabled={startingChat}
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs font-semibold flex items-center gap-1.5 border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+                  className="h-8 text-xs font-semibold flex items-center gap-1.5 border-zinc-850 hover:border-zinc-700 bg-zinc-900"
                 >
                   <MessageSquare size={13} className="text-blue-400" />
                   <span>{startingChat ? 'Connecting...' : 'Direct Chat'}</span>
@@ -447,28 +478,53 @@ export default function ProfilePage() {
           )}
         </div>
       ) : (
-        <Card className="p-6 border border-zinc-900 bg-zinc-950/20 space-y-4 rounded-xl">
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
-              Network Role Details
-            </h4>
-            <span className="text-xs font-semibold text-white capitalize flex items-center gap-1.5">
-              <Sparkles size={13} className="text-purple-400" /> {profile?.role?.replace('_', ' ')}
-            </span>
-          </div>
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
-              About
-            </h4>
-            <p className="text-xs text-zinc-300 leading-relaxed">{profile?.bio || 'No bio set.'}</p>
-          </div>
-          <div>
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
-              Username
-            </h4>
-            <span className="text-xs text-zinc-300">@{profile?.username}</span>
-          </div>
-        </Card>
+        <div className="space-y-4">
+          <Card className="p-6 border border-zinc-900 bg-zinc-950/20 space-y-4 rounded-xl">
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+                Network Role Details
+              </h4>
+              <span className="text-xs font-semibold text-white capitalize flex items-center gap-1.5">
+                <Sparkles size={13} className="text-purple-400" /> {profile?.role?.replace('_', ' ')}
+              </span>
+            </div>
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+                About
+              </h4>
+              <p className="text-xs text-zinc-300 leading-relaxed">{profile?.bio || 'No bio set.'}</p>
+            </div>
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+                Username
+              </h4>
+              <span className="text-xs text-zinc-300">@{profile?.username}</span>
+            </div>
+          </Card>
+
+          {/* Danger Zone: Delete Account */}
+          {isSelf && (
+            <Card className="p-6 border border-rose-900/30 bg-rose-950/10 rounded-xl space-y-3">
+              <div className="flex items-center gap-2 text-rose-400">
+                <AlertTriangle size={16} />
+                <h4 className="text-xs font-bold uppercase tracking-wider">Danger Zone</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Permanently delete your FxZone account, profile, posts, comments, direct messages, and all associated trading data. This action is irreversible.
+              </p>
+              <div className="pt-1">
+                <Button
+                  onClick={() => setDeleteModalOpen(true)}
+                  size="sm"
+                  className="bg-rose-700/80 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 border border-rose-600/30"
+                >
+                  <Trash2 size={13} />
+                  <span>Delete My Account</span>
+                </Button>
+              </div>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Edit Profile Modal */}
@@ -536,22 +592,103 @@ export default function ProfilePage() {
               </p>
             )}
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-between items-center gap-2 pt-2 border-t border-zinc-900">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditModalOpen(false);
+                  setDeleteModalOpen(true);
+                }}
+                className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 hover:underline"
+              >
+                <Trash2 size={12} /> Delete Account
+              </button>
+
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEditModalOpen(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-500 font-bold text-xs"
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving Changes...' : 'Save Profile'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {deleteModalOpen && (
+        <Modal
+          isOpen={deleteModalOpen}
+          onClose={() => {
+            if (!deletingAccount) {
+              setDeleteModalOpen(false);
+              setDeleteConfirmText('');
+            }
+          }}
+          title="Delete Account Permanently"
+        >
+          <div className="space-y-4">
+            <div className="p-3 bg-rose-950/20 border border-rose-900/40 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
+                <AlertTriangle size={16} />
+                <span>Permanent Data Purge</span>
+              </div>
+              <p className="text-[11px] text-zinc-300 leading-relaxed">
+                This will permanently delete your user account <strong>@{profile?.username}</strong>, your published technical posts, comments, private chat messages, active sessions, and bookmarks. This operation cannot be undone.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">
+                To confirm, type <span className="text-rose-400 font-bold font-mono">delete</span> below:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="delete"
+                className="w-full h-9 bg-zinc-950 border border-zinc-800 rounded px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-rose-500"
+                disabled={deletingAccount}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-900">
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setEditModalOpen(false)}
-                disabled={saving}
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setDeleteConfirmText('');
+                }}
+                disabled={deletingAccount}
               >
                 Cancel
               </Button>
               <Button
                 size="sm"
-                className="bg-blue-600 hover:bg-blue-500 font-bold text-xs"
-                onClick={handleSaveProfile}
-                disabled={saving}
+                className="bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs"
+                disabled={deleteConfirmText.trim().toLowerCase() !== 'delete' || deletingAccount}
+                onClick={handleDeleteAccount}
               >
-                {saving ? 'Saving Changes...' : 'Save Profile'}
+                {deletingAccount ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 size={12} className="animate-spin" /> Purging Account...
+                  </span>
+                ) : (
+                  'Permanently Delete Account'
+                )}
               </Button>
             </div>
           </div>

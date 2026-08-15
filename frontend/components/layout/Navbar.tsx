@@ -16,6 +16,7 @@ import {
   User as UserIcon,
   Sliders,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 
@@ -43,6 +44,16 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
       label: 'UI Customization',
       icon: <Sliders size={14} />,
       onClick: () => setIsThemeOpen(true),
+    },
+    {
+      label: 'Delete Account',
+      icon: <Trash2 size={14} />,
+      danger: true,
+      onClick: () => {
+        if (user) {
+          window.location.href = `/profile/${user.id}?action=delete`;
+        }
+      },
     },
     {
       label: 'Sign Out',
