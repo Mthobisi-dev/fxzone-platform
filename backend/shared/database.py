@@ -509,61 +509,58 @@ def get_redis():
     return _redis_client
 
 
-# Seeding for SQLite fallback
-async def seed_sqlite_if_empty():
-    """Seed the SQLite database with initial model entities ONLY in development if empty."""
-    if settings.APP_ENV == "production" or os.environ.get("RENDER"):
-        logger.info("Production environment detected — skipping automatic seed injection.")
-        return
-
-    from shared.models import User
+# Assets-only initialization (only seeds trading pairs if assets table is empty)
+async def seed_assets_if_empty():
+    """Ensure standard trading assets exist in the database without altering any user data."""
+    from shared.models import Asset
     from sqlalchemy import select
-    
+
     async with AsyncSessionLocal() as session:
         try:
-            result = await session.execute(select(User).limit(1))
-            user = result.scalars().first()
-            if user is not None:
-                logger.info("Database already has data, skipping seeding.")
+            result = await session.execute(select(Asset).limit(1))
+            if result.scalars().first() is not None:
                 return
         except Exception as e:
-            logger.error(f"Failed to query users table during seeding check: {e}")
+            logger.debug(f"Asset check query notice: {e}")
             return
 
-        logger.info("Seeding SQLite database with demo data...")
-        
-        # Build path to 002_seed_data.sql
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        sql_path = os.path.join(base_dir, "database", "postgresql", "002_seed_data.sql")
-        
-        if not os.path.exists(sql_path):
-            logger.error(f"Seed file not found at: {sql_path}")
-            return
-            
-        with open(sql_path, "r", encoding="utf-8") as f:
-            sql_content = f.read()
+        logger.info("Seeding initial trading asset symbols...")
+        initial_assets = [
+            # Forex
+            ("EURUSD", "Euro / US Dollar", "forex", "The most traded currency pair in the world"),
+            ("GBPUSD", "British Pound / US Dollar", "forex", "Cable - major forex pair"),
+            ("USDJPY", "US Dollar / Japanese Yen", "forex", "Major pair influenced by BoJ policy"),
+            ("AUDUSD", "Australian Dollar / US Dollar", "forex", "Commodity-linked currency pair"),
+            ("USDCAD", "US Dollar / Canadian Dollar", "forex", "Loonie - correlated with oil prices"),
+            ("NZDUSD", "New Zealand Dollar / US Dollar", "forex", "Kiwi - commodity currency"),
+            ("USDCHF", "US Dollar / Swiss Franc", "forex", "Safe haven currency pair"),
+            ("EURGBP", "Euro / British Pound", "forex", "European cross pair"),
+            # Stocks
+            ("AAPL", "Apple Inc.", "stock", "Technology giant - iPhone, Mac, Services"),
+            ("GOOGL", "Alphabet Inc.", "stock", "Google parent company - Search, Cloud, AI"),
+            ("MSFT", "Microsoft Corp.", "stock", "Software & cloud computing leader"),
+            ("AMZN", "Amazon.com Inc.", "stock", "E-commerce and cloud infrastructure"),
+            ("TSLA", "Tesla Inc.", "stock", "Electric vehicles and clean energy"),
+            ("NVDA", "NVIDIA Corp.", "stock", "GPU and AI chip manufacturer"),
+            ("META", "Meta Platforms Inc.", "stock", "Social media and metaverse"),
+            # Crypto
+            ("BTCUSD", "Bitcoin / US Dollar", "crypto", "The original cryptocurrency"),
+            ("ETHUSD", "Ethereum / US Dollar", "crypto", "Smart contract platform"),
+            ("SOLUSD", "Solana / US Dollar", "crypto", "High-performance blockchain"),
+            ("ADAUSD", "Cardano / US Dollar", "crypto", "Proof-of-stake blockchain platform"),
+            ("DOTUSD", "Polkadot / US Dollar", "crypto", "Multi-chain interoperability protocol"),
+            ("XRPUSD", "Ripple / US Dollar", "crypto", "Digital payment network"),
+        ]
 
-        # Split SQL file statements by ';'
-        statements = sql_content.split(";")
-        for stmt in statements:
-            cleaned = stmt.strip()
-            # Remove comments and empty lines
-            lines = [line for line in cleaned.split("\n") if not line.strip().startswith("--")]
-            cleaned_stmt = "\n".join(lines).strip()
-            if not cleaned_stmt:
-                continue
-
-            try:
-                await session.execute(text(cleaned_stmt))
-            except Exception as e:
-                logger.debug(f"Statement notice in seed: {e}")
+        for symbol, name, atype, desc in initial_assets:
+            session.add(Asset(symbol=symbol, name=name, asset_type=atype, description=desc, is_active=True))
 
         try:
             await session.commit()
-            logger.info("SQLite database initial seed applied successfully.")
+            logger.info("Trading assets initialized successfully.")
         except Exception as e:
             await session.rollback()
-            logger.error(f"Failed to commit seeded SQLite database: {e}")
+            logger.warning(f"Failed to seed default assets: {e}")
 
 
 # ============================================================
@@ -572,25 +569,42 @@ async def seed_sqlite_if_empty():
 async def init_all_databases():
     """Initialize all database connections with fallback logic and auto-migrations."""
     global engine, AsyncSessionLocal, _redis_client, _mongo_client, _mongo_db
-    
-    # 1. Initialize Postgres / SQLite Fallback
+
+    # Determine if we must enforce cloud/PostgreSQL persistence
+    is_production = settings.APP_ENV == "production" or bool(os.environ.get("RENDER"))
+    has_postgres_configured = (
+        bool(os.environ.get("DATABASE_URL")) or
+        "supabase" in settings.DATABASE_URL.lower() or
+        "render.com" in settings.DATABASE_URL.lower() or
+        "dpg-" in settings.DATABASE_URL.lower() or
+        is_production
+    )
+
     use_sqlite = _use_sqlite
 
-    # If DATABASE_URL is explicitly set via environment variable, NEVER fall back to SQLite.
-    _db_url_is_explicit = bool(os.environ.get("DATABASE_URL"))
-
     if not use_sqlite:
-        try:
-            # Test PostgreSQL connectivity
-            async with engine.connect() as conn:
-                await conn.execute(text("SELECT 1"))
-            logger.info("Connected to PostgreSQL database successfully.")
-            
+        connected = False
+        last_err = None
+        # Retry loop for PostgreSQL connection (handles database cold start)
+        for attempt in range(1, 4):
+            try:
+                async with engine.connect() as conn:
+                    await conn.execute(text("SELECT 1"))
+                connected = True
+                logger.info("Connected to PostgreSQL database successfully.")
+                break
+            except Exception as e:
+                last_err = e
+                logger.warning(f"PostgreSQL connection attempt {attempt}/3 failed: {e}")
+                if attempt < 3:
+                    await asyncio.sleep(2.0)
+
+        if connected:
             # Ensure PostgreSQL tables and columns exist idempotently
             async with engine.begin() as conn:
                 from shared.models import Base as ModelsBase
                 await conn.run_sync(ModelsBase.metadata.create_all)
-                
+
                 # Safe PostgreSQL column additions
                 pg_migrations = [
                     "ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN DEFAULT TRUE;",
@@ -611,21 +625,18 @@ async def init_all_databases():
                         await conn.execute(text(stmt_sql))
                     except Exception as e:
                         logger.debug(f"PostgreSQL column migration notice: {e}")
-                        
+
             logger.info("PostgreSQL database tables and schema verified successfully.")
-            
-        except Exception as e:
-            if _db_url_is_explicit:
+            await seed_assets_if_empty()
+        else:
+            if has_postgres_configured:
                 logger.error(
-                    f"DATABASE_URL is set but PostgreSQL connection failed: {e}. "
-                    "Fix the DATABASE_URL or database credentials. "
-                    "NOT falling back to SQLite to protect production data."
+                    f"CRITICAL: PostgreSQL connection failed in production: {last_err}. "
+                    "Refusing to fall back to ephemeral SQLite to protect data permanence."
                 )
-                raise RuntimeError(
-                    f"Cannot connect to configured PostgreSQL database: {e}"
-                ) from e
+                raise RuntimeError(f"Cannot connect to production PostgreSQL database: {last_err}") from last_err
             else:
-                logger.warning(f"Failed to connect to PostgreSQL ({e}). Falling back to SQLite for local development...")
+                logger.warning(f"PostgreSQL not reachable ({last_err}). Falling back to SQLite for local development...")
                 use_sqlite = True
 
     if use_sqlite:
@@ -640,7 +651,6 @@ async def init_all_databases():
             class_=AsyncSession,
             expire_on_commit=False,
         )
-        # Create all tables dynamically & enable WAL mode for high performance concurrency
         async with engine.begin() as conn:
             await conn.execute(text("PRAGMA journal_mode=WAL;"))
             await conn.execute(text("PRAGMA busy_timeout=30000;"))
@@ -650,7 +660,6 @@ async def init_all_databases():
             from shared.models import Base as ModelsBase
             await conn.run_sync(ModelsBase.metadata.create_all)
 
-            # Safe column migrations for SQLite
             for col_sql in [
                 "ALTER TABLE live_sessions ADD COLUMN requires_approval BOOLEAN DEFAULT 1",
                 "ALTER TABLE live_sessions ADD COLUMN viewer_count INTEGER DEFAULT 0",
@@ -670,8 +679,8 @@ async def init_all_databases():
                 except Exception:
                     pass
 
-        logger.info("SQLite database configured with WAL mode & busy timeout 30s.")
-        await seed_sqlite_if_empty()
+        logger.info("SQLite database initialized.")
+        await seed_assets_if_empty()
 
     # 2. Initialize Redis / Mock Redis fallback
     if _HAS_AIOREDIS:

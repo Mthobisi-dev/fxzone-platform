@@ -46,12 +46,21 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
-        """Ensure the DATABASE_URL uses the asyncpg driver dialect for SQLAlchemy."""
+        """Ensure the DATABASE_URL uses the asyncpg driver dialect for SQLAlchemy and sanitize query parameters."""
         url = self.DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        # asyncpg does not accept ?sslmode= in the connection query string
+        if "?" in url:
+            base_url, query_str = url.split("?", 1)
+            params = [p for p in query_str.split("&") if not p.startswith("sslmode=")]
+            if params:
+                url = f"{base_url}?{'&'.join(params)}"
+            else:
+                url = base_url
         return url
 
     @property

@@ -1,13 +1,7 @@
 -- FxZone Seed Data
 -- Demo users, assets, watchlists, and sample content with explicit UUIDs
 
--- ============================================================
--- DEMO USERS (password: demo123)
--- bcrypt hash of 'demo123'
--- ============================================================
-INSERT INTO users (id, email, username, password_hash, display_name, avatar_url, bio, role, is_active, followers_count, following_count) VALUES
-    ('a0000000000000000000000000000001', 'admin@fxzone.io', 'fxadmin', '$2b$12$YN6uy/YWbPgFJK2XWzhGnuHyDvp4UPqPrbqh6ndgC8sRV0dKY1zXm', 'FxZone Admin', 'https://api.dicebear.com/8.x/initials/svg?seed=FA', 'Platform administrator and market analyst', 'admin', true, 0, 0),
-    ('a0000000000000000000000000000002', 'bot@fxzone.io', 'fxzone_bot', '$2b$12$YN6uy/YWbPgFJK2XWzhGnuHyDvp4UPqPrbqh6ndgC8sRV0dKY1zXm', 'FxZone Bot', 'https://api.dicebear.com/8.x/bottts/svg?seed=FxZoneBot', 'Official FxZone AI Market Analyst powered by Google Gemini. Posting live news updates and market charts.', 'analyst', true, 0, 0);
+-- DEMO USERS removed - users are dynamically registered by real traders
 
 -- ============================================================
 -- ASSETS
@@ -42,53 +36,5 @@ INSERT INTO assets (id, symbol, name, asset_type, description, is_active) VALUES
     ('c0000000000000000000000000000020', 'DOTUSD', 'Polkadot / US Dollar', 'crypto', 'Multi-chain interoperability protocol', true),
     ('c0000000000000000000000000000021', 'XRPUSD', 'Ripple / US Dollar', 'crypto', 'Digital payment network', true);
 
--- ============================================================
--- WATCHLISTS
--- ============================================================
-INSERT INTO watchlists (id, user_id, name) VALUES
-    ('b0000000000000000000000000000001', 'a0000000000000000000000000000002', 'Forex Majors'),
-    ('b0000000000000000000000000000002', 'a0000000000000000000000000000003', 'Crypto Portfolio');
+-- Assets only
 
--- Watchlist Items
-INSERT INTO watchlist_items (id, watchlist_id, asset_id) VALUES
-    ('d0000000000000000000000000000001', 'b0000000000000000000000000000001', 'c0000000000000000000000000000001'),
-    ('d0000000000000000000000000000002', 'b0000000000000000000000000000001', 'c0000000000000000000000000000002'),
-    ('d0000000000000000000000000000003', 'b0000000000000000000000000000001', 'c0000000000000000000000000000003'),
-    ('d0000000000000000000000000000004', 'b0000000000000000000000000000001', 'c0000000000000000000000000000004'),
-    ('d0000000000000000000000000000005', 'b0000000000000000000000000000002', 'c0000000000000000000000000000016'),
-    ('d0000000000000000000000000000006', 'b0000000000000000000000000000002', 'c0000000000000000000000000000017'),
-    ('d0000000000000000000000000000007', 'b0000000000000000000000000000002', 'c0000000000000000000000000000018');
-
--- SAMPLE POSTS removed per user request
-
--- ============================================================
--- FOLLOWS
--- ============================================================
--- No initial follows for bot accounts per user policy
-
--- ============================================================
--- NOTIFICATION PREFERENCES (defaults for demo users)
--- ============================================================
-INSERT INTO notification_preferences (id, user_id) VALUES
-    ('80000000-0000-0000-0000-000000000001', 'a0000000000000000000000000000001'),
-    ('80000000-0000-0000-0000-000000000002', 'a0000000000000000000000000000002'),
-    ('80000000-0000-0000-0000-000000000003', 'a0000000000000000000000000000003');
-
--- ============================================================
--- USER PREFERENCE VECTORS
--- ============================================================
-INSERT INTO user_preference_vectors (id, user_id, risk_preference, experience_level) VALUES
-    ('90000000-0000-0000-0000-000000000001', 'a0000000000000000000000000000001', 0.5, 'expert'),
-    ('90000000-0000-0000-0000-000000000002', 'a0000000000000000000000000000002', 0.4, 'advanced'),
-    ('90000000-0000-0000-0000-000000000003', 'a0000000000000000000000000000003', 0.8, 'intermediate');
-
-INSERT INTO user_category_preferences (id, user_id, category_name, preference_value) VALUES
-    ('f0000000-0000-0000-0000-000000000001', 'a0000000000000000000000000000001', 'forex', 0.33),
-    ('f0000000-0000-0000-0000-000000000002', 'a0000000000000000000000000000001', 'stocks', 0.33),
-    ('f0000000-0000-0000-0000-000000000003', 'a0000000000000000000000000000001', 'crypto', 0.33),
-    ('f0000000-0000-0000-0000-000000000004', 'a0000000000000000000000000000002', 'forex', 0.8),
-    ('f0000000-0000-0000-0000-000000000005', 'a0000000000000000000000000000002', 'stocks', 0.1),
-    ('f0000000-0000-0000-0000-000000000006', 'a0000000000000000000000000000002', 'crypto', 0.1),
-    ('f0000000-0000-0000-0000-000000000007', 'a0000000000000000000000000000003', 'forex', 0.2),
-    ('f0000000-0000-0000-0000-000000000008', 'a0000000000000000000000000000003', 'stocks', 0.1),
-    ('f0000000-0000-0000-0000-000000000009', 'a0000000000000000000000000000003', 'crypto', 0.7);
