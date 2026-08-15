@@ -14,7 +14,11 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function SocialFeedPage() {
   const { user } = useAuth();
-  const isAdmin = user?.email === 'mthobisimzimela031@gmail.com' || user?.username === 'admin' || user?.role === 'admin' || (user?.role as any)?.value === 'admin';
+  const isAdmin =
+    user?.email === 'mthobisimzimela031@gmail.com' ||
+    user?.username === 'admin' ||
+    user?.role === 'admin' ||
+    (user?.role as any)?.value === 'admin';
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -25,12 +29,16 @@ export default function SocialFeedPage() {
       const response = await api.get('/api/social/feed');
       if (Array.isArray(response)) {
         const mapped = response.map((p: any) => ({
-          id: p.id,
-          userId: p.user_id || p.userId,
+          id: String(p.id),
+          userId: String(p.user_id || p.userId),
           user: {
-            id: p.user?.id || p.user_id || p.userId,
+            id: String(p.user?.id || p.user_id || p.userId),
             username: p.user?.username || '',
-            displayName: p.user?.display_name || p.user?.displayName || p.user?.username || '',
+            displayName:
+              p.user?.display_name ||
+              p.user?.displayName ||
+              p.user?.username ||
+              '',
             avatarUrl: p.user?.avatar_url || p.user?.avatarUrl,
             role: p.user?.role || 'trader',
           },
@@ -42,11 +50,20 @@ export default function SocialFeedPage() {
           repostsCount: p.reposts_count ?? p.repostsCount ?? 0,
           isLikedByUser: p.is_liked_by_user ?? p.isLikedByUser ?? false,
           isRepostedByUser: p.is_reposted_by_user ?? p.isRepostedByUser ?? false,
-          isBookmarkedByUser: p.is_bookmarked_by_user ?? p.isBookmarkedByUser ?? false,
+          isBookmarkedByUser:
+            p.is_bookmarked_by_user ?? p.isBookmarkedByUser ?? false,
           isPinned: p.is_pinned ?? p.isPinned ?? false,
           createdAt: p.created_at || p.createdAt || new Date().toISOString(),
         }));
-        setPosts(mapped);
+
+        // Deduplicate posts strictly by ID to prevent any duplicate UI render
+        const uniquePostsMap = new Map<string, Post>();
+        for (const post of mapped) {
+          if (post.id && !uniquePostsMap.has(post.id)) {
+            uniquePostsMap.set(post.id, post);
+          }
+        }
+        setPosts(Array.from(uniquePostsMap.values()));
       } else {
         setPosts([]);
       }
@@ -65,7 +82,8 @@ export default function SocialFeedPage() {
   }, []);
 
   const handleStartFresh = async () => {
-    if (!confirm('Are you sure you want to delete all feed posts and start fresh?')) return;
+    if (!confirm('Are you sure you want to delete all feed posts and start fresh?'))
+      return;
     try {
       await api.delete('/api/social/posts/purge-all');
       setPosts([]);
@@ -73,6 +91,11 @@ export default function SocialFeedPage() {
       console.error(err);
       setPosts([]);
     }
+  };
+
+  const handlePostDeleted = (deletedId: string) => {
+    // Instant optimistic update and cache strip
+    setPosts((prev) => prev.filter((p) => p.id !== deletedId));
   };
 
   return (
@@ -87,7 +110,9 @@ export default function SocialFeedPage() {
 
         {/* Refresh Feed & Start Fresh Action */}
         <div className="flex justify-between items-center px-1">
-          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Operator Streams</span>
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+            Operator Streams
+          </span>
           <div className="flex items-center gap-2">
             {isAdmin && (
               <button
@@ -102,6 +127,7 @@ export default function SocialFeedPage() {
               onClick={fetchFeed}
               disabled={loading}
               className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-900 transition-colors"
+              title="Refresh social feed"
             >
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
             </button>
@@ -114,14 +140,23 @@ export default function SocialFeedPage() {
             <div className="h-40 flex items-center justify-center">
               <Loader2 className="animate-spin text-blue-500" size={24} />
             </div>
-          ) : posts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              onSelect={setSelectedPost}
-              onDelete={(deletedId) => setPosts((prev) => prev.filter((p) => p.id !== deletedId))}
-            />
-          ))}
+          ) : posts.length === 0 ? (
+            <div className="py-12 text-center border border-dashed border-zinc-850 rounded-xl bg-zinc-950/20">
+              <p className="text-xs text-zinc-400 font-semibold">No posts on the feed yet.</p>
+              <p className="text-[10px] text-zinc-500 mt-1">
+                Be the first to share market charts, ideas, or analysis!
+              </p>
+            </div>
+          ) : (
+            posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onSelect={setSelectedPost}
+                onDelete={handlePostDeleted}
+              />
+            ))
+          )}
         </div>
       </div>
 
@@ -141,10 +176,20 @@ export default function SocialFeedPage() {
             ].map((item, idx) => (
               <div key={idx} className="flex justify-between items-center">
                 <div>
-                  <span className="text-xs font-bold text-white block">{item.symbol}</span>
-                  <span className="text-[8px] text-zinc-550">{item.posts} discussions</span>
+                  <span className="text-xs font-bold text-white block">
+                    {item.symbol}
+                  </span>
+                  <span className="text-[8px] text-zinc-550">
+                    {item.posts} discussions
+                  </span>
                 </div>
-                <span className={`text-[10px] font-bold ${item.change.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
+                <span
+                  className={`text-[10px] font-bold ${
+                    item.change.startsWith('+')
+                      ? 'text-emerald-400'
+                      : 'text-red-400'
+                  }`}
+                >
                   {item.change}
                 </span>
               </div>
@@ -165,11 +210,17 @@ export default function SocialFeedPage() {
                 <div className="flex items-center gap-2">
                   <Avatar name={expert.name} size="sm" />
                   <div>
-                    <span className="text-[10px] font-bold text-white block">{expert.name}</span>
-                    <span className="text-[8px] text-zinc-550">@{expert.handle}</span>
+                    <span className="text-[10px] font-bold text-white block">
+                      {expert.name}
+                    </span>
+                    <span className="text-[8px] text-zinc-550">
+                      @{expert.handle}
+                    </span>
                   </div>
                 </div>
-                <span className="text-[9px] text-zinc-400 font-semibold">{expert.followers} followers</span>
+                <span className="text-[9px] text-zinc-400 font-semibold">
+                  {expert.followers} followers
+                </span>
               </div>
             ))}
           </div>
@@ -184,7 +235,10 @@ export default function SocialFeedPage() {
           title="Operator Post Details"
         >
           <div className="space-y-4">
-            <PostCard post={selectedPost} />
+            <PostCard post={selectedPost} onDelete={() => {
+              handlePostDeleted(selectedPost.id);
+              setSelectedPost(null);
+            }} />
             <CommentThread postId={selectedPost.id} />
           </div>
         </Modal>

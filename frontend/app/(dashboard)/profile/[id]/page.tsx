@@ -8,14 +8,26 @@ import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { PostCard, Post } from '@/components/social/PostCard';
-import { CheckCircle2, UserPlus, UserMinus, Loader2, Sparkles, Edit3, Camera, MessageSquare } from 'lucide-react';
+import {
+  CheckCircle2,
+  UserPlus,
+  UserMinus,
+  Loader2,
+  Sparkles,
+  Edit3,
+  Camera,
+  MessageSquare,
+  Bookmark,
+  Share2,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 
 export default function ProfilePage() {
   const params = useParams();
   const router = useRouter();
   const { user: currentUser } = useAuth();
-  const userId = params.id as string;
+  const rawId = params.id as string;
+  const targetId = rawId === 'me' && currentUser?.id ? String(currentUser.id) : rawId;
 
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -24,13 +36,15 @@ export default function ProfilePage() {
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'about'>('posts');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchSavedPosts = async () => {
     setLoadingSaved(true);
     try {
       const res = await api.get('/api/social/posts/saved');
       if (Array.isArray(res)) {
-        setSavedPosts(res);
+        const unique = Array.from(new Map(res.map((p: any) => [String(p.id), p])).values());
+        setSavedPosts(unique as Post[]);
       }
     } catch (e) {
       console.error('Failed to load saved posts:', e);
@@ -56,30 +70,44 @@ export default function ProfilePage() {
   const [saveError, setSaveError] = useState('');
 
   const fetchProfile = async () => {
+    if (!targetId) return;
     setLoading(true);
+    setErrorMsg(null);
     try {
-      const response = await api.get(`/api/social/users/${userId}`);
-      if (response) {
+      const response = await api.get(`/api/social/users/${targetId}`);
+      if (response && response.id) {
         setProfile(response);
       }
       
-      const userPosts = await api.get(`/api/social/users/${userId}/posts`);
+      const userPosts = await api.get(`/api/social/users/${targetId}/posts`);
       if (Array.isArray(userPosts)) {
-        setPosts(userPosts);
+        const unique = Array.from(new Map(userPosts.map((p: any) => [String(p.id), p])).values());
+        setPosts(unique as Post[]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load profile details:', err);
-      setProfile({
-        id: userId,
-        username: 'analyst_pro',
-        displayName: 'Technical FX Analyst',
-        avatarUrl: undefined,
-        role: 'analyst',
-        bio: 'Senior currency strategist focusing on G10 forex setups.',
-        followersCount: 1420,
-        followingCount: 380,
-        isFollowing: false,
-      });
+      // If user is viewing their own profile via fallback
+      if (
+        currentUser &&
+        (String(currentUser.id) === targetId ||
+          currentUser.username === targetId ||
+          targetId === 'me')
+      ) {
+        setProfile({
+          id: String(currentUser.id),
+          username: currentUser.username,
+          displayName: currentUser.display_name || currentUser.username,
+          avatarUrl: currentUser.avatar_url,
+          role: currentUser.role || 'trader',
+          bio: currentUser.bio || 'FxZone Trader',
+          followersCount: (currentUser as any)?.followers_count || 0,
+          followingCount: (currentUser as any)?.following_count || 0,
+          isFollowing: false,
+        });
+      } else {
+        setErrorMsg('User profile not found or unavailable.');
+        setProfile(null);
+      }
       setPosts([]);
     } finally {
       setLoading(false);
@@ -88,7 +116,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
-  }, [userId]);
+  }, [targetId]);
 
   const handleFollowToggle = async () => {
     if (!profile || followLoading) return;
@@ -98,17 +126,29 @@ export default function ProfilePage() {
     setProfile((prev: any) => ({
       ...prev,
       isFollowing: !prevFollowing,
-      followersCount: prevFollowing ? prev.followersCount - 1 : prev.followersCount + 1,
+      followersCount: prevFollowing
+        ? Math.max(0, (prev.followersCount || 1) - 1)
+        : (prev.followersCount || 0) + 1,
     }));
 
     try {
-      await api.post(`/api/social/users/${userId}/follow`, {});
+      const res = await api.post(`/api/social/users/${profile.id || targetId}/follow`, {});
+      if (res) {
+        setProfile((prev: any) => ({
+          ...prev,
+          isFollowing: res.is_following,
+          followersCount: res.followers_count ?? prev.followersCount,
+          followingCount: res.following_count ?? prev.followingCount,
+        }));
+      }
     } catch (err) {
       console.error(err);
       setProfile((prev: any) => ({
         ...prev,
         isFollowing: prevFollowing,
-        followersCount: prevFollowing ? prev.followersCount + 1 : prev.followersCount - 1,
+        followersCount: prevFollowing
+          ? (prev.followersCount || 0) + 1
+          : Math.max(0, (prev.followersCount || 1) - 1),
       }));
     } finally {
       setFollowLoading(false);
@@ -138,14 +178,23 @@ export default function ProfilePage() {
           finalAvatarUrl = uploadRes.url;
         }
       }
-      await api.put('/api/auth/me', {
+
+      const res = await api.put('/api/auth/me', {
         username: editUsername.trim() || undefined,
         display_name: editDisplayName.trim() || undefined,
         bio: editBio.trim() || undefined,
         avatar_url: finalAvatarUrl || undefined,
       });
+
+      setProfile((prev: any) => ({
+        ...prev,
+        username: res.username || editUsername,
+        displayName: res.display_name || editDisplayName,
+        bio: res.bio || editBio,
+        avatarUrl: res.avatar_url || finalAvatarUrl,
+      }));
+
       setEditModalOpen(false);
-      setAvatarFile(null);
       fetchProfile();
     } catch (err: any) {
       console.error('Failed to update profile:', err);
@@ -178,7 +227,17 @@ export default function ProfilePage() {
     }
   };
 
-  const isSelf = currentUser?.id === userId;
+  const isSelf =
+    targetId === 'me' ||
+    String(currentUser?.id) === String(targetId) ||
+    String(currentUser?.id) === String(profile?.id) ||
+    currentUser?.username === targetId ||
+    currentUser?.username === profile?.username;
+
+  const handlePostDeleted = (deletedId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== deletedId));
+    setSavedPosts((prev) => prev.filter((p) => p.id !== deletedId));
+  };
 
   if (loading && !profile) {
     return (
@@ -188,14 +247,28 @@ export default function ProfilePage() {
     );
   }
 
+  if (errorMsg && !profile) {
+    return (
+      <div className="p-8 text-center max-w-lg mx-auto mt-12 border border-dashed border-zinc-850 rounded-2xl bg-zinc-950/40 space-y-4">
+        <p className="text-sm text-zinc-400 font-semibold">{errorMsg}</p>
+        <Button
+          onClick={() => router.push('/discover')}
+          className="bg-blue-600 hover:bg-blue-500 text-xs font-bold px-4"
+        >
+          Discover Other Traders
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6 select-none">
       {/* Cover Header Card */}
-      <Card className="border border-zinc-900 bg-zinc-950/40 overflow-hidden relative">
+      <Card className="border border-zinc-900 bg-zinc-950/40 overflow-hidden relative rounded-2xl">
         {/* Banner area */}
         <div className="h-32 bg-gradient-to-r from-blue-900/40 via-purple-900/40 to-pink-900/40 relative">
-          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-[8px] bg-black/60 border border-zinc-800 text-zinc-500 font-bold uppercase tracking-wider px-2 py-0.5 rounded">
-            FxZone Verified
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-[8px] bg-black/60 border border-zinc-800 text-zinc-400 font-bold uppercase tracking-wider px-2 py-0.5 rounded">
+            FxZone Trader Profile
           </div>
         </div>
 
@@ -210,9 +283,9 @@ export default function ProfilePage() {
               />
             </div>
             
-            <div className="mb-2">
+            <div className="mb-2 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="text-sm font-bold text-white leading-none">
+                <h3 className="text-sm font-bold text-white leading-none truncate">
                   {profile?.displayName || profile?.display_name || profile?.username}
                 </h3>
                 {(profile?.role === 'verified_educator' || profile?.role === 'analyst') && (
@@ -228,107 +301,117 @@ export default function ProfilePage() {
               <Button
                 onClick={openEditModal}
                 variant="outline"
-                className="h-8 text-xs font-semibold px-4 flex items-center gap-1.5"
+                size="sm"
+                className="h-8 text-xs font-semibold flex items-center gap-1.5 border-zinc-800 hover:border-zinc-700 bg-zinc-900"
               >
-                <Edit3 size={12} />
+                <Edit3 size={13} />
                 <span>Edit Profile</span>
               </Button>
-            ) : profile?.username !== 'fxzone_bot' && profile?.role !== 'bot' ? (
+            ) : (
               <>
                 <Button
+                  onClick={handleDirectMessage}
+                  disabled={startingChat}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs font-semibold flex items-center gap-1.5 border-zinc-800 hover:border-zinc-700 bg-zinc-900"
+                >
+                  <MessageSquare size={13} className="text-blue-400" />
+                  <span>{startingChat ? 'Connecting...' : 'Direct Chat'}</span>
+                </Button>
+
+                <Button
                   onClick={handleFollowToggle}
-                  variant={profile?.isFollowing ? 'outline' : 'primary'}
-                  className="h-8 text-xs font-semibold px-4 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500"
                   disabled={followLoading}
+                  size="sm"
+                  className={`h-8 text-xs font-bold px-4 flex items-center gap-1.5 ${
+                    profile?.isFollowing
+                      ? 'bg-zinc-800 hover:bg-red-600/20 hover:text-red-400 hover:border-red-500/30 text-zinc-300'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white'
+                  }`}
                 >
                   {followLoading ? (
-                    <Loader2 size={12} className="animate-spin" />
+                    <Loader2 size={13} className="animate-spin" />
                   ) : profile?.isFollowing ? (
                     <>
-                      <UserMinus size={12} />
+                      <UserMinus size={13} />
                       <span>Unfollow</span>
                     </>
                   ) : (
                     <>
-                      <UserPlus size={12} />
+                      <UserPlus size={13} />
                       <span>Follow</span>
                     </>
                   )}
                 </Button>
-
-                <Button
-                  onClick={handleDirectMessage}
-                  variant="outline"
-                  className="h-8 text-xs font-semibold px-3 flex items-center gap-1.5 border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-200 hover:text-white"
-                  disabled={startingChat}
-                  title="Direct Message"
-                >
-                  {startingChat ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <>
-                      <MessageSquare size={12} className="text-purple-400" />
-                      <span>Message</span>
-                    </>
-                  )}
-                </Button>
               </>
-            ) : null}
+            )}
           </div>
         </div>
 
-        {/* Biography and Stats Summary */}
-        <div className="px-6 pb-6 pt-2 border-t border-zinc-900/60 flex flex-col sm:flex-row justify-between items-start gap-4">
-          <div className="max-w-md">
-            <p className="text-xs text-zinc-400 leading-relaxed">{profile?.bio || 'No biography configured.'}</p>
-          </div>
-          
-          <div className="flex gap-6 shrink-0 pt-1">
+        {/* Bio & Stats Bar */}
+        <div className="px-6 pb-6 pt-0 border-t border-zinc-900 mt-2">
+          {profile?.bio && (
+            <p className="text-xs text-zinc-300 leading-relaxed my-3">{profile.bio}</p>
+          )}
+
+          <div className="flex gap-6 mt-4 pt-3 border-t border-zinc-900/60 text-xs">
             <div>
-              <span className="text-xs font-bold text-zinc-200 block leading-tight">{posts.length}</span>
-              <span className="text-[9px] text-zinc-500 font-medium">Ideas</span>
+              <span className="font-bold text-white block">
+                {profile?.followersCount ?? profile?.followers_count ?? 0}
+              </span>
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Followers</span>
             </div>
-            {profile?.username !== 'fxzone_bot' && profile?.role !== 'bot' && (
-              <>
-                <div>
-                  <span className="text-xs font-bold text-zinc-200 block leading-tight">{profile?.followersCount || profile?.followers_count || 0}</span>
-                  <span className="text-[9px] text-zinc-500 font-medium">Followers</span>
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-zinc-200 block leading-tight">{profile?.followingCount || profile?.following_count || 0}</span>
-                  <span className="text-[9px] text-zinc-500 font-medium">Following</span>
-                </div>
-              </>
-            )}
+            <div>
+              <span className="font-bold text-white block">
+                {profile?.followingCount ?? profile?.following_count ?? 0}
+              </span>
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Following</span>
+            </div>
+            <div>
+              <span className="font-bold text-white block">{posts.length}</span>
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Posts</span>
+            </div>
           </div>
         </div>
       </Card>
 
       {/* Tabs */}
-      <div className="flex gap-4 border-b border-zinc-900 select-none pb-1">
+      <div className="flex gap-2 border-b border-zinc-850 pb-2">
         <button
           onClick={() => setActiveTab('posts')}
-          className={`text-xs font-bold pb-2 transition-colors border-b-2 -mb-[9px] px-2 ${
-            activeTab === 'posts' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            activeTab === 'posts'
+              ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20'
+              : 'text-zinc-500 hover:text-white'
           }`}
         >
-          Trading Ideas
+          Shared Analysis ({posts.length})
         </button>
-        <button
-          onClick={() => setActiveTab('saved')}
-          className={`text-xs font-bold pb-2 transition-colors border-b-2 -mb-[9px] px-2 ${
-            activeTab === 'saved' ? 'border-purple-500 text-purple-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'
-          }`}
-        >
-          Saved Setups
-        </button>
+
+        {isSelf && (
+          <button
+            onClick={() => setActiveTab('saved')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+              activeTab === 'saved'
+                ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20'
+                : 'text-zinc-500 hover:text-white'
+            }`}
+          >
+            <Bookmark size={12} />
+            <span>Saved Bookmarks</span>
+          </button>
+        )}
+
         <button
           onClick={() => setActiveTab('about')}
-          className={`text-xs font-bold pb-2 transition-colors border-b-2 -mb-[9px] px-2 ${
-            activeTab === 'about' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            activeTab === 'about'
+              ? 'bg-purple-600/15 text-purple-400 border border-purple-500/20'
+              : 'text-zinc-500 hover:text-white'
           }`}
         >
-          About Operator
+          About Trader
         </button>
       </div>
 
@@ -336,11 +419,13 @@ export default function ProfilePage() {
       {activeTab === 'posts' ? (
         <div className="space-y-4">
           {posts.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-zinc-900 rounded-xl bg-zinc-950/10">
+            <div className="text-center py-12 border border-dashed border-zinc-850 rounded-xl bg-zinc-950/20">
               <p className="text-xs text-zinc-500 italic">No trading ideas have been posted yet.</p>
             </div>
           ) : (
-            posts.map((post) => <PostCard key={post.id} post={post} />)
+            posts.map((post) => (
+              <PostCard key={post.id} post={post} onDelete={handlePostDeleted} />
+            ))
           )}
         </div>
       ) : activeTab === 'saved' ? (
@@ -350,27 +435,37 @@ export default function ProfilePage() {
               <Loader2 className="animate-spin text-purple-500" size={20} />
             </div>
           ) : savedPosts.length === 0 ? (
-            <div className="text-center py-12 border border-dashed border-zinc-900 rounded-xl bg-zinc-950/10">
-              <p className="text-xs text-zinc-500 italic">No saved posts found. Bookmark market setups to access them here!</p>
+            <div className="text-center py-12 border border-dashed border-zinc-850 rounded-xl bg-zinc-950/20">
+              <p className="text-xs text-zinc-500 italic">
+                No saved posts found. Bookmark market setups to access them here!
+              </p>
             </div>
           ) : (
-            savedPosts.map((post) => <PostCard key={post.id} post={post} />)
+            savedPosts.map((post) => (
+              <PostCard key={post.id} post={post} onDelete={handlePostDeleted} />
+            ))
           )}
         </div>
       ) : (
-        <Card className="p-6 border border-zinc-900 bg-zinc-950/20 space-y-4">
+        <Card className="p-6 border border-zinc-900 bg-zinc-950/20 space-y-4 rounded-xl">
           <div>
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Network Role Details</h4>
+            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+              Network Role Details
+            </h4>
             <span className="text-xs font-semibold text-white capitalize flex items-center gap-1.5">
               <Sparkles size={13} className="text-purple-400" /> {profile?.role?.replace('_', ' ')}
             </span>
           </div>
           <div>
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">About</h4>
+            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+              About
+            </h4>
             <p className="text-xs text-zinc-300 leading-relaxed">{profile?.bio || 'No bio set.'}</p>
           </div>
           <div>
-            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Username</h4>
+            <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+              Username
+            </h4>
             <span className="text-xs text-zinc-300">@{profile?.username}</span>
           </div>
         </Card>
@@ -411,74 +506,53 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-            {/* Username */}
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1">Username</label>
-              <input
-                type="text"
-                value={editUsername}
-                onChange={(e) => setEditUsername(e.target.value)}
-                placeholder="Your unique username"
-                className="w-full h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
-              />
-            </div>
+
             {/* Display Name */}
             <div>
-              <label className="text-[10px] text-zinc-400 block mb-1">Display Name (Real Name)</label>
+              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">Display Name</label>
               <input
                 type="text"
                 value={editDisplayName}
                 onChange={(e) => setEditDisplayName(e.target.value)}
-                placeholder="Your real name"
-                className="w-full h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                placeholder="Your trading persona name"
+                className="w-full h-8 bg-zinc-950 border border-zinc-850 rounded px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
               />
             </div>
+
             {/* Bio */}
             <div>
-              <label className="text-[10px] text-zinc-400 block mb-1">About Operator</label>
+              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">Bio & Strategies</label>
               <textarea
                 value={editBio}
                 onChange={(e) => setEditBio(e.target.value)}
-                placeholder="Tell others about your trading style..."
-                rows={3}
-                className="w-full bg-zinc-950 border border-zinc-850 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700 resize-none"
+                placeholder="Short bio, experience, favorite currency pairs, or analysis methodologies..."
+                className="w-full h-20 bg-zinc-950 border border-zinc-850 rounded p-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700 resize-none"
               />
             </div>
-            {/* Error Display */}
+
             {saveError && (
-              <p className="text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{saveError}</p>
+              <p className="text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded">
+                {saveError}
+              </p>
             )}
-            {/* Actions */}
-            <div className="flex justify-between items-center pt-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (confirm('Are you absolutely sure you want to delete your account? All your posts, comments, messages, and profile data will be permanently purged!')) {
-                    try {
-                      await api.delete('/api/social/users/me');
-                      localStorage.removeItem('fxzone_access_token');
-                      localStorage.removeItem('fxzone_user');
-                      alert('Your account and all associated data have been permanently deleted.');
-                      window.location.href = '/login';
-                    } catch (err: any) {
-                      console.error('Account deletion error:', err);
-                      const errMsg = err?.detail || err?.message || 'Failed to delete account. Please try again.';
-                      alert(`Account Deletion Error: ${errMsg}`);
-                    }
-                  }
-                }}
-                className="text-[10px] text-rose-500 hover:text-rose-400 font-bold underline"
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditModalOpen(false)}
+                disabled={saving}
               >
-                Delete Account
-              </button>
-              <div className="flex gap-2">
-                <Button size="sm" variant="ghost" onClick={() => setEditModalOpen(false)} disabled={saving}>
-                  Cancel
-                </Button>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-500" onClick={handleSaveProfile} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-500 font-bold text-xs"
+                onClick={handleSaveProfile}
+                disabled={saving}
+              >
+                {saving ? 'Saving Changes...' : 'Save Profile'}
+              </Button>
             </div>
           </div>
         </Modal>

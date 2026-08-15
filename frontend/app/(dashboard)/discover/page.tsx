@@ -236,7 +236,15 @@ export default function DiscoverPage() {
               key={u.id}
               className="p-4 border border-zinc-850 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors group"
             >
-              <div className="flex items-start gap-3">
+              <div
+                className="flex items-start gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => {
+                  if (u.username !== 'fxzone_bot') {
+                    window.location.href = `/profile/${u.id || u.username}`;
+                  }
+                }}
+                title={`View @${u.username}'s profile`}
+              >
                 <Avatar
                   src={u.avatar_url || undefined}
                   name={u.display_name || u.username}
@@ -244,7 +252,7 @@ export default function DiscoverPage() {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <h3 className="text-xs font-bold text-white truncate">
+                    <h3 className="text-xs font-bold text-white truncate hover:text-blue-400 transition-colors">
                       {u.display_name || u.username}
                     </h3>
                     {getRoleBadge(u.role)}

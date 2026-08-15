@@ -333,8 +333,18 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       className="p-4 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer rounded-xl"
     >
       <div className="flex gap-3">
-        {/* User Avatar */}
-        <div className="shrink-0">
+        {/* User Avatar - clickable to view profile */}
+        <div
+          className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation();
+            const target = postUser.id || postUser.username;
+            if (target && postUser.username !== 'fxzone_bot') {
+              window.location.href = `/profile/${target}`;
+            }
+          }}
+          title={`View @${postUser.username}'s profile`}
+        >
           <Avatar
             src={postUser.avatarUrl}
             alt={postUser.displayName || postUser.username}
@@ -346,8 +356,18 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-center justify-between gap-2 mb-1.5 select-none">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-semibold text-white truncate max-w-[140px]">
+            <div
+              className="flex items-center gap-1.5 flex-wrap cursor-pointer group/author"
+              onClick={(e) => {
+                e.stopPropagation();
+                const target = postUser.id || postUser.username;
+                if (target && postUser.username !== 'fxzone_bot') {
+                  window.location.href = `/profile/${target}`;
+                }
+              }}
+              title={`View @${postUser.username}'s profile`}
+            >
+              <span className="text-xs font-semibold text-white truncate max-w-[140px] group-hover/author:text-blue-400 group-hover/author:underline transition-colors">
                 {postUser.displayName || postUser.username}
               </span>
               <span className="text-[10px] text-zinc-500 truncate max-w-[90px]">

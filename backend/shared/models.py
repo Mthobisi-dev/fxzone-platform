@@ -225,12 +225,13 @@ class Comment(Base):
 # ============================================================
 class Reaction(Base):
     __tablename__ = "reactions"
-    __table_args__ = (UniqueConstraint("user_id", "post_id"),)
+    # Unique per user + post + reaction_type so a user can both 'like' AND 'repost' the same post
+    __table_args__ = (UniqueConstraint("user_id", "post_id", "reaction_type", name="uq_reaction_user_post_type"),)
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     post_id = Column(UUID(as_uuid=True), ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
-    reaction_type = Column(String(20), default="like")
+    reaction_type = Column(String(20), default="like", nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
     post = relationship("Post", back_populates="reactions")
