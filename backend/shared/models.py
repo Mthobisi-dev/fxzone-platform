@@ -186,6 +186,11 @@ class Post(Base):
     reposts_count = Column(Integer, default=0)
     is_story = Column(Boolean, default=False)
     is_pinned = Column(Boolean, default=False)
+    show_comments_count = Column(Boolean, default=True)
+    show_likes_count = Column(Boolean, default=True)
+    allow_reshare = Column(Boolean, default=True)
+    allow_save = Column(Boolean, default=True)
+    allow_share = Column(Boolean, default=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 

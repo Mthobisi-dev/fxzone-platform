@@ -19,6 +19,13 @@ import {
   Radio,
   Play,
   Pause,
+  SlidersHorizontal,
+  MessageSquare,
+  Heart,
+  Repeat2,
+  Bookmark,
+  Share2,
+  Check,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -58,6 +65,14 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Post Action & Visibility Options
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showCommentsCount, setShowCommentsCount] = useState(true);
+  const [showLikesCount, setShowLikesCount] = useState(true);
+  const [allowReshare, setAllowReshare] = useState(true);
+  const [allowSave, setAllowSave] = useState(true);
+  const [allowShare, setAllowShare] = useState(true);
 
   // Voice Note Recording
   const [isRecording, setIsRecording] = useState(false);
@@ -207,6 +222,11 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         content: finalContent,
         image_url: primaryUrl,
         asset_tags: assetTags,
+        show_comments_count: showCommentsCount,
+        show_likes_count: showLikesCount,
+        allow_reshare: allowReshare,
+        allow_save: allowSave,
+        allow_share: allowShare,
       });
 
       // Reset state
@@ -216,6 +236,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         if (m.previewUrl) URL.revokeObjectURL(m.previewUrl);
       });
       setMediaFiles([]);
+      setShowOptionsModal(false);
       setIsExpanded(false);
 
       onPostCreated?.();
@@ -474,7 +495,126 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                     <Paperclip size={14} className="text-orange-400" />
                     <span className="hidden sm:inline">File</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowOptionsModal((prev) => !prev)}
+                    className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] ${
+                      showOptionsModal || (!showCommentsCount || !showLikesCount || !allowReshare || !allowSave || !allowShare)
+                        ? 'bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30'
+                        : 'hover:bg-zinc-850 text-zinc-400 hover:text-white'
+                    }`}
+                    title="Configure Post Privacy & Interaction Controls"
+                  >
+                    <SlidersHorizontal size={13} className="text-purple-400" />
+                    <span>Options</span>
+                  </button>
                 </div>
+
+                {/* Post Options Drawer */}
+                {showOptionsModal && (
+                  <div className="p-3 bg-zinc-950/90 border border-zinc-800 rounded-xl space-y-2 text-xs text-zinc-300 mt-2 shadow-xl">
+                    <div className="flex items-center justify-between pb-1 border-b border-zinc-850">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                        <SlidersHorizontal size={12} className="text-purple-400" /> Interaction & Counter Controls
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowOptionsModal(false)}
+                        className="text-zinc-500 hover:text-white"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {/* Comments Counter */}
+                      <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-zinc-850 cursor-pointer hover:border-zinc-700 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare size={13} className="text-blue-400" />
+                          <div>
+                            <span className="text-[11px] font-semibold text-white block">Comments Count</span>
+                            <span className="text-[9px] text-zinc-500 block">Show total comments counter</span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={showCommentsCount}
+                          onChange={(e) => setShowCommentsCount(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-zinc-700 text-blue-600 focus:ring-0 bg-zinc-800"
+                        />
+                      </label>
+
+                      {/* Likes Counter */}
+                      <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-zinc-850 cursor-pointer hover:border-zinc-700 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <Heart size={13} className="text-rose-400" />
+                          <div>
+                            <span className="text-[11px] font-semibold text-white block">Likes Counter</span>
+                            <span className="text-[9px] text-zinc-500 block">Show total likes counter</span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={showLikesCount}
+                          onChange={(e) => setShowLikesCount(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-zinc-700 text-rose-600 focus:ring-0 bg-zinc-800"
+                        />
+                      </label>
+
+                      {/* Allow Reshare */}
+                      <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-zinc-850 cursor-pointer hover:border-zinc-700 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <Repeat2 size={13} className="text-emerald-400" />
+                          <div>
+                            <span className="text-[11px] font-semibold text-white block">Allow Reshares</span>
+                            <span className="text-[9px] text-zinc-500 block">Enable repost button</span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={allowReshare}
+                          onChange={(e) => setAllowReshare(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-zinc-700 text-emerald-600 focus:ring-0 bg-zinc-800"
+                        />
+                      </label>
+
+                      {/* Allow Save */}
+                      <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-zinc-850 cursor-pointer hover:border-zinc-700 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <Bookmark size={13} className="text-yellow-400" />
+                          <div>
+                            <span className="text-[11px] font-semibold text-white block">Allow Saving</span>
+                            <span className="text-[9px] text-zinc-500 block">Enable save/bookmark button</span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={allowSave}
+                          onChange={(e) => setAllowSave(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-zinc-700 text-yellow-600 focus:ring-0 bg-zinc-800"
+                        />
+                      </label>
+
+                      {/* Allow Share */}
+                      <label className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-zinc-850 cursor-pointer hover:border-zinc-700 transition-colors sm:col-span-2">
+                        <div className="flex items-center gap-2">
+                          <Share2 size={13} className="text-cyan-400" />
+                          <div>
+                            <span className="text-[11px] font-semibold text-white block">Allow Sharing</span>
+                            <span className="text-[9px] text-zinc-500 block">Enable copy link and DM sharing</span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={allowShare}
+                          onChange={(e) => setAllowShare(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-zinc-700 text-cyan-600 focus:ring-0 bg-zinc-800"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-2">
                   <Button

@@ -365,10 +365,10 @@ async def get_saved_posts(
     formatted = []
     for p in posts:
         formatted.append({
-            "id": p.id,
-            "user_id": p.user_id,
+            "id": str(p.id),
+            "user_id": str(p.user_id),
             "user": {
-                "id": p.user.id,
+                "id": str(p.user.id),
                 "username": p.user.username,
                 "display_name": p.user.display_name or p.user.username,
                 "avatar_url": p.user.avatar_url,
@@ -382,6 +382,11 @@ async def get_saved_posts(
             "reposts_count": p.reposts_count or 0,
             "is_story": p.is_story or False,
             "is_pinned": getattr(p, "is_pinned", False),
+            "show_comments_count": getattr(p, "show_comments_count", True) if getattr(p, "show_comments_count", None) is not None else True,
+            "show_likes_count": getattr(p, "show_likes_count", True) if getattr(p, "show_likes_count", None) is not None else True,
+            "allow_reshare": getattr(p, "allow_reshare", True) if getattr(p, "allow_reshare", None) is not None else True,
+            "allow_save": getattr(p, "allow_save", True) if getattr(p, "allow_save", None) is not None else True,
+            "allow_share": getattr(p, "allow_share", True) if getattr(p, "allow_share", None) is not None else True,
             "expires_at": p.expires_at,
             "created_at": p.created_at,
             "is_liked_by_user": False,
@@ -389,6 +394,26 @@ async def get_saved_posts(
             "is_bookmarked_by_user": True
         })
     return formatted
+
+
+@router.get("/featured-experts")
+async def get_featured_experts(
+    limit: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db)
+):
+    """Fetch featured traders and analysts with real database followers."""
+    service = SocialService(db)
+    return await service.get_featured_experts(limit=limit)
+
+
+@router.get("/trending-symbols")
+async def get_trending_symbols(
+    limit: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db)
+):
+    """Fetch active trending trading symbols with real discussion stats."""
+    service = SocialService(db)
+    return await service.get_trending_symbols(limit=limit)
 
 
 @router.delete("/users/me")

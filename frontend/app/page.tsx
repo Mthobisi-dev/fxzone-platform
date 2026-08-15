@@ -87,10 +87,9 @@ export default function LandingPage() {
         if (res.ok) {
           const users = await res.json();
           const count = Array.isArray(users) ? users.length : 1;
-          const activeTradersVal = count > 10 ? count : count + 1420;
           setSystemStats({
-            monthlyVolume: `$${(count * 1.25).toFixed(1)}B+`,
-            activeTraders: activeTradersVal > 1000 ? `${(activeTradersVal / 1000).toFixed(1)}K+` : `${activeTradersVal}+`,
+            monthlyVolume: `$${(Math.max(1, count) * 0.25).toFixed(1)}M+`,
+            activeTraders: count > 1000 ? `${(count / 1000).toFixed(1)}K+` : `${count}`,
             executionLatency: '12ms',
             platformUptime: '99.99%',
           });

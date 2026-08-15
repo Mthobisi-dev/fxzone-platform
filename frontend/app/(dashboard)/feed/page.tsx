@@ -23,6 +23,54 @@ export default function SocialFeedPage() {
   const [loading, setLoading] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
+  // Sidebar dynamic real data
+  const [trendingSymbols, setTrendingSymbols] = useState<any[]>([]);
+  const [featuredExperts, setFeaturedExperts] = useState<any[]>([]);
+
+  const fetchSidebarData = async () => {
+    try {
+      const [trendRes, expertRes, quotesRes] = await Promise.allSettled([
+        api.get('/api/social/trending-symbols'),
+        api.get('/api/social/featured-experts'),
+        api.get('/api/market/quotes'),
+      ]);
+
+      const quotesMap = new Map<string, any>();
+      if (quotesRes.status === 'fulfilled' && Array.isArray(quotesRes.value)) {
+        quotesRes.value.forEach((q: any) => quotesMap.set(q.symbol, q));
+      }
+
+      if (trendRes.status === 'fulfilled' && Array.isArray(trendRes.value)) {
+        setTrendingSymbols(
+          trendRes.value.map((t: any) => {
+            const q = quotesMap.get(t.symbol);
+            const changePercent = q?.change_percent ?? q?.changePercent;
+            return {
+              symbol: t.symbol,
+              posts: t.posts ?? 0,
+              change: changePercent !== undefined ? `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%` : '0.00%',
+              price: q?.price ?? null,
+            };
+          })
+        );
+      } else {
+        // Default standard active pairs if none
+        setTrendingSymbols([
+          { symbol: 'BTCUSD', posts: 0, change: '+0.00%' },
+          { symbol: 'EURUSD', posts: 0, change: '+0.00%' },
+          { symbol: 'AAPL', posts: 0, change: '+0.00%' },
+          { symbol: 'SOLUSD', posts: 0, change: '+0.00%' },
+        ]);
+      }
+
+      if (expertRes.status === 'fulfilled' && Array.isArray(expertRes.value)) {
+        setFeaturedExperts(expertRes.value);
+      }
+    } catch (e) {
+      console.error('Failed to load sidebar data:', e);
+    }
+  };
+
   const fetchFeed = async () => {
     setLoading(true);
     try {
@@ -48,6 +96,11 @@ export default function SocialFeedPage() {
           likesCount: p.likes_count ?? p.likesCount ?? 0,
           commentsCount: p.comments_count ?? p.commentsCount ?? 0,
           repostsCount: p.reposts_count ?? p.repostsCount ?? 0,
+          showCommentsCount: p.show_comments_count ?? p.showCommentsCount ?? true,
+          showLikesCount: p.show_likes_count ?? p.showLikesCount ?? true,
+          allowReshare: p.allow_reshare ?? p.allowReshare ?? true,
+          allowSave: p.allow_save ?? p.allowSave ?? true,
+          allowShare: p.allow_share ?? p.allowShare ?? true,
           isLikedByUser: p.is_liked_by_user ?? p.isLikedByUser ?? false,
           isRepostedByUser: p.is_reposted_by_user ?? p.isRepostedByUser ?? false,
           isBookmarkedByUser:
@@ -76,7 +129,11 @@ export default function SocialFeedPage() {
 
   useEffect(() => {
     fetchFeed();
-    const handleRefresh = () => fetchFeed();
+    fetchSidebarData();
+    const handleRefresh = () => {
+      fetchFeed();
+      fetchSidebarData();
+    };
     window.addEventListener('fxzone_refresh_feed', handleRefresh);
     return () => window.removeEventListener('fxzone_refresh_feed', handleRefresh);
   }, []);
@@ -106,7 +163,10 @@ export default function SocialFeedPage() {
         <StoryBar />
 
         {/* Composer */}
-        <PostComposer onPostCreated={fetchFeed} />
+        <PostComposer onPostCreated={() => {
+          fetchFeed();
+          fetchSidebarData();
+        }} />
 
         {/* Refresh Feed & Start Fresh Action */}
         <div className="flex justify-between items-center px-1">
@@ -124,7 +184,10 @@ export default function SocialFeedPage() {
               </button>
             )}
             <button
-              onClick={fetchFeed}
+              onClick={() => {
+                fetchFeed();
+                fetchSidebarData();
+              }}
               disabled={loading}
               className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-900 transition-colors"
               title="Refresh social feed"
@@ -168,32 +231,31 @@ export default function SocialFeedPage() {
             <TrendingUp size={14} className="text-emerald-400" /> Trending Symbols
           </h4>
           <div className="space-y-3">
-            {[
-              { symbol: 'BTCUSD', posts: 1420, change: '+4.5%' },
-              { symbol: 'EURUSD', posts: 890, change: '-0.12%' },
-              { symbol: 'AAPL', posts: 560, change: '+1.8%' },
-              { symbol: 'SOLUSD', posts: 490, change: '+6.2%' },
-            ].map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-bold text-white block">
-                    {item.symbol}
-                  </span>
-                  <span className="text-[8px] text-zinc-550">
-                    {item.posts} discussions
+            {trendingSymbols.length === 0 ? (
+              <p className="text-[10px] text-zinc-500 italic">Loading market symbols...</p>
+            ) : (
+              trendingSymbols.map((item, idx) => (
+                <div key={idx} className="flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-bold text-white block">
+                      {item.symbol}
+                    </span>
+                    <span className="text-[8px] text-zinc-500">
+                      {item.posts > 0 ? `${item.posts} discussions` : 'Market Active'}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-[10px] font-bold ${
+                      item.change?.startsWith('+')
+                        ? 'text-emerald-400'
+                        : 'text-red-400'
+                    }`}
+                  >
+                    {item.change}
                   </span>
                 </div>
-                <span
-                  className={`text-[10px] font-bold ${
-                    item.change.startsWith('+')
-                      ? 'text-emerald-400'
-                      : 'text-red-400'
-                  }`}
-                >
-                  {item.change}
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
 
@@ -203,26 +265,28 @@ export default function SocialFeedPage() {
             <Sparkles size={14} className="text-purple-400" /> Featured Experts
           </h4>
           <div className="space-y-3">
-            {[
-              { name: 'FxZone Bot', handle: 'fxzone_bot', followers: '2.1K' },
-            ].map((expert, idx) => (
-              <div key={idx} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Avatar name={expert.name} size="sm" />
-                  <div>
-                    <span className="text-[10px] font-bold text-white block">
-                      {expert.name}
-                    </span>
-                    <span className="text-[8px] text-zinc-550">
-                      @{expert.handle}
-                    </span>
+            {featuredExperts.length === 0 ? (
+              <p className="text-[10px] text-zinc-500 italic">No registered experts yet.</p>
+            ) : (
+              featuredExperts.map((expert, idx) => (
+                <div key={idx} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Avatar name={expert.name} src={expert.avatar_url} size="sm" />
+                    <div>
+                      <span className="text-[10px] font-bold text-white block truncate max-w-[100px]">
+                        {expert.name}
+                      </span>
+                      <span className="text-[8px] text-zinc-500 block truncate max-w-[100px]">
+                        @{expert.handle}
+                      </span>
+                    </div>
                   </div>
+                  <span className="text-[9px] text-zinc-400 font-semibold">
+                    {expert.followers} {expert.followers === 1 ? 'follower' : 'followers'}
+                  </span>
                 </div>
-                <span className="text-[9px] text-zinc-400 font-semibold">
-                  {expert.followers} followers
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
       </div>

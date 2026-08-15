@@ -56,7 +56,39 @@ export default function ProfilePage() {
     try {
       const res = await api.get('/api/social/posts/saved');
       if (Array.isArray(res)) {
-        const unique = Array.from(new Map(res.map((p: any) => [String(p.id), p])).values());
+        const mapped = res.map((p: any) => ({
+          id: String(p.id),
+          userId: String(p.user_id || p.userId),
+          user: {
+            id: String(p.user?.id || p.user_id || p.userId),
+            username: p.user?.username || '',
+            displayName:
+              p.user?.display_name ||
+              p.user?.displayName ||
+              p.user?.username ||
+              '',
+            avatarUrl: p.user?.avatar_url || p.user?.avatarUrl,
+            role: p.user?.role || 'trader',
+          },
+          content: p.content,
+          imageUrl: p.image_url || p.imageUrl,
+          assetTags: p.asset_tags || p.assetTags || [],
+          likesCount: p.likes_count ?? p.likesCount ?? 0,
+          commentsCount: p.comments_count ?? p.commentsCount ?? 0,
+          repostsCount: p.reposts_count ?? p.repostsCount ?? 0,
+          showCommentsCount: p.show_comments_count ?? p.showCommentsCount ?? true,
+          showLikesCount: p.show_likes_count ?? p.showLikesCount ?? true,
+          allowReshare: p.allow_reshare ?? p.allowReshare ?? true,
+          allowSave: p.allow_save ?? p.allowSave ?? true,
+          allowShare: p.allow_share ?? p.allowShare ?? true,
+          isLikedByUser: p.is_liked_by_user ?? p.isLikedByUser ?? false,
+          isRepostedByUser: p.is_reposted_by_user ?? p.isRepostedByUser ?? false,
+          isBookmarkedByUser: true,
+          isPinned: p.is_pinned ?? p.isPinned ?? false,
+          createdAt: p.created_at || p.createdAt || new Date().toISOString(),
+        }));
+
+        const unique = Array.from(new Map(mapped.map((p: any) => [String(p.id), p])).values());
         setSavedPosts(unique as Post[]);
       }
     } catch (e) {
@@ -94,7 +126,38 @@ export default function ProfilePage() {
       
       const userPosts = await api.get(`/api/social/users/${targetId}/posts`);
       if (Array.isArray(userPosts)) {
-        const unique = Array.from(new Map(userPosts.map((p: any) => [String(p.id), p])).values());
+        const mapped = userPosts.map((p: any) => ({
+          id: String(p.id),
+          userId: String(p.user_id || p.userId),
+          user: {
+            id: String(p.user?.id || p.user_id || p.userId),
+            username: p.user?.username || '',
+            displayName:
+              p.user?.display_name ||
+              p.user?.displayName ||
+              p.user?.username ||
+              '',
+            avatarUrl: p.user?.avatar_url || p.user?.avatarUrl,
+            role: p.user?.role || 'trader',
+          },
+          content: p.content,
+          imageUrl: p.image_url || p.imageUrl,
+          assetTags: p.asset_tags || p.assetTags || [],
+          likesCount: p.likes_count ?? p.likesCount ?? 0,
+          commentsCount: p.comments_count ?? p.commentsCount ?? 0,
+          repostsCount: p.reposts_count ?? p.repostsCount ?? 0,
+          showCommentsCount: p.show_comments_count ?? p.showCommentsCount ?? true,
+          showLikesCount: p.show_likes_count ?? p.showLikesCount ?? true,
+          allowReshare: p.allow_reshare ?? p.allowReshare ?? true,
+          allowSave: p.allow_save ?? p.allowSave ?? true,
+          allowShare: p.allow_share ?? p.allowShare ?? true,
+          isLikedByUser: p.is_liked_by_user ?? p.isLikedByUser ?? false,
+          isRepostedByUser: p.is_reposted_by_user ?? p.isRepostedByUser ?? false,
+          isBookmarkedByUser: p.is_bookmarked_by_user ?? p.isBookmarkedByUser ?? false,
+          isPinned: p.is_pinned ?? p.isPinned ?? false,
+          createdAt: p.created_at || p.createdAt || new Date().toISOString(),
+        }));
+        const unique = Array.from(new Map(mapped.map((p: any) => [String(p.id), p])).values());
         setPosts(unique as Post[]);
       }
     } catch (err: any) {

@@ -50,6 +50,11 @@ class PostCreate(BaseModel):
     image_url: Optional[str] = Field(None, description="Optional image/chart URL attached to the post.")
     asset_tags: List[str] = Field(default_factory=list, description="Assets tagged in this post, e.g. ['BTCUSD'].")
     is_story: bool = Field(False, description="Whether this is a 24h expiring story.")
+    show_comments_count: Optional[bool] = Field(True, description="Whether to display the comments counter.")
+    show_likes_count: Optional[bool] = Field(True, description="Whether to display the likes counter.")
+    allow_reshare: Optional[bool] = Field(True, description="Whether users can reshare/repost this post.")
+    allow_save: Optional[bool] = Field(True, description="Whether users can bookmark/save this post.")
+    allow_share: Optional[bool] = Field(True, description="Whether users can share this post.")
 
 
 class PostResponse(camel_model):
@@ -65,6 +70,11 @@ class PostResponse(camel_model):
     reposts_count: int
     is_story: bool
     is_pinned: Optional[bool] = False
+    show_comments_count: Optional[bool] = True
+    show_likes_count: Optional[bool] = True
+    allow_reshare: Optional[bool] = True
+    allow_save: Optional[bool] = True
+    allow_share: Optional[bool] = True
     expires_at: Optional[datetime] = None
     created_at: datetime
     is_liked_by_user: Optional[bool] = False

@@ -54,6 +54,11 @@ class SocialService:
             image_url=data.image_url,
             tagged_assets=tagged_assets,
             is_story=data.is_story,
+            show_comments_count=True if data.show_comments_count is None else data.show_comments_count,
+            show_likes_count=True if data.show_likes_count is None else data.show_likes_count,
+            allow_reshare=True if data.allow_reshare is None else data.allow_reshare,
+            allow_save=True if data.allow_save is None else data.allow_save,
+            allow_share=True if data.allow_share is None else data.allow_share,
             expires_at=expires_at,
             created_at=now,
             likes_count=0,
@@ -122,6 +127,11 @@ class SocialService:
             "reposts_count": max(p.reposts_count or 0, actual_reposts),
             "is_story": p.is_story or False,
             "is_pinned": getattr(p, "is_pinned", False),
+            "show_comments_count": getattr(p, "show_comments_count", True) if getattr(p, "show_comments_count", None) is not None else True,
+            "show_likes_count": getattr(p, "show_likes_count", True) if getattr(p, "show_likes_count", None) is not None else True,
+            "allow_reshare": getattr(p, "allow_reshare", True) if getattr(p, "allow_reshare", None) is not None else True,
+            "allow_save": getattr(p, "allow_save", True) if getattr(p, "allow_save", None) is not None else True,
+            "allow_share": getattr(p, "allow_share", True) if getattr(p, "allow_share", None) is not None else True,
             "expires_at": p.expires_at,
             "created_at": p.created_at,
             "is_liked_by_user": is_liked,
@@ -208,6 +218,11 @@ class SocialService:
                 "reposts_count": max(p.reposts_count or 0, actual_reposts),
                 "is_story": p.is_story or False,
                 "is_pinned": getattr(p, "is_pinned", False),
+                "show_comments_count": getattr(p, "show_comments_count", True) if getattr(p, "show_comments_count", None) is not None else True,
+                "show_likes_count": getattr(p, "show_likes_count", True) if getattr(p, "show_likes_count", None) is not None else True,
+                "allow_reshare": getattr(p, "allow_reshare", True) if getattr(p, "allow_reshare", None) is not None else True,
+                "allow_save": getattr(p, "allow_save", True) if getattr(p, "allow_save", None) is not None else True,
+                "allow_share": getattr(p, "allow_share", True) if getattr(p, "allow_share", None) is not None else True,
                 "expires_at": p.expires_at,
                 "created_at": p.created_at,
                 "is_liked_by_user": p_id_str in liked_post_ids,
@@ -266,6 +281,11 @@ class SocialService:
                 "reposts_count": max(p.reposts_count or 0, actual_reposts),
                 "is_story": p.is_story or False,
                 "is_pinned": getattr(p, "is_pinned", False),
+                "show_comments_count": getattr(p, "show_comments_count", True) if getattr(p, "show_comments_count", None) is not None else True,
+                "show_likes_count": getattr(p, "show_likes_count", True) if getattr(p, "show_likes_count", None) is not None else True,
+                "allow_reshare": getattr(p, "allow_reshare", True) if getattr(p, "allow_reshare", None) is not None else True,
+                "allow_save": getattr(p, "allow_save", True) if getattr(p, "allow_save", None) is not None else True,
+                "allow_share": getattr(p, "allow_share", True) if getattr(p, "allow_share", None) is not None else True,
                 "expires_at": p.expires_at,
                 "created_at": p.created_at,
                 "is_liked_by_user": False,
@@ -852,3 +872,56 @@ class SocialService:
         )
         res = await self.db.execute(stmt)
         return list(res.scalars().all())
+
+    async def get_featured_experts(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Fetch real registered experts and analysts with real follower counts from database."""
+        stmt = (
+            select(User)
+            .where(User.is_active == True)
+            .order_by(User.followers_count.desc(), User.created_at.asc())
+            .limit(limit)
+        )
+        res = await self.db.execute(stmt)
+        users = list(res.scalars().all())
+
+        experts = []
+        for u in users:
+            # Count actual followers from Follow table if exists
+            f_count = await self.db.scalar(select(func.count(Follow.id)).where(Follow.following_id == u.id)) or u.followers_count or 0
+            experts.append({
+                "id": str(u.id),
+                "name": u.display_name or u.username,
+                "handle": u.username,
+                "avatar_url": u.avatar_url,
+                "role": u.role.value if hasattr(u.role, 'value') else str(u.role),
+                "followers": f_count,
+            })
+        return experts
+
+    async def get_trending_symbols(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Fetch top active market symbols with real post discussion activity."""
+        # Query most tagged assets
+        stmt = (
+            select(Asset.symbol, Asset.name, func.count(post_asset_tags.c.post_id).label("post_count"))
+            .join(post_asset_tags, post_asset_tags.c.asset_id == Asset.id, isouter=True)
+            .group_by(Asset.id, Asset.symbol, Asset.name)
+            .order_by(func.count(post_asset_tags.c.post_id).desc())
+            .limit(limit)
+        )
+        res = await self.db.execute(stmt)
+        rows = res.all()
+
+        if not rows:
+            # Fallback to active assets if no tags yet
+            asset_res = await self.db.execute(select(Asset).limit(limit))
+            rows = [(a.symbol, a.name, 0) for a in asset_res.scalars().all()]
+
+        trending = []
+        for r in rows:
+            symbol = r[0]
+            count = r[2] if len(r) > 2 else 0
+            trending.append({
+                "symbol": symbol,
+                "posts": count,
+            })
+        return trending

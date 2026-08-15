@@ -49,6 +49,16 @@ export interface Post {
   likesCount: number;
   commentsCount: number;
   repostsCount: number;
+  showCommentsCount?: boolean;
+  showLikesCount?: boolean;
+  allowReshare?: boolean;
+  allowSave?: boolean;
+  allowShare?: boolean;
+  show_comments_count?: boolean;
+  show_likes_count?: boolean;
+  allow_reshare?: boolean;
+  allow_save?: boolean;
+  allow_share?: boolean;
   isLikedByUser?: boolean;
   isRepostedByUser?: boolean;
   isBookmarkedByUser?: boolean;
@@ -561,108 +571,128 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
           )}
 
           {/* Action Bar */}
-          <div className="flex items-center justify-between border-t border-zinc-850/50 pt-2.5 mt-2 max-w-sm select-none">
-            {!isBot && (
-              <>
-                {/* Comment Toggle Button */}
+          {(() => {
+            const showCommentsCountOpt = post.showCommentsCount ?? raw.show_comments_count ?? true;
+            const showLikesCountOpt = post.showLikesCount ?? raw.show_likes_count ?? true;
+            const allowReshareOpt = post.allowReshare ?? raw.allow_reshare ?? true;
+            const allowSaveOpt = post.allowSave ?? raw.allow_save ?? true;
+            const allowShareOpt = post.allowShare ?? raw.allow_share ?? true;
+
+            return (
+              <div className="flex items-center justify-between border-t border-zinc-850/50 pt-2.5 mt-2 max-w-sm select-none">
+                {!isBot && (
+                  <>
+                    {/* Comment Toggle Button */}
+                    <button
+                      onClick={handleToggleComments}
+                      className={cn(
+                        'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                        showComments
+                          ? 'text-blue-400 bg-blue-500/10'
+                          : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-850/40'
+                      )}
+                      title="View and post comments"
+                    >
+                      <MessageSquare size={13} className="group-hover:scale-110 transition-transform" />
+                      {showCommentsCountOpt && (
+                        <span className="text-[10px] font-medium">{commentsCount}</span>
+                      )}
+                    </button>
+
+                    {/* Repost / Reshare Button */}
+                    {allowReshareOpt && (
+                      <button
+                        onClick={handleRepost}
+                        disabled={repostLoading}
+                        className={cn(
+                          'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                          isReposted
+                            ? 'text-emerald-400 bg-emerald-500/10'
+                            : 'text-zinc-500 hover:text-emerald-400 hover:bg-zinc-850/40'
+                        )}
+                        title={isReposted ? 'Remove repost' : 'Repost to feed'}
+                      >
+                        <Repeat2
+                          size={13}
+                          className={cn(
+                            'group-hover:rotate-180 transition-transform duration-300',
+                            isReposted && 'scale-110'
+                          )}
+                        />
+                        <span className="text-[10px] font-medium">{reposts}</span>
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {/* Like Button */}
                 <button
-                  onClick={handleToggleComments}
+                  onClick={handleLike}
+                  disabled={likeLoading}
                   className={cn(
                     'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
-                    showComments
-                      ? 'text-blue-400 bg-blue-500/10'
-                      : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-850/40'
+                    isLiked
+                      ? 'text-rose-500 bg-rose-500/10'
+                      : 'text-zinc-500 hover:text-rose-500 hover:bg-zinc-850/40'
                   )}
-                  title="View and post comments"
+                  title={isLiked ? 'Unlike post' : 'Like post'}
                 >
-                  <MessageSquare size={13} className="group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] font-medium">{commentsCount}</span>
+                  <motion.div whileTap={{ scale: 1.4 }}>
+                    <Heart
+                      size={13}
+                      className={cn(
+                        'transition-transform',
+                        isLiked ? 'fill-rose-500 stroke-rose-500' : 'group-hover:scale-110'
+                      )}
+                    />
+                  </motion.div>
+                  {showLikesCountOpt && (
+                    <span className="text-[10px] font-medium">{likes}</span>
+                  )}
                 </button>
 
-                {/* Repost / Reshare Button */}
-                <button
-                  onClick={handleRepost}
-                  disabled={repostLoading}
-                  className={cn(
-                    'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
-                    isReposted
-                      ? 'text-emerald-400 bg-emerald-500/10'
-                      : 'text-zinc-500 hover:text-emerald-400 hover:bg-zinc-850/40'
-                  )}
-                  title={isReposted ? 'Remove repost' : 'Repost to feed'}
-                >
-                  <Repeat2
-                    size={13}
-                    className={cn(
-                      'group-hover:rotate-180 transition-transform duration-300',
-                      isReposted && 'scale-110'
+                {!isBot && (
+                  <>
+                    {/* Bookmark / Save Button */}
+                    {allowSaveOpt && (
+                      <button
+                        onClick={handleBookmark}
+                        disabled={bookmarkLoading}
+                        className={cn(
+                          'group flex items-center transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                          isBookmarked
+                            ? 'text-yellow-500 bg-yellow-500/10'
+                            : 'text-zinc-500 hover:text-yellow-500 hover:bg-zinc-850/40'
+                        )}
+                        title={isBookmarked ? 'Remove from Saved' : 'Save / Bookmark post'}
+                      >
+                        <Bookmark
+                          size={13}
+                          className={cn(
+                            'transition-transform',
+                            isBookmarked
+                              ? 'fill-yellow-500 stroke-yellow-500'
+                              : 'group-hover:scale-110'
+                          )}
+                        />
+                      </button>
                     )}
-                  />
-                  <span className="text-[10px] font-medium">{reposts}</span>
-                </button>
-              </>
-            )}
 
-            {/* Like Button */}
-            <button
-              onClick={handleLike}
-              disabled={likeLoading}
-              className={cn(
-                'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
-                isLiked
-                  ? 'text-rose-500 bg-rose-500/10'
-                  : 'text-zinc-500 hover:text-rose-500 hover:bg-zinc-850/40'
-              )}
-              title={isLiked ? 'Unlike post' : 'Like post'}
-            >
-              <motion.div whileTap={{ scale: 1.4 }}>
-                <Heart
-                  size={13}
-                  className={cn(
-                    'transition-transform',
-                    isLiked ? 'fill-rose-500 stroke-rose-500' : 'group-hover:scale-110'
-                  )}
-                />
-              </motion.div>
-              <span className="text-[10px] font-medium">{likes}</span>
-            </button>
-
-            {!isBot && (
-              <>
-                {/* Bookmark / Save Button */}
-                <button
-                  onClick={handleBookmark}
-                  disabled={bookmarkLoading}
-                  className={cn(
-                    'group flex items-center transition-colors focus:outline-none px-1.5 py-1 rounded-md',
-                    isBookmarked
-                      ? 'text-yellow-500 bg-yellow-500/10'
-                      : 'text-zinc-500 hover:text-yellow-500 hover:bg-zinc-850/40'
-                  )}
-                  title={isBookmarked ? 'Remove from Saved' : 'Save / Bookmark post'}
-                >
-                  <Bookmark
-                    size={13}
-                    className={cn(
-                      'transition-transform',
-                      isBookmarked
-                        ? 'fill-yellow-500 stroke-yellow-500'
-                        : 'group-hover:scale-110'
+                    {/* Share Button */}
+                    {allowShareOpt && (
+                      <button
+                        onClick={openShareModal}
+                        className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 hover:bg-zinc-850/40 px-1.5 py-1 rounded-md transition-colors focus:outline-none"
+                        title="Share post"
+                      >
+                        <Share2 size={13} className="group-hover:scale-110 transition-transform" />
+                      </button>
                     )}
-                  />
-                </button>
-
-                {/* Share Button */}
-                <button
-                  onClick={openShareModal}
-                  className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 hover:bg-zinc-850/40 px-1.5 py-1 rounded-md transition-colors focus:outline-none"
-                  title="Share post"
-                >
-                  <Share2 size={13} className="group-hover:scale-110 transition-transform" />
-                </button>
-              </>
-            )}
-          </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Inline Comment Thread */}
           <AnimatePresence>
