@@ -1,28 +1,49 @@
--- FxZone Full Schema for Supabase
--- Execute this in Supabase SQL Editor
-
--- === PART 1: TABLES ===
-
--- FxZone Database Schema
--- PostgreSQL 16
+-- ============================================================
+-- FxZone Platform — Supabase Production Database Schema
+-- Run this in Supabase Dashboard -> SQL Editor
+-- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================
--- ENUM TYPES
+-- ENUMS
 -- ============================================================
-CREATE TYPE user_role AS ENUM ('trader', 'analyst', 'admin', 'verified_educator');
-CREATE TYPE asset_type AS ENUM ('forex', 'stock', 'crypto');
-CREATE TYPE session_type_enum AS ENUM ('public', 'private', 'invite_only');
-CREATE TYPE session_status_enum AS ENUM ('scheduled', 'live', 'ended');
-CREATE TYPE experience_level AS ENUM ('beginner', 'intermediate', 'advanced', 'expert');
-CREATE TYPE participant_role AS ENUM ('host', 'viewer', 'co_host');
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+        CREATE TYPE user_role AS ENUM ('trader', 'analyst', 'admin', 'verified_educator');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'asset_type') THEN
+        CREATE TYPE asset_type AS ENUM ('forex', 'stock', 'crypto', 'commodity', 'index');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'session_type_enum') THEN
+        CREATE TYPE session_type_enum AS ENUM ('public', 'private', 'invite_only');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'session_status_enum') THEN
+        CREATE TYPE session_status_enum AS ENUM ('scheduled', 'live', 'ended');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'experience_level') THEN
+        CREATE TYPE experience_level AS ENUM ('beginner', 'intermediate', 'advanced', 'expert');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'participant_role') THEN
+        CREATE TYPE participant_role AS ENUM ('host', 'viewer', 'co_host');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_side') THEN
+        CREATE TYPE order_side AS ENUM ('buy', 'sell');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_type') THEN
+        CREATE TYPE order_type AS ENUM ('market', 'limit', 'stop');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
+        CREATE TYPE order_status AS ENUM ('pending', 'open', 'filled', 'partially_filled', 'cancelled', 'rejected');
+    END IF;
+END $$;
 
 -- ============================================================
--- USERS
+-- 1. USERS
 -- ============================================================
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -38,14 +59,14 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
 -- ============================================================
--- ASSETS
+-- 2. ASSETS
 -- ============================================================
-CREATE TABLE assets (
+CREATE TABLE IF NOT EXISTS assets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     symbol VARCHAR(20) UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -56,22 +77,22 @@ CREATE TABLE assets (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_assets_symbol ON assets(symbol);
-CREATE INDEX idx_assets_type ON assets(asset_type);
+CREATE INDEX IF NOT EXISTS idx_assets_symbol ON assets(symbol);
+CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
 
 -- ============================================================
--- WATCHLISTS
+-- 3. WATCHLISTS
 -- ============================================================
-CREATE TABLE watchlists (
+CREATE TABLE IF NOT EXISTS watchlists (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL DEFAULT 'My Watchlist',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_watchlists_user ON watchlists(user_id);
+CREATE INDEX IF NOT EXISTS idx_watchlists_user ON watchlists(user_id);
 
-CREATE TABLE watchlist_items (
+CREATE TABLE IF NOT EXISTS watchlist_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     watchlist_id UUID NOT NULL REFERENCES watchlists(id) ON DELETE CASCADE,
     asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
@@ -79,29 +100,12 @@ CREATE TABLE watchlist_items (
     UNIQUE(watchlist_id, asset_id)
 );
 
-CREATE INDEX idx_watchlist_items_watchlist ON watchlist_items(watchlist_id);
+CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist ON watchlist_items(watchlist_id);
 
 -- ============================================================
--- PRICE HISTORY
+-- 4. POSTS (Social Feed)
 -- ============================================================
-CREATE TABLE price_history (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-    open_price DECIMAL(20,8) NOT NULL,
-    high_price DECIMAL(20,8) NOT NULL,
-    low_price DECIMAL(20,8) NOT NULL,
-    close_price DECIMAL(20,8) NOT NULL,
-    volume DECIMAL(20,4) DEFAULT 0,
-    timeframe VARCHAR(10) DEFAULT '1h',
-    timestamp TIMESTAMPTZ NOT NULL
-);
-
-CREATE INDEX idx_price_history_asset_time ON price_history(asset_id, timestamp DESC);
-
--- ============================================================
--- POSTS (Social)
--- ============================================================
-CREATE TABLE posts (
+CREATE TABLE IF NOT EXISTS posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
@@ -115,23 +119,19 @@ CREATE TABLE posts (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- POST ASSET TAGS (4NF Normalization)
--- ============================================================
-CREATE TABLE post_asset_tags (
+CREATE TABLE IF NOT EXISTS post_asset_tags (
     post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
     PRIMARY KEY (post_id, asset_id)
 );
 
-CREATE INDEX idx_posts_user ON posts(user_id);
-CREATE INDEX idx_posts_created ON posts(created_at DESC);
-CREATE INDEX idx_posts_story ON posts(is_story, expires_at) WHERE is_story = true;
+CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id);
+CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
 
 -- ============================================================
--- COMMENTS
+-- 5. COMMENTS
 -- ============================================================
-CREATE TABLE comments (
+CREATE TABLE IF NOT EXISTS comments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -140,27 +140,38 @@ CREATE TABLE comments (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_comments_post ON comments(post_id);
-CREATE INDEX idx_comments_parent ON comments(parent_id);
+CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
 
 -- ============================================================
--- REACTIONS
+-- 6. REACTIONS & BOOKMARKS
 -- ============================================================
-CREATE TABLE reactions (
+CREATE TABLE IF NOT EXISTS reactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     reaction_type VARCHAR(20) DEFAULT 'like',
     created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_reaction_user_post_type UNIQUE(user_id, post_id, reaction_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reactions_post ON reactions(post_id);
+
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(user_id, post_id)
 );
 
-CREATE INDEX idx_reactions_post ON reactions(post_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_post ON bookmarks(post_id);
 
 -- ============================================================
--- FOLLOWS
+-- 7. FOLLOWS
 -- ============================================================
-CREATE TABLE follows (
+CREATE TABLE IF NOT EXISTS follows (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     follower_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     following_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -169,21 +180,23 @@ CREATE TABLE follows (
     CHECK (follower_id != following_id)
 );
 
-CREATE INDEX idx_follows_follower ON follows(follower_id);
-CREATE INDEX idx_follows_following ON follows(following_id);
+CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
 
 -- ============================================================
--- CONVERSATIONS (Chat)
+-- 8. CHAT & CONVERSATIONS
 -- ============================================================
-CREATE TABLE conversations (
+CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100),
+    description TEXT,
     is_group BOOLEAN DEFAULT false,
+    creator_id UUID REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE conversation_members (
+CREATE TABLE IF NOT EXISTS conversation_members (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -192,13 +205,10 @@ CREATE TABLE conversation_members (
     UNIQUE(conversation_id, user_id)
 );
 
-CREATE INDEX idx_conv_members_user ON conversation_members(user_id);
-CREATE INDEX idx_conv_members_conv ON conversation_members(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_conv_members_user ON conversation_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_conv_members_conv ON conversation_members(conversation_id);
 
--- ============================================================
--- MESSAGES
--- ============================================================
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -207,12 +217,12 @@ CREATE TABLE messages (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at DESC);
 
 -- ============================================================
--- LIVE SESSIONS
+-- 9. LIVE SESSIONS & STREAMING
 -- ============================================================
-CREATE TABLE live_sessions (
+CREATE TABLE IF NOT EXISTS live_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     host_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR(200) NOT NULL,
@@ -220,16 +230,17 @@ CREATE TABLE live_sessions (
     session_type session_type_enum DEFAULT 'public',
     status session_status_enum DEFAULT 'scheduled',
     max_participants INTEGER DEFAULT 100,
+    requires_approval BOOLEAN DEFAULT true,
     viewer_count INTEGER DEFAULT 0,
     started_at TIMESTAMPTZ,
     ended_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_sessions_status ON live_sessions(status);
-CREATE INDEX idx_sessions_host ON live_sessions(host_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_status ON live_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_sessions_host ON live_sessions(host_id);
 
-CREATE TABLE session_participants (
+CREATE TABLE IF NOT EXISTS session_participants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     session_id UUID NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -239,12 +250,12 @@ CREATE TABLE session_participants (
     UNIQUE(session_id, user_id)
 );
 
-CREATE INDEX idx_session_parts_session ON session_participants(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_parts_session ON session_participants(session_id);
 
 -- ============================================================
--- NOTIFICATIONS
+-- 10. NOTIFICATIONS
 -- ============================================================
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type VARCHAR(50) NOT NULL,
@@ -255,12 +266,9 @@ CREATE TABLE notifications (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
 
--- ============================================================
--- NOTIFICATION PREFERENCES
--- ============================================================
-CREATE TABLE notification_preferences (
+CREATE TABLE IF NOT EXISTS notification_preferences (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     in_app BOOLEAN DEFAULT true,
@@ -274,9 +282,9 @@ CREATE TABLE notification_preferences (
 );
 
 -- ============================================================
--- ML / PERSONALIZATION
+-- 11. ML / PERSONALIZATION PREFERENCES
 -- ============================================================
-CREATE TABLE user_behavior_events (
+CREATE TABLE IF NOT EXISTS user_behavior_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     event_type VARCHAR(50) NOT NULL,
@@ -286,10 +294,18 @@ CREATE TABLE user_behavior_events (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_behavior_user ON user_behavior_events(user_id, created_at DESC);
-CREATE INDEX idx_behavior_type ON user_behavior_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_behavior_user ON user_behavior_events(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_behavior_type ON user_behavior_events(event_type);
 
-CREATE TABLE user_preference_vectors (
+CREATE TABLE IF NOT EXISTS user_category_preferences (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category_name VARCHAR(50) NOT NULL,
+    preference_value FLOAT NOT NULL DEFAULT 0.0,
+    UNIQUE(user_id, category_name)
+);
+
+CREATE TABLE IF NOT EXISTS user_preference_vectors (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     risk_preference FLOAT DEFAULT 0.5,
@@ -298,135 +314,40 @@ CREATE TABLE user_preference_vectors (
 );
 
 -- ============================================================
--- USER CATEGORY PREFERENCES (4NF Normalization)
+-- 12. TRADING & ORDERS
 -- ============================================================
-CREATE TABLE user_category_preferences (
+CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category_name VARCHAR(50) NOT NULL,
-    preference_value FLOAT NOT NULL DEFAULT 0.0,
-    UNIQUE(user_id, category_name)
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    side order_side NOT NULL,
+    order_type order_type NOT NULL,
+    status order_status DEFAULT 'pending',
+    quantity DECIMAL(20,8) NOT NULL,
+    price DECIMAL(20,8),
+    stop_price DECIMAL(20,8),
+    filled_quantity DECIMAL(20,8) DEFAULT 0,
+    average_fill_price DECIMAL(20,8),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 
--- === PART 2: SEED DATA ===
+CREATE TABLE IF NOT EXISTS positions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    side order_side NOT NULL,
+    quantity DECIMAL(20,8) NOT NULL,
+    entry_price DECIMAL(20,8) NOT NULL,
+    current_price DECIMAL(20,8),
+    unrealized_pnl DECIMAL(20,8) DEFAULT 0,
+    realized_pnl DECIMAL(20,8) DEFAULT 0,
+    is_closed BOOLEAN DEFAULT false,
+    opened_at TIMESTAMPTZ DEFAULT NOW(),
+    closed_at TIMESTAMPTZ
+);
 
--- FxZone Seed Data
--- Demo users, assets, watchlists, and sample content with explicit UUIDs
-
--- ============================================================
--- DEMO USERS (password: demo123)
--- bcrypt hash of 'demo123'
--- ============================================================
-INSERT INTO users (id, email, username, password_hash, display_name, avatar_url, bio, role, is_active, followers_count, following_count) VALUES
-    ('a0000000000000000000000000000001', 'admin@fxzone.io', 'fxadmin', '$2b$12$YN6uy/YWbPgFJK2XWzhGnuHyDvp4UPqPrbqh6ndgC8sRV0dKY1zXm', 'FxZone Admin', 'https://api.dicebear.com/8.x/initials/svg?seed=FA', 'Platform administrator and market analyst', 'admin', TRUE, 0, 0),
-    ('a0000000000000000000000000000002', 'analyst@fxzone.io', 'jackbot_analyst', '$2b$12$YN6uy/YWbPgFJK2XWzhGnuHyDvp4UPqPrbqh6ndgC8sRV0dKY1zXm', 'Jack Bot', 'https://api.dicebear.com/8.x/initials/svg?seed=JB', 'AI-powered market analyst | Forex & Crypto signals | @jackbot_analyst', 'analyst', TRUE, 0, 0),
-    ('a0000000000000000000000000000003', 'trader@fxzone.io', 'marcus_trades', '$2b$12$YN6uy/YWbPgFJK2XWzhGnuHyDvp4UPqPrbqh6ndgC8sRV0dKY1zXm', 'Marcus Webb', 'https://api.dicebear.com/8.x/initials/svg?seed=MW', 'Swing trader | BTC & SOL focused | Risk management first', 'trader', TRUE, 0, 0);
-
--- ============================================================
--- ASSETS
--- ============================================================
--- Forex
-INSERT INTO assets (id, symbol, name, asset_type, description, is_active) VALUES
-    ('c0000000000000000000000000000001', 'EURUSD', 'Euro / US Dollar', 'forex', 'The most traded currency pair in the world', TRUE),
-    ('c0000000000000000000000000000002', 'GBPUSD', 'British Pound / US Dollar', 'forex', 'Cable - major forex pair', TRUE),
-    ('c0000000000000000000000000000003', 'USDJPY', 'US Dollar / Japanese Yen', 'forex', 'Major pair influenced by BoJ policy', TRUE),
-    ('c0000000000000000000000000000004', 'AUDUSD', 'Australian Dollar / US Dollar', 'forex', 'Commodity-linked currency pair', TRUE),
-    ('c0000000000000000000000000000005', 'USDCAD', 'US Dollar / Canadian Dollar', 'forex', 'Loonie - correlated with oil prices', TRUE),
-    ('c0000000000000000000000000000006', 'NZDUSD', 'New Zealand Dollar / US Dollar', 'forex', 'Kiwi - commodity currency', TRUE),
-    ('c0000000000000000000000000000007', 'USDCHF', 'US Dollar / Swiss Franc', 'forex', 'Safe haven currency pair', TRUE),
-    ('c0000000000000000000000000000008', 'EURGBP', 'Euro / British Pound', 'forex', 'European cross pair', TRUE);
-
--- Stocks
-INSERT INTO assets (id, symbol, name, asset_type, description, is_active) VALUES
-    ('c0000000000000000000000000000009', 'AAPL', 'Apple Inc.', 'stock', 'Technology giant - iPhone, Mac, Services', TRUE),
-    ('c0000000000000000000000000000010', 'GOOGL', 'Alphabet Inc.', 'stock', 'Google parent company - Search, Cloud, AI', TRUE),
-    ('c0000000000000000000000000000011', 'MSFT', 'Microsoft Corp.', 'stock', 'Software & cloud computing leader', TRUE),
-    ('c0000000000000000000000000000012', 'AMZN', 'Amazon.com Inc.', 'stock', 'E-commerce and cloud infrastructure', TRUE),
-    ('c0000000000000000000000000000013', 'TSLA', 'Tesla Inc.', 'stock', 'Electric vehicles and clean energy', TRUE),
-    ('c0000000000000000000000000000014', 'NVDA', 'NVIDIA Corp.', 'stock', 'GPU and AI chip manufacturer', TRUE),
-    ('c0000000000000000000000000000015', 'META', 'Meta Platforms Inc.', 'stock', 'Social media and metaverse', TRUE);
-
--- Crypto
-INSERT INTO assets (id, symbol, name, asset_type, description, is_active) VALUES
-    ('c0000000000000000000000000000016', 'BTCUSD', 'Bitcoin / US Dollar', 'crypto', 'The original cryptocurrency', TRUE),
-    ('c0000000000000000000000000000017', 'ETHUSD', 'Ethereum / US Dollar', 'crypto', 'Smart contract platform', TRUE),
-    ('c0000000000000000000000000000018', 'SOLUSD', 'Solana / US Dollar', 'crypto', 'High-performance blockchain', TRUE),
-    ('c0000000000000000000000000000019', 'ADAUSD', 'Cardano / US Dollar', 'crypto', 'Proof-of-stake blockchain platform', TRUE),
-    ('c0000000000000000000000000000020', 'DOTUSD', 'Polkadot / US Dollar', 'crypto', 'Multi-chain interoperability protocol', TRUE),
-    ('c0000000000000000000000000000021', 'XRPUSD', 'Ripple / US Dollar', 'crypto', 'Digital payment network', TRUE);
-
--- ============================================================
--- WATCHLISTS
--- ============================================================
-INSERT INTO watchlists (id, user_id, name) VALUES
-    ('b0000000000000000000000000000001', 'a0000000000000000000000000000002', 'Forex Majors'),
-    ('b0000000000000000000000000000002', 'a0000000000000000000000000000003', 'Crypto Portfolio');
-
--- Watchlist Items
-INSERT INTO watchlist_items (id, watchlist_id, asset_id) VALUES
-    ('d0000000000000000000000000000001', 'b0000000000000000000000000000001', 'c0000000000000000000000000000001'),
-    ('d0000000000000000000000000000002', 'b0000000000000000000000000000001', 'c0000000000000000000000000000002'),
-    ('d0000000000000000000000000000003', 'b0000000000000000000000000000001', 'c0000000000000000000000000000003'),
-    ('d0000000000000000000000000000004', 'b0000000000000000000000000000001', 'c0000000000000000000000000000004'),
-    ('d0000000000000000000000000000005', 'b0000000000000000000000000000002', 'c0000000000000000000000000000016'),
-    ('d0000000000000000000000000000006', 'b0000000000000000000000000000002', 'c0000000000000000000000000000017'),
-    ('d0000000000000000000000000000007', 'b0000000000000000000000000000002', 'c0000000000000000000000000000018');
-
--- ============================================================
--- SAMPLE POSTS
--- ============================================================
-INSERT INTO posts (id, user_id, content, likes_count, comments_count, reposts_count, is_story, created_at) VALUES
-    ('e0000000000000000000000000000001', 'a0000000000000000000000000000002', 'EUR/USD breaking above the 1.0850 resistance level. The ECB''s hawkish stance is providing strong support. Watch for a retest of 1.0900 this week. Key levels to monitor: Support at 1.0820, resistance at 1.0900. 📊', 24, 8, 0, FALSE, '2026-07-02 12:00:00'),
-    ('e0000000000000000000000000000002', 'a0000000000000000000000000000003', 'BTC looking incredibly bullish right now! The halving effect is kicking in and institutional adoption keeps growing. My target remains $80K by Q3. Not financial advice, always DYOR. 🚀🔥', 89, 34, 0, FALSE, '2026-07-02 12:05:00'),
-    ('e0000000000000000000000000000003', 'a0000000000000000000000000000002', 'NVIDIA earnings beat expectations again. AI demand driving GPU sales through the roof. This stock is becoming the backbone of the AI revolution. Added to my position today. 💚', 45, 12, 0, FALSE, '2026-07-02 12:10:00'),
-    ('e0000000000000000000000000000004', 'a0000000000000000000000000000003', 'Solana ecosystem is exploding! DeFi TVL up 300% this quarter. The speed and low fees make it a serious ETH competitor. Loading up on SOL dips. 🟢', 67, 21, 0, FALSE, '2026-07-02 12:15:00'),
-    ('e0000000000000000000000000000005', 'a0000000000000000000000000000001', 'Market Update: Fed minutes released today suggest potential rate pause. This could be bullish for both equities and crypto. Stay alert for volatility around the announcement. ⚡', 112, 43, 0, FALSE, '2026-07-02 12:20:00');
-
-INSERT INTO post_asset_tags (post_id, asset_id) VALUES
-    ('e0000000000000000000000000000001', 'c0000000000000000000000000000001'),
-    ('e0000000000000000000000000000002', 'c0000000000000000000000000000016'),
-    ('e0000000000000000000000000000003', 'c0000000000000000000000000000014'),
-    ('e0000000000000000000000000000004', 'c0000000000000000000000000000018'),
-    ('e0000000000000000000000000000004', 'c0000000000000000000000000000017'),
-    ('e0000000000000000000000000000005', 'c0000000000000000000000000000016'),
-    ('e0000000000000000000000000000005', 'c0000000000000000000000000000009'),
-    ('e0000000000000000000000000000005', 'c0000000000000000000000000000001');
-
--- ============================================================
--- FOLLOWS
--- ============================================================
-INSERT INTO follows (id, follower_id, following_id) VALUES
-    ('f0000000000000000000000000000001', 'a0000000000000000000000000000003', 'a0000000000000000000000000000002'),
-    ('f0000000000000000000000000000002', 'a0000000000000000000000000000001', 'a0000000000000000000000000000002');
-
-UPDATE users SET followers_count = 2 WHERE id = 'a0000000000000000000000000000002';
-UPDATE users SET following_count = 1 WHERE id = 'a0000000000000000000000000000003';
-UPDATE users SET following_count = 1 WHERE id = 'a0000000000000000000000000000001';
-
--- ============================================================
--- NOTIFICATION PREFERENCES (defaults for demo users)
--- ============================================================
-INSERT INTO notification_preferences (id, user_id) VALUES
-    ('80000000-0000-0000-0000-000000000001', 'a0000000000000000000000000000001'),
-    ('80000000-0000-0000-0000-000000000002', 'a0000000000000000000000000000002'),
-    ('80000000-0000-0000-0000-000000000003', 'a0000000000000000000000000000003');
-
--- ============================================================
--- USER PREFERENCE VECTORS
--- ============================================================
-INSERT INTO user_preference_vectors (id, user_id, risk_preference, experience_level) VALUES
-    ('90000000-0000-0000-0000-000000000001', 'a0000000000000000000000000000001', 0.5, 'expert'),
-    ('90000000-0000-0000-0000-000000000002', 'a0000000000000000000000000000002', 0.4, 'advanced'),
-    ('90000000-0000-0000-0000-000000000003', 'a0000000000000000000000000000003', 0.8, 'intermediate');
-
-INSERT INTO user_category_preferences (id, user_id, category_name, preference_value) VALUES
-    ('f0000000-0000-0000-0000-000000000001', 'a0000000000000000000000000000001', 'forex', 0.33),
-    ('f0000000-0000-0000-0000-000000000002', 'a0000000000000000000000000000001', 'stocks', 0.33),
-    ('f0000000-0000-0000-0000-000000000003', 'a0000000000000000000000000000001', 'crypto', 0.33),
-    ('f0000000-0000-0000-0000-000000000004', 'a0000000000000000000000000000002', 'forex', 0.8),
-    ('f0000000-0000-0000-0000-000000000005', 'a0000000000000000000000000000002', 'stocks', 0.1),
-    ('f0000000-0000-0000-0000-000000000006', 'a0000000000000000000000000000002', 'crypto', 0.1),
-    ('f0000000-0000-0000-0000-000000000007', 'a0000000000000000000000000000003', 'forex', 0.2),
-    ('f0000000-0000-0000-0000-000000000008', 'a0000000000000000000000000000003', 'stocks', 0.1),
-    ('f0000000-0000-0000-0000-000000000009', 'a0000000000000000000000000000003', 'crypto', 0.7);
+CREATE INDEX IF NOT EXISTS idx_positions_user ON positions(user_id);

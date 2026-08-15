@@ -1,436 +1,353 @@
 -- ============================================================
--- FxZone Platform — Complete Supabase Database Schema (Idempotent & Safe)
--- Run this in the Supabase SQL Editor (Dashboard → SQL Editor)
+-- FxZone Platform — Supabase Production Database Schema
+-- Run this in Supabase Dashboard -> SQL Editor
 -- ============================================================
 
--- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";       -- fuzzy text search
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";       -- password hashing helpers
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================
--- ENUMS (Safe Idempotent Creation & Alteration)
+-- ENUMS
 -- ============================================================
-
 DO $$ 
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-    CREATE TYPE user_role AS ENUM ('trader', 'analyst', 'verified_educator', 'admin');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'asset_type') THEN
-    CREATE TYPE asset_type AS ENUM ('forex', 'crypto', 'stock', 'commodity', 'index');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_side') THEN
-    CREATE TYPE order_side AS ENUM ('buy', 'sell');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_type') THEN
-    CREATE TYPE order_type AS ENUM ('market', 'limit', 'stop', 'stop_limit');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
-    CREATE TYPE order_status AS ENUM ('pending', 'open', 'filled', 'partially_filled', 'cancelled', 'rejected');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sentiment_label') THEN
-    CREATE TYPE sentiment_label AS ENUM ('Bullish', 'Bearish', 'Neutral');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'session_type') THEN
-    CREATE TYPE session_type AS ENUM ('webinar', 'analysis', 'live_trade', 'qa');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'notification_type') THEN
-    CREATE TYPE notification_type AS ENUM ('follow', 'like', 'comment', 'signal', 'price_alert', 'system');
-  END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+        CREATE TYPE user_role AS ENUM ('trader', 'analyst', 'admin', 'verified_educator');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'asset_type') THEN
+        CREATE TYPE asset_type AS ENUM ('forex', 'stock', 'crypto', 'commodity', 'index');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'session_type_enum') THEN
+        CREATE TYPE session_type_enum AS ENUM ('public', 'private', 'invite_only');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'session_status_enum') THEN
+        CREATE TYPE session_status_enum AS ENUM ('scheduled', 'live', 'ended');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'experience_level') THEN
+        CREATE TYPE experience_level AS ENUM ('beginner', 'intermediate', 'advanced', 'expert');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'participant_role') THEN
+        CREATE TYPE participant_role AS ENUM ('host', 'viewer', 'co_host');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_side') THEN
+        CREATE TYPE order_side AS ENUM ('buy', 'sell');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_type') THEN
+        CREATE TYPE order_type AS ENUM ('market', 'limit', 'stop');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
+        CREATE TYPE order_status AS ENUM ('pending', 'open', 'filled', 'partially_filled', 'cancelled', 'rejected');
+    END IF;
 END $$;
 
--- Safely add missing enum values to asset_type if it already existed without them
-ALTER TYPE asset_type ADD VALUE IF NOT EXISTS 'commodity';
-ALTER TYPE asset_type ADD VALUE IF NOT EXISTS 'index';
-ALTER TYPE asset_type ADD VALUE IF NOT EXISTS 'crypto';
-ALTER TYPE asset_type ADD VALUE IF NOT EXISTS 'stock';
-ALTER TYPE asset_type ADD VALUE IF NOT EXISTS 'forex';
-
-COMMIT;
-
 -- ============================================================
--- TABLES
+-- 1. USERS
 -- ============================================================
-
--- ------------------------------------------------------------
--- 1. USERS & PROFILES (extends Supabase auth.users)
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.profiles (
-  id              UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email           TEXT UNIQUE NOT NULL,
-  username        TEXT UNIQUE NOT NULL CHECK (length(username) BETWEEN 3 AND 50),
-  display_name    TEXT,
-  avatar_url      TEXT DEFAULT 'https://api.dicebear.com/8.x/initials/svg?seed=trader',
-  bio             TEXT,
-  role            user_role NOT NULL DEFAULT 'trader',
-  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-  followers_count INTEGER NOT NULL DEFAULT 0,
-  following_count INTEGER NOT NULL DEFAULT 0,
-  total_pnl       NUMERIC(18, 4) DEFAULT 0,
-  win_rate        NUMERIC(5, 2) DEFAULT 0,
-  trade_count     INTEGER DEFAULT 0,
-  signal_accuracy NUMERIC(5, 2) DEFAULT 0,
-  signal_count    INTEGER DEFAULT 0,
-  is_verified     BOOLEAN DEFAULT FALSE,
-  google_id       TEXT UNIQUE,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    display_name VARCHAR(100),
+    avatar_url TEXT,
+    bio TEXT,
+    role user_role DEFAULT 'trader',
+    is_active BOOLEAN DEFAULT true,
+    followers_count INTEGER DEFAULT 0,
+    following_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ------------------------------------------------------------
--- 2. ASSETS (Tradeable instruments)
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.assets (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  symbol      TEXT UNIQUE NOT NULL,
-  name        TEXT NOT NULL,
-  asset_type  asset_type NOT NULL,
-  description TEXT,
-  pip_size    NUMERIC(12, 8) DEFAULT 0.0001,
-  lot_size    NUMERIC(14, 2) DEFAULT 100000,
-  margin_pct  NUMERIC(5, 2) DEFAULT 1.0,
-  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+-- ============================================================
+-- 2. ASSETS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS assets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    symbol VARCHAR(20) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    asset_type asset_type NOT NULL,
+    description TEXT,
+    logo_url TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Ensure pip_size and lot_size exist on pre-existing assets table
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS pip_size NUMERIC(12, 8) DEFAULT 0.0001;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS lot_size NUMERIC(14, 2) DEFAULT 100000;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS margin_pct NUMERIC(5, 2) DEFAULT 1.0;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS description TEXT;
-ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+CREATE INDEX IF NOT EXISTS idx_assets_symbol ON assets(symbol);
+CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
 
--- Seed assets
-INSERT INTO public.assets (symbol, name, asset_type, pip_size, lot_size) VALUES
-  ('EURUSD', 'Euro / US Dollar',          'forex'::asset_type,     0.00001, 100000),
-  ('GBPUSD', 'British Pound / US Dollar', 'forex'::asset_type,     0.00001, 100000),
-  ('USDJPY', 'US Dollar / Japanese Yen',  'forex'::asset_type,     0.001,   100000),
-  ('AUDUSD', 'Australian Dollar / USD',   'forex'::asset_type,     0.00001, 100000),
-  ('USDCAD', 'US Dollar / Canadian Dollar','forex'::asset_type,    0.00001, 100000),
-  ('USDCHF', 'US Dollar / Swiss Franc',   'forex'::asset_type,     0.00001, 100000),
-  ('NZDUSD', 'New Zealand Dollar / USD',  'forex'::asset_type,     0.00001, 100000),
-  ('EURGBP', 'Euro / British Pound',      'forex'::asset_type,     0.00001, 100000),
-  ('XAUUSD', 'Gold / US Dollar',          'commodity'::asset_type, 0.01,    100),
-  ('XAGUSD', 'Silver / US Dollar',        'commodity'::asset_type, 0.001,   5000),
-  ('BTCUSD', 'Bitcoin / US Dollar',       'crypto'::asset_type,    0.01,    1),
-  ('ETHUSD', 'Ethereum / US Dollar',      'crypto'::asset_type,    0.01,    1),
-  ('SOLUSD', 'Solana / US Dollar',        'crypto'::asset_type,    0.001,   1),
-  ('XRPUSD', 'XRP / US Dollar',           'crypto'::asset_type,    0.00001, 1),
-  ('AAPL',   'Apple Inc.',                'stock'::asset_type,     0.01,    1),
-  ('GOOGL',  'Alphabet Inc.',             'stock'::asset_type,     0.01,    1),
-  ('MSFT',   'Microsoft Corporation',     'stock'::asset_type,     0.01,    1),
-  ('NVDA',   'NVIDIA Corporation',        'stock'::asset_type,     0.01,    1),
-  ('TSLA',   'Tesla, Inc.',               'stock'::asset_type,     0.01,    1),
-  ('META',   'Meta Platforms, Inc.',      'stock'::asset_type,     0.01,    1),
-  ('AMZN',   'Amazon.com, Inc.',          'stock'::asset_type,     0.01,    1)
-ON CONFLICT (symbol) DO NOTHING;
-
--- ------------------------------------------------------------
+-- ============================================================
 -- 3. WATCHLISTS
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.watchlists (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL DEFAULT 'My Watchlist',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- ============================================================
+CREATE TABLE IF NOT EXISTS watchlists (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL DEFAULT 'My Watchlist',
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.watchlist_items (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  watchlist_id UUID NOT NULL REFERENCES public.watchlists(id) ON DELETE CASCADE,
-  asset_id     UUID NOT NULL REFERENCES public.assets(id) ON DELETE CASCADE,
-  added_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (watchlist_id, asset_id)
+CREATE INDEX IF NOT EXISTS idx_watchlists_user ON watchlists(user_id);
+
+CREATE TABLE IF NOT EXISTS watchlist_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    watchlist_id UUID NOT NULL REFERENCES watchlists(id) ON DELETE CASCADE,
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(watchlist_id, asset_id)
 );
 
--- ------------------------------------------------------------
--- 4. ORDERS & POSITIONS
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.orders (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id         UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  asset_id        UUID NOT NULL REFERENCES public.assets(id),
-  side            order_side NOT NULL,
-  order_type      order_type NOT NULL DEFAULT 'market',
-  status          order_status NOT NULL DEFAULT 'pending',
-  quantity        NUMERIC(18, 6) NOT NULL CHECK (quantity > 0),
-  price           NUMERIC(18, 6),
-  stop_loss       NUMERIC(18, 6),
-  take_profit     NUMERIC(18, 6),
-  filled_at       NUMERIC(18, 6),
-  filled_qty      NUMERIC(18, 6) DEFAULT 0,
-  commission      NUMERIC(12, 4) DEFAULT 0,
-  pnl             NUMERIC(14, 4),
-  broker          TEXT DEFAULT 'exness',
-  broker_order_id TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.positions (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id         UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  asset_id        UUID NOT NULL REFERENCES public.assets(id),
-  side            order_side NOT NULL,
-  quantity        NUMERIC(18, 6) NOT NULL,
-  avg_entry_price NUMERIC(18, 6) NOT NULL,
-  unrealized_pnl  NUMERIC(14, 4) DEFAULT 0,
-  opened_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (user_id, asset_id, side)
-);
-
--- ------------------------------------------------------------
--- 5. PRICE ALERTS
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.price_alerts (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id      UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  asset_id     UUID NOT NULL REFERENCES public.assets(id),
-  target_price NUMERIC(18, 6) NOT NULL,
-  condition    TEXT NOT NULL CHECK (condition IN ('above', 'below')),
-  is_triggered BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ------------------------------------------------------------
--- 6. AI INSIGHTS
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.ai_insights (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  asset_id    UUID REFERENCES public.assets(id),
-  symbol      TEXT NOT NULL,
-  sentiment   sentiment_label NOT NULL DEFAULT 'Neutral',
-  confidence  NUMERIC(4, 3) NOT NULL DEFAULT 0.5 CHECK (confidence BETWEEN 0 AND 1),
-  summary     TEXT,
-  analysis    TEXT,
-  model_used  TEXT DEFAULT 'gemini-flash',
-  user_id     UUID REFERENCES public.profiles(id),
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ------------------------------------------------------------
--- 7. NEWS ARTICLES
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.news_articles (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  title           TEXT NOT NULL,
-  summary         TEXT,
-  url             TEXT UNIQUE,
-  source          TEXT,
-  published_at    TIMESTAMPTZ,
-  sentiment_score NUMERIC(4, 3),
-  sentiment_label sentiment_label DEFAULT 'Neutral',
-  asset_tags      TEXT[],
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ------------------------------------------------------------
--- 8. SOCIAL POSTS
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.posts (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id       UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  asset_id      UUID REFERENCES public.assets(id),
-  content       TEXT NOT NULL,
-  image_url     TEXT,
-  chart_url     TEXT,
-  likes_count   INTEGER NOT NULL DEFAULT 0,
-  replies_count INTEGER NOT NULL DEFAULT 0,
-  is_signal     BOOLEAN DEFAULT FALSE,
-  signal_side   order_side,
-  signal_entry  NUMERIC(18, 6),
-  signal_tp     NUMERIC(18, 6),
-  signal_sl     NUMERIC(18, 6),
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS public.post_likes (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  post_id    UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
-  user_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (post_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS public.post_comments (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  post_id    UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
-  user_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  content    TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ------------------------------------------------------------
--- 9. SOCIAL FOLLOWS
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.follows (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  follower_id  UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  following_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (follower_id, following_id)
-);
-
--- ------------------------------------------------------------
--- 10. WEBINARS & LIVE SESSIONS
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.sessions (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  host_id      UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  title        TEXT NOT NULL,
-  description  TEXT,
-  session_type session_type NOT NULL DEFAULT 'webinar',
-  is_live      BOOLEAN DEFAULT FALSE,
-  scheduled_at TIMESTAMPTZ,
-  viewer_count INTEGER DEFAULT 0,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ------------------------------------------------------------
--- 11. NOTIFICATIONS
--- ------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.notifications (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  recipient_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  user_id      UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  sender_id    UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  type         notification_type NOT NULL DEFAULT 'system',
-  title        TEXT NOT NULL,
-  body         TEXT,
-  is_read      BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Ensure both recipient_id and user_id columns exist on pre-existing notifications table
-ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS recipient_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE;
-ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_watchlist_items_watchlist ON watchlist_items(watchlist_id);
 
 -- ============================================================
--- AUTOMATED TRIGGERS
+-- 4. POSTS (Social Feed)
 -- ============================================================
+CREATE TABLE IF NOT EXISTS posts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    image_url TEXT,
+    likes_count INTEGER DEFAULT 0,
+    comments_count INTEGER DEFAULT 0,
+    reposts_count INTEGER DEFAULT 0,
+    is_story BOOLEAN DEFAULT false,
+    is_pinned BOOLEAN DEFAULT false,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Trigger: auto create profile when a new user signs up in auth.users
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, username, display_name, avatar_url)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    LOWER(REGEXP_REPLACE(SPLIT_PART(NEW.email, '@', 1), '[^a-z0-9_]', '_', 'g')),
-    COALESCE(NEW.raw_user_meta_data->>'full_name', SPLIT_PART(NEW.email, '@', 1)),
-    COALESCE(NEW.raw_user_meta_data->>'avatar_url', 'https://api.dicebear.com/8.x/initials/svg?seed=' || SPLIT_PART(NEW.email, '@', 1))
-  )
-  ON CONFLICT (id) DO NOTHING;
-  RETURN NEW;
-END;
-$$;
+CREATE TABLE IF NOT EXISTS post_asset_tags (
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    PRIMARY KEY (post_id, asset_id)
+);
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- Trigger: sync follower / following counts
-CREATE OR REPLACE FUNCTION public.handle_follow()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  IF TG_OP = 'INSERT' THEN
-    UPDATE public.profiles SET followers_count = followers_count + 1 WHERE id = NEW.following_id;
-    UPDATE public.profiles SET following_count = following_count + 1 WHERE id = NEW.follower_id;
-  ELSIF TG_OP = 'DELETE' THEN
-    UPDATE public.profiles SET followers_count = GREATEST(0, followers_count - 1) WHERE id = OLD.following_id;
-    UPDATE public.profiles SET following_count = GREATEST(0, following_count - 1) WHERE id = OLD.follower_id;
-  END IF;
-  RETURN NULL;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_follow_counts ON public.follows;
-CREATE TRIGGER trg_follow_counts
-  AFTER INSERT OR DELETE ON public.follows
-  FOR EACH ROW EXECUTE FUNCTION public.handle_follow();
-
--- Trigger: sync post like counts
-CREATE OR REPLACE FUNCTION public.handle_post_like()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  IF TG_OP = 'INSERT' THEN
-    UPDATE public.posts SET likes_count = likes_count + 1 WHERE id = NEW.post_id;
-  ELSIF TG_OP = 'DELETE' THEN
-    UPDATE public.posts SET likes_count = GREATEST(0, likes_count - 1) WHERE id = OLD.post_id;
-  END IF;
-  RETURN NULL;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_post_likes ON public.post_likes;
-CREATE TRIGGER trg_post_likes
-  AFTER INSERT OR DELETE ON public.post_likes
-  FOR EACH ROW EXECUTE FUNCTION public.handle_post_like();
+CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id);
+CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
 
 -- ============================================================
--- ROW LEVEL SECURITY (RLS)
+-- 5. COMMENTS
 -- ============================================================
+CREATE TABLE IF NOT EXISTS comments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    parent_id UUID REFERENCES comments(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-ALTER TABLE public.profiles        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.watchlists      ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.orders          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.positions       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.posts           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.follows         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notifications   ENABLE ROW LEVEL SECURITY;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Profiles readable by public') THEN
-    CREATE POLICY "Profiles readable by public" ON public.profiles FOR SELECT USING (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users update own profile') THEN
-    CREATE POLICY "Users update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Watchlists private to owner') THEN
-    CREATE POLICY "Watchlists private to owner" ON public.watchlists FOR ALL USING (auth.uid() = user_id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Orders private to owner') THEN
-    CREATE POLICY "Orders private to owner" ON public.orders FOR ALL USING (auth.uid() = user_id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Positions private to owner') THEN
-    CREATE POLICY "Positions private to owner" ON public.positions FOR ALL USING (auth.uid() = user_id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Posts readable by public') THEN
-    CREATE POLICY "Posts readable by public" ON public.posts FOR SELECT USING (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authors manage own posts') THEN
-    CREATE POLICY "Authors manage own posts" ON public.posts FOR ALL USING (auth.uid() = user_id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Follows readable by public') THEN
-    CREATE POLICY "Follows readable by public" ON public.follows FOR SELECT USING (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users manage own follows') THEN
-    CREATE POLICY "Users manage own follows" ON public.follows FOR ALL USING (auth.uid() = follower_id);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Notifications private') THEN
-    CREATE POLICY "Notifications private" ON public.notifications FOR ALL USING (auth.uid() = recipient_id OR auth.uid() = user_id);
-  END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
 
 -- ============================================================
--- PERFORMANCE INDEXES
+-- 6. REACTIONS & BOOKMARKS
 -- ============================================================
+CREATE TABLE IF NOT EXISTS reactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    reaction_type VARCHAR(20) DEFAULT 'like',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_reaction_user_post_type UNIQUE(user_id, post_id, reaction_type)
+);
 
-CREATE INDEX IF NOT EXISTS idx_profiles_username ON public.profiles(username);
-CREATE INDEX IF NOT EXISTS idx_orders_user       ON public.orders(user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_posts_user        ON public.posts(user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_follows_follower  ON public.follows(follower_id);
-CREATE INDEX IF NOT EXISTS idx_follows_following ON public.follows(following_id);
-CREATE INDEX IF NOT EXISTS idx_news_asset_tags  ON public.news_articles USING GIN(asset_tags);
+CREATE INDEX IF NOT EXISTS idx_reactions_post ON reactions(post_id);
+
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, post_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_post ON bookmarks(post_id);
+
+-- ============================================================
+-- 7. FOLLOWS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS follows (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    follower_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    following_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(follower_id, following_id),
+    CHECK (follower_id != following_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
+
+-- ============================================================
+-- 8. CHAT & CONVERSATIONS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS conversations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(100),
+    description TEXT,
+    is_group BOOLEAN DEFAULT false,
+    creator_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS conversation_members (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMPTZ DEFAULT NOW(),
+    last_read_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(conversation_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_members_user ON conversation_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_conv_members_conv ON conversation_members(conversation_id);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    message_type VARCHAR(20) DEFAULT 'text',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at DESC);
+
+-- ============================================================
+-- 9. LIVE SESSIONS & STREAMING
+-- ============================================================
+CREATE TABLE IF NOT EXISTS live_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    host_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    session_type session_type_enum DEFAULT 'public',
+    status session_status_enum DEFAULT 'scheduled',
+    max_participants INTEGER DEFAULT 100,
+    requires_approval BOOLEAN DEFAULT true,
+    viewer_count INTEGER DEFAULT 0,
+    started_at TIMESTAMPTZ,
+    ended_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_status ON live_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_sessions_host ON live_sessions(host_id);
+
+CREATE TABLE IF NOT EXISTS session_participants (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role participant_role DEFAULT 'viewer',
+    joined_at TIMESTAMPTZ DEFAULT NOW(),
+    left_at TIMESTAMPTZ,
+    UNIQUE(session_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_parts_session ON session_participants(session_id);
+
+-- ============================================================
+-- 10. NOTIFICATIONS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    message TEXT,
+    data JSONB DEFAULT '{}',
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS notification_preferences (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    in_app BOOLEAN DEFAULT true,
+    email BOOLEAN DEFAULT false,
+    push BOOLEAN DEFAULT true,
+    news_alerts BOOLEAN DEFAULT true,
+    price_alerts BOOLEAN DEFAULT true,
+    social_alerts BOOLEAN DEFAULT true,
+    session_alerts BOOLEAN DEFAULT true,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 11. ML / PERSONALIZATION PREFERENCES
+-- ============================================================
+CREATE TABLE IF NOT EXISTS user_behavior_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    event_type VARCHAR(50) NOT NULL,
+    target_type VARCHAR(50),
+    target_id VARCHAR(100),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_behavior_user ON user_behavior_events(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_behavior_type ON user_behavior_events(event_type);
+
+CREATE TABLE IF NOT EXISTS user_category_preferences (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category_name VARCHAR(50) NOT NULL,
+    preference_value FLOAT NOT NULL DEFAULT 0.0,
+    UNIQUE(user_id, category_name)
+);
+
+CREATE TABLE IF NOT EXISTS user_preference_vectors (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    risk_preference FLOAT DEFAULT 0.5,
+    experience_level experience_level DEFAULT 'beginner',
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 12. TRADING & ORDERS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    side order_side NOT NULL,
+    order_type order_type NOT NULL,
+    status order_status DEFAULT 'pending',
+    quantity DECIMAL(20,8) NOT NULL,
+    price DECIMAL(20,8),
+    stop_price DECIMAL(20,8),
+    filled_quantity DECIMAL(20,8) DEFAULT 0,
+    average_fill_price DECIMAL(20,8),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+
+CREATE TABLE IF NOT EXISTS positions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    side order_side NOT NULL,
+    quantity DECIMAL(20,8) NOT NULL,
+    entry_price DECIMAL(20,8) NOT NULL,
+    current_price DECIMAL(20,8),
+    unrealized_pnl DECIMAL(20,8) DEFAULT 0,
+    realized_pnl DECIMAL(20,8) DEFAULT 0,
+    is_closed BOOLEAN DEFAULT false,
+    opened_at TIMESTAMPTZ DEFAULT NOW(),
+    closed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_positions_user ON positions(user_id);

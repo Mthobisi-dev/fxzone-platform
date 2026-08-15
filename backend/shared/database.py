@@ -439,8 +439,10 @@ if _use_sqlite:
     )
 else:
     connect_args = {}
+    is_supabase = "supabase" in db_url.lower() or _db_source == "supabase"
+
     # Supabase / cloud PostgreSQL requires SSL
-    if _db_source in ("supabase", "render_postgres") or "sslmode=require" in settings.DATABASE_URL:
+    if is_supabase or _db_source in ("supabase", "render_postgres") or "sslmode=require" in settings.DATABASE_URL:
         try:
             import ssl
             ssl_ctx = ssl.create_default_context()
@@ -449,6 +451,11 @@ else:
             connect_args["ssl"] = ssl_ctx
         except Exception:
             pass
+
+    # Supabase Transaction Pooler (Port 6543 / Supavisor) requires statement cache disabled in asyncpg
+    if is_supabase or ":6543" in db_url or "pooler" in db_url:
+        connect_args["statement_cache_size"] = 0
+        connect_args["prepared_statement_cache_size"] = 0
 
     engine = create_async_engine(
         db_url,
