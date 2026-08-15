@@ -34,8 +34,8 @@ async def register_user(db: AsyncSession, data: UserCreate) -> User:
         role=role,
     )
     db.add(user)
-    await db.flush()
-    await db.refresh(user)
+    await db.flush()   # Write to transaction buffer so ID is generated
+    await db.refresh(user)  # Refresh to get server-generated defaults
 
     # Dispatch welcome system notification
     try:
@@ -49,7 +49,12 @@ async def register_user(db: AsyncSession, data: UserCreate) -> User:
             data={"welcome": True}
         )
     except Exception as e:
-        logging.error(f"Error creating welcome notification: {e}")
+        logging.warning(f"Welcome notification failed (non-fatal): {e}")
+
+    # Commit the new user to the database NOW so it is immediately readable
+    # by the subsequent authenticate_user call (which uses a fresh query)
+    await db.commit()
+    await db.refresh(user)
 
     return user
 
@@ -144,6 +149,7 @@ async def update_user_profile(db: AsyncSession, user_id: str, data: UserUpdate) 
         user.avatar_url = data.avatar_url
 
     await db.flush()
+    await db.commit()
     await db.refresh(user)
     return user
 
@@ -179,7 +185,9 @@ async def authenticate_google_user(db: AsyncSession, data) -> dict:
             role="trader",
         )
         db.add(user)
-        await db.flush()
+        await db.flush()     # generate ID
+        await db.refresh(user)
+        await db.commit()    # Durably commit the new Google user NOW
         await db.refresh(user)
 
     token_data = {
