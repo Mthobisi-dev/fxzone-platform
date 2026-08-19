@@ -203,14 +203,14 @@ export default function LandingPage() {
         symbol={selectedSymbol}
       />
       {/* Top Fixed Header */}
-      <nav className="h-20 px-6 md:px-12 border-b border-zinc-800/50 bg-zinc-950/70 backdrop-blur-xl fixed top-0 left-0 right-0 z-50 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <nav className="h-16 sm:h-20 px-4 sm:px-6 md:px-12 border-b border-zinc-800/50 bg-zinc-950/70 backdrop-blur-xl fixed top-0 left-0 right-0 z-50 flex items-center justify-between">
+        <div className="flex items-center gap-2 sm:gap-3">
           <img
             src="/fxzone-logo.jpg"
             alt="FxZone Logo"
-            className="h-11 w-11 rounded-xl object-cover shadow-[0_0_22px_rgba(255,255,255,0.18)] border border-zinc-700"
+            className="h-8 w-8 sm:h-11 sm:w-11 rounded-xl object-cover shadow-[0_0_22px_rgba(255,255,255,0.18)] border border-zinc-700"
           />
-          <span className="text-2xl font-black tracking-tight text-white">
+          <span className="text-xl sm:text-2xl font-black tracking-tight text-white">
             FxZone
           </span>
         </div>
@@ -222,33 +222,34 @@ export default function LandingPage() {
           <a href="#stats" className="hover:text-white transition-colors">Performance</a>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link href="/login">
-            <Button variant="ghost" size="sm" className="text-xs text-zinc-300 hover:text-white hover:bg-zinc-900/60 font-semibold px-4">
+            <Button variant="ghost" size="sm" className="text-xs text-zinc-300 hover:text-white hover:bg-zinc-900/60 font-semibold px-3 sm:px-4">
               Sign In
             </Button>
           </Link>
           <Link href="/register">
-            <Button size="sm" className="text-xs bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 font-bold shadow-lg shadow-purple-600/25 px-5 rounded-lg border border-purple-400/20">
-              Get Started Free
+            <Button size="sm" className="text-xs bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 font-bold shadow-lg shadow-purple-600/25 px-3 sm:px-5 rounded-lg border border-purple-400/20">
+              <span className="hidden sm:inline">Get Started Free</span>
+              <span className="sm:hidden">Join</span>
             </Button>
           </Link>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-36 pb-20 px-6 max-w-6xl mx-auto text-center flex flex-col items-center relative z-10">
+      <section className="pt-28 sm:pt-36 pb-16 sm:pb-20 px-4 sm:px-6 max-w-6xl mx-auto text-center flex flex-col items-center relative z-10">
         
         {/* Release Pill */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 backdrop-blur-md text-xs font-semibold text-purple-300 mb-8 shadow-inner"
+          className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 backdrop-blur-md text-[10px] sm:text-xs font-semibold text-purple-300 mb-6 sm:mb-8 shadow-inner max-w-full"
         >
-          <Sparkles size={14} className="text-purple-400 animate-pulse" />
-          <span>Introducing FxZone v2.5 with Gemini AI Insights</span>
-          <ChevronRight size={14} className="text-purple-400" />
+          <Sparkles size={12} className="text-purple-400 animate-pulse shrink-0" />
+          <span className="truncate">Introducing FxZone v2.5 with Gemini AI Insights</span>
+          <ChevronRight size={12} className="text-purple-400 shrink-0" />
         </motion.div>
 
         {/* BOLD AND BIG FxZone TITLE */}
@@ -256,12 +257,12 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1 }}
-          className="flex flex-col items-center"
+          className="flex flex-col items-center w-full"
         >
-          <h1 className="text-7xl sm:text-8xl md:text-9xl font-black tracking-tighter text-white leading-none drop-shadow-[0_10px_35px_rgba(0,0,0,0.8)] select-none">
+          <h1 className="text-5xl sm:text-7xl md:text-9xl font-black tracking-tighter text-white leading-none drop-shadow-[0_10px_35px_rgba(0,0,0,0.8)] select-none">
             Fx<span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">Zone</span>
           </h1>
-          <p className="text-lg sm:text-2xl md:text-3xl font-extrabold text-zinc-300 tracking-tight mt-4 max-w-3xl">
+          <p className="text-base sm:text-xl md:text-3xl font-extrabold text-zinc-300 tracking-tight mt-3 sm:mt-4 max-w-3xl px-2">
             Analyze markets. Understand signals. Trade with AI intelligence.
           </p>
         </motion.div>
@@ -271,7 +272,7 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.2 }}
-          className="text-sm md:text-base text-zinc-400 mt-6 max-w-2xl leading-relaxed font-medium"
+          className="text-xs sm:text-sm md:text-base text-zinc-400 mt-4 sm:mt-6 max-w-2xl leading-relaxed font-medium px-2"
         >
           FxZone combines real-time multi-asset market streams, Google Gemini AI technical analysis, news sentiment, and risk tools in one unified trading terminal.
         </motion.p>
@@ -281,15 +282,15 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.3 }}
-          className="flex flex-wrap justify-center gap-4 mt-10"
+          className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 sm:gap-4 mt-8 sm:mt-10 w-full px-4 sm:px-0"
         >
-          <Link href="/dashboard">
-            <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold px-8 py-6 rounded-xl flex items-center gap-2 shadow-2xl shadow-purple-600/30 text-sm border border-white/10 transition-all hover:scale-105">
+          <Link href="/dashboard" className="w-full sm:w-auto">
+            <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold px-6 sm:px-8 py-4 sm:py-6 rounded-xl flex items-center justify-center gap-2 shadow-2xl shadow-purple-600/30 text-sm border border-white/10 transition-all hover:scale-105">
               Launch Terminal <ArrowRight size={18} />
             </Button>
           </Link>
-          <Link href="/register">
-            <Button variant="outline" size="lg" className="border-zinc-700/80 bg-zinc-900/60 backdrop-blur-md text-zinc-200 hover:text-white hover:bg-zinc-800/80 px-8 py-6 rounded-xl font-bold text-sm transition-all hover:scale-105">
+          <Link href="/register" className="w-full sm:w-auto">
+            <Button variant="outline" size="lg" className="w-full sm:w-auto border-zinc-700/80 bg-zinc-900/60 backdrop-blur-md text-zinc-200 hover:text-white hover:bg-zinc-800/80 px-6 sm:px-8 py-4 sm:py-6 rounded-xl font-bold text-sm transition-all hover:scale-105">
               Get Started Free
             </Button>
           </Link>
@@ -301,26 +302,27 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4 }}
-          className="w-full mt-16 p-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 backdrop-blur-xl shadow-2xl overflow-hidden scroll-mt-24"
+          className="w-full mt-12 sm:mt-16 p-2 sm:p-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 backdrop-blur-xl shadow-2xl overflow-hidden scroll-mt-24"
         >
-          <div className="flex items-center justify-between gap-4 overflow-x-auto no-scrollbar py-1 px-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-widest shrink-0 border-r border-zinc-800 pr-4">
-              <Activity size={16} className="text-emerald-400 animate-pulse" /> Live Market Feeds
-              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono font-normal">Realtime</span>
+          <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-1 px-2">
+            <div className="flex items-center gap-1.5 text-[9px] sm:text-xs font-bold text-zinc-400 uppercase tracking-widest shrink-0 border-r border-zinc-800 pr-3 sm:pr-4">
+              <Activity size={14} className="text-emerald-400 animate-pulse" />
+              <span className="hidden sm:inline">Live Market Feeds</span>
+              <span className="sm:hidden">Live</span>
+              <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-mono font-normal">RT</span>
             </div>
             {tickerAssets.map((asset, i) => (
               <button
                 key={i}
                 onClick={() => openTradeModal(asset.symbol)}
-                className="flex items-center gap-2 text-xs shrink-0 px-3 py-1.5 rounded-lg bg-zinc-900/50 border border-zinc-800/50 hover:border-purple-500/40 hover:bg-zinc-800/60 transition-all cursor-pointer group"
+                className="flex items-center gap-1.5 text-[10px] sm:text-xs shrink-0 px-2 sm:px-3 py-1.5 rounded-lg bg-zinc-900/50 border border-zinc-800/50 hover:border-purple-500/40 hover:bg-zinc-800/60 transition-all cursor-pointer group"
                 title={`Trade or Analyze ${asset.symbol}`}
               >
                 <span className="font-bold text-zinc-200 group-hover:text-purple-300">{asset.symbol}</span>
-                <span className="font-semibold text-zinc-400">{asset.price}</span>
+                <span className="font-semibold text-zinc-400 hidden sm:inline">{asset.price}</span>
                 <span className={`font-bold ${asset.positive ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {asset.change}
                 </span>
-                <ExternalLink size={10} className="text-zinc-500 group-hover:text-purple-400 ml-0.5" />
               </button>
             ))}
           </div>
@@ -462,17 +464,17 @@ export default function LandingPage() {
       </section>
 
       {/* Final Call to Action */}
-      <section className="py-24 px-6 max-w-4xl mx-auto text-center relative z-10">
-        <div className="p-10 md:p-16 rounded-3xl border border-purple-500/30 bg-gradient-to-b from-purple-900/20 to-zinc-950/80 backdrop-blur-xl shadow-2xl relative overflow-hidden">
-          <h2 className="text-4xl md:text-6xl font-black text-white tracking-tight">
+      <section className="py-16 sm:py-24 px-4 sm:px-6 max-w-4xl mx-auto text-center relative z-10">
+        <div className="p-8 sm:p-10 md:p-16 rounded-3xl border border-purple-500/30 bg-gradient-to-b from-purple-900/20 to-zinc-950/80 backdrop-blur-xl shadow-2xl relative overflow-hidden">
+          <h2 className="text-3xl sm:text-4xl md:text-6xl font-black text-white tracking-tight leading-tight">
             Ready to Experience <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">FxZone</span>?
           </h2>
-          <p className="text-xs md:text-sm text-zinc-400 mt-4 max-w-xl mx-auto leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-400 mt-4 max-w-xl mx-auto leading-relaxed">
             Leverage AI-powered technical insights, real-time market streams, and intelligent risk tools in your workspace.
           </p>
-          <div className="mt-8 flex justify-center gap-4">
-            <Link href="/register">
-              <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold px-8 py-6 rounded-xl shadow-xl shadow-purple-600/30 text-sm">
+          <div className="mt-8 flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 px-4 sm:px-0">
+            <Link href="/register" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold px-6 sm:px-8 py-4 sm:py-6 rounded-xl shadow-xl shadow-purple-600/30 text-sm">
                 Create Free Account
               </Button>
             </Link>

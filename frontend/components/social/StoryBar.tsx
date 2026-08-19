@@ -38,7 +38,20 @@ export function StoryBar() {
     try {
       const response = await api.get('/api/social/stories');
       if (Array.isArray(response)) {
-        setStories(response);
+        const mapped: Story[] = response.map((s: any) => ({
+          id: String(s.id),
+          userId: String(s.userId || s.user_id || (s.user ? (s.user.id || s.user.userId) : '')),
+          user: {
+            username: s.user?.username || 'trader',
+            displayName: s.user?.displayName || s.user?.display_name || s.user?.username || 'Trader',
+            avatarUrl: s.user?.avatarUrl || s.user?.avatar_url,
+          },
+          content: s.content || '',
+          imageUrl: s.imageUrl || s.image_url,
+          createdAt: s.createdAt || s.created_at,
+          expiresAt: s.expiresAt || s.expires_at,
+        }));
+        setStories(mapped);
       }
     } catch (err) {
       console.error('Failed to fetch stories:', err);
@@ -47,14 +60,22 @@ export function StoryBar() {
 
   useEffect(() => {
     fetchStories();
+    const handleRefresh = () => fetchStories();
+    window.addEventListener('fxzone_refresh_stories', handleRefresh);
+    window.addEventListener('fxzone_refresh_feed', handleRefresh);
+    return () => {
+      window.removeEventListener('fxzone_refresh_stories', handleRefresh);
+      window.removeEventListener('fxzone_refresh_feed', handleRefresh);
+    };
   }, []);
 
   // Group stories by user so clicking displays user's full sequence of stories
   const groupedStories = stories.reduce((acc, story) => {
-    if (!acc[story.userId]) {
-      acc[story.userId] = [];
+    const uKey = story.userId || 'anon';
+    if (!acc[uKey]) {
+      acc[uKey] = [];
     }
-    acc[story.userId].push(story);
+    acc[uKey].push(story);
     return acc;
   }, {} as Record<string, Story[]>);
 
@@ -83,7 +104,11 @@ export function StoryBar() {
       setNewImageUrl('');
       setStoryFile(null);
       setCreating(false);
-      fetchStories();
+      await fetchStories();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fxzone_refresh_stories'));
+        window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
+      }
     } catch (err) {
       console.error('Failed to create story:', err);
     } finally {
