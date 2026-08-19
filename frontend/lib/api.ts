@@ -62,10 +62,17 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
     headers.set('Content-Type', 'application/json');
   }
 
+  // Strictly disable caching on all API requests to ensure real-time data accuracy
+  if (!headers.has('Cache-Control')) {
+    headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    headers.set('Pragma', 'no-cache');
+  }
+
   let response: Response;
   try {
     response = await fetch(url, {
       ...options,
+      cache: 'no-store',
       headers,
     });
   } catch (netErr: any) {

@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   description: 'Real-time financial market data, AI assistant, personalized news, social trading network, and WebRTC live sessions.',
 };
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default function RootLayout({
   children,
 }: {

@@ -158,7 +158,16 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     setDeleting(true);
     try {
       await api.delete(`/api/social/posts/${post.id}`);
+      try {
+        const stored = localStorage.getItem('fxzone_saved_posts') || '[]';
+        let list = JSON.parse(stored);
+        list = list.filter((id: string) => id !== post.id);
+        localStorage.setItem('fxzone_saved_posts', JSON.stringify(list));
+      } catch {}
       onDelete?.(post.id);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
+      }
     } catch (err) {
       console.error('Failed to delete post:', err);
       alert('Could not delete post.');

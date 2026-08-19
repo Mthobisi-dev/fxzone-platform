@@ -74,4 +74,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             )
 
         response.headers["X-Process-Time"] = f"{process_time:.1f}ms"
+        # Strictly prevent caching of dynamic API responses across all browsers and edge CDNs
+        if not request.url.path.startswith("/uploads"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
         return response
