@@ -75,53 +75,61 @@ class AIAssistantService:
             }
         
         # 3. Fetch real-time live market prices for all available assets
+        live_prices: Dict = {}
         real_market_feed = []
         try:
             from services.market_data.providers import price_engine
-            prices = await price_engine.get_all_prices()
-            if prices:
-                for sym, pd in prices.items():
-                    p = pd.get("price", 0)
-                    c = pd.get("daily_change_pct", 0)
-                    h = pd.get("high", p)
-                    l = pd.get("low", p)
-                    p_str = f"${p:,.2f}" if p > 10 else f"${p:,.4f}"
-                    h_str = f"${h:,.2f}" if h > 10 else f"${h:,.4f}"
-                    l_str = f"${l:,.2f}" if l > 10 else f"${l:,.4f}"
-                    real_market_feed.append(f"  • {sym}: {p_str} ({c:+.2f}%, 24h High: {h_str}, Low: {l_str})")
+            live_prices = await price_engine.get_all_prices()
+            if live_prices:
+                for sym, pd_data in live_prices.items():
+                    p = pd_data.get("price", 0)
+                    c = pd_data.get("daily_change_pct", 0)
+                    h = pd_data.get("high", p)
+                    l = pd_data.get("low", p)
+                    vol = pd_data.get("volume", 0)
+                    p_str = f"${p:,.2f}" if p > 10 else f"${p:,.5f}"
+                    h_str = f"${h:,.2f}" if h > 10 else f"${h:,.5f}"
+                    l_str = f"${l:,.2f}" if l > 10 else f"${l:,.5f}"
+                    real_market_feed.append(
+                        f"  {sym}: price={p_str}, change={c:+.2f}%, high={h_str}, low={l_str}, volume={vol:,}"
+                    )
         except Exception as pe:
             logger.warning(f"Failed to compile live prices for AI chat prompt: {pe}")
 
-        market_feed_str = "\n".join(real_market_feed[:18]) if real_market_feed else "  Live market prices currently streaming."
+        market_feed_str = "\n".join(real_market_feed) if real_market_feed else "  Live market prices currently streaming."
 
         # 4. Assemble prompt with history and real-time live market feeds
         history_str = ""
         for msg in history:
             role = "User" if msg["role"] == "user" else "Assistant"
             history_str += f"{role}: {msg['content']}\n"
-            
+
+        # Build system prompt enriched with live market data for both Gemini and MockClient
+        enriched_system_prompt = (
+            f"{SYSTEM_PROMPT}\n\n"
+            f"=== LIVE REAL-TIME MARKET DATA (from CoinGecko + Yahoo Finance APIs) ===\n"
+            f"{market_feed_str}\n"
+            f"=== END MARKET DATA ===\n\n"
+            f"CRITICAL: Use ONLY the exact prices listed above when answering market questions. "
+            f"Never invent prices. If a symbol is listed above, quote it precisely."
+        )
+
         full_prompt = (
-            f"LIVE REAL-TIME MARKET DATA (Verified Public APIs):\n"
-            f"{market_feed_str}\n\n"
-            f"User Profile Info:\n"
-            f"- Experience Level: {user_ctx['experience_level']}\n"
-            f"- Watchlist Assets: {', '.join(user_ctx['watchlist_symbols'])}\n\n"
-            f"Instructions:\n"
-            f"- Answer the user's questions about the market with precision using the live real-time prices provided above.\n"
-            f"- If the user asks about any Forex, Crypto, Stock, or Commodity (Gold/Silver), give the exact current price, 24h trend, support/resistance levels, and risk insights.\n\n"
-            f"Conversation History:\n{history_str}\n"
-            f"User: {message}\n"
+            f"User's question: {message}\n\n"
+            f"Recent conversation:\n{history_str}"
             f"Assistant:"
         )
 
-        # 5. Generate response from LLM
-        ai_response = await self.llm.generate(full_prompt, system_prompt=SYSTEM_PROMPT)
+        # 5. Generate response from LLM — pass live_prices dict for MockClient to use directly
+        if hasattr(self.llm, '_inject_prices'):
+            self.llm._inject_prices(live_prices)
+        ai_response = await self.llm.generate(full_prompt, system_prompt=enriched_system_prompt)
 
-        # 5. Append risk disclaimer if it is not present
-        if "disclaimer" not in ai_response.lower():
-            ai_response += f"\n\n---\n*{RISK_DISCLAIMER}*"
+        # 6. Append risk disclaimer only if not already present
+        if RISK_DISCLAIMER[:30].lower() not in ai_response.lower():
+            ai_response += f"\n\n> ⚠️ *{RISK_DISCLAIMER}*"
 
-        # 6. Save back to MongoDB (skip for guests or if no MongoDB)
+        # 7. Save back to MongoDB (skip for guests or if no MongoDB)
         if user_id is not None and self.mongo_db is not None:
             new_messages = history + [
                 {"role": "user", "content": message, "timestamp": datetime.utcnow().isoformat()},
@@ -178,51 +186,61 @@ class AIAssistantService:
             }
         
         # Fetch real-time live market prices for streaming context
-        real_market_feed = []
+        live_prices_stream: Dict = {}
+        real_market_feed_s = []
         try:
             from services.market_data.providers import price_engine
-            prices = await price_engine.get_all_prices()
-            if prices:
-                for sym, pd in prices.items():
-                    p = pd.get("price", 0)
-                    c = pd.get("daily_change_pct", 0)
-                    h = pd.get("high", p)
-                    l = pd.get("low", p)
-                    p_str = f"${p:,.2f}" if p > 10 else f"${p:,.4f}"
-                    h_str = f"${h:,.2f}" if h > 10 else f"${h:,.4f}"
-                    l_str = f"${l:,.2f}" if l > 10 else f"${l:,.4f}"
-                    real_market_feed.append(f"  • {sym}: {p_str} ({c:+.2f}%, High: {h_str}, Low: {l_str})")
+            live_prices_stream = await price_engine.get_all_prices()
+            if live_prices_stream:
+                for sym, pd_data in live_prices_stream.items():
+                    p = pd_data.get("price", 0)
+                    c = pd_data.get("daily_change_pct", 0)
+                    h = pd_data.get("high", p)
+                    l = pd_data.get("low", p)
+                    vol = pd_data.get("volume", 0)
+                    p_str = f"${p:,.2f}" if p > 10 else f"${p:,.5f}"
+                    h_str = f"${h:,.2f}" if h > 10 else f"${h:,.5f}"
+                    l_str = f"${l:,.2f}" if l > 10 else f"${l:,.5f}"
+                    real_market_feed_s.append(
+                        f"  {sym}: price={p_str}, change={c:+.2f}%, high={h_str}, low={l_str}, volume={vol:,}"
+                    )
         except Exception as pe:
             logger.warning(f"Streaming prompt price compile notice: {pe}")
 
-        market_feed_str = "\n".join(real_market_feed[:18]) if real_market_feed else "  Live market prices streaming."
+        market_feed_str_s = "\n".join(real_market_feed_s) if real_market_feed_s else "  Live market prices streaming."
 
         history_str = ""
         for msg in history:
             role = "User" if msg["role"] == "user" else "Assistant"
             history_str += f"{role}: {msg['content']}\n"
-            
-        full_prompt = (
-            f"LIVE REAL-TIME MARKET DATA (Verified Public APIs):\n"
-            f"{market_feed_str}\n\n"
-            f"User Profile Info:\n"
-            f"- Experience: {user_ctx['experience_level']}\n"
-            f"Instructions:\n"
-            f"- Base all price levels, market trends, and technical analysis strictly on the real-time prices above.\n\n"
-            f"History:\n{history_str}\n"
-            f"User: {message}\n"
+
+        enriched_system_prompt_s = (
+            f"{SYSTEM_PROMPT}\n\n"
+            f"=== LIVE REAL-TIME MARKET DATA (from CoinGecko + Yahoo Finance APIs) ===\n"
+            f"{market_feed_str_s}\n"
+            f"=== END MARKET DATA ===\n\n"
+            f"CRITICAL: Use ONLY the exact prices listed above when answering market questions. "
+            f"Never invent prices. If a symbol is listed above, quote it precisely."
+        )
+
+        full_prompt_s = (
+            f"User's question: {message}\n\n"
+            f"Recent conversation:\n{history_str}"
             f"Assistant:"
         )
 
         full_reply = ""
-        async for chunk in self.llm.stream(full_prompt, system_prompt=SYSTEM_PROMPT):
+        if hasattr(self.llm, '_inject_prices'):
+            self.llm._inject_prices(live_prices_stream)
+        async for chunk in self.llm.stream(full_prompt_s, system_prompt=enriched_system_prompt_s):
             full_reply += chunk
             yield chunk
 
         # Append disclaimer
-        disclaimer_suffix = f"\n\n---\n*{RISK_DISCLAIMER}*"
-        yield disclaimer_suffix
-        full_reply += disclaimer_suffix
+        if RISK_DISCLAIMER[:30].lower() not in full_reply.lower():
+            disclaimer_suffix = f"\n\n> ⚠️ *{RISK_DISCLAIMER}*"
+            yield disclaimer_suffix
+            full_reply += disclaimer_suffix
 
         # Save to MongoDB at the end (skip for guests)
         if user_id is not None and self.mongo_db is not None:

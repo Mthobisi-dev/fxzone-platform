@@ -208,8 +208,18 @@ class GeminiClient(LLMClient):
 class MockClient(LLMClient):
     """Smart mock LLM client that fetches REAL prices and injects them into responses."""
 
+    def __init__(self):
+        self._injected_prices: Dict[str, Any] = {}  # Pre-fetched prices from service.py
+
+    def _inject_prices(self, prices: Dict[str, Any]) -> None:
+        """Accept pre-fetched live prices from the service layer (avoids double API call)."""
+        if prices:
+            self._injected_prices = prices
+
     async def _get_real_prices(self) -> Dict[str, Any]:
-        """Fetch current real prices from the PriceEngine to use in responses."""
+        """Use injected prices if available, otherwise fetch from PriceEngine directly."""
+        if self._injected_prices:
+            return self._injected_prices
         try:
             from services.market_data.providers import price_engine
             prices = await price_engine.get_all_prices()
@@ -227,7 +237,7 @@ class MockClient(LLMClient):
 
     async def generate(self, prompt: str, system_prompt: str = "") -> str:
         import asyncio
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.2)
 
         prices = await self._get_real_prices()
         prompt_lower = prompt.lower()
