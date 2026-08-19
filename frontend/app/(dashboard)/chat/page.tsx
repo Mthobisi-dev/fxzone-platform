@@ -431,8 +431,9 @@ export default function ChatPage() {
         </div>
       ) : (
         <>
-          {/* Sidebar */}
+          {/* Sidebar (Full width on mobile when no active chat, hidden on mobile when active chat is open) */}
           <ChatSidebar
+            className={activeConvId ? 'hidden md:flex' : 'flex w-full md:w-80'}
             conversations={conversations}
             suggestedUsers={eligibleUsers}
             loadingSuggested={loadingUsers}
@@ -447,21 +448,24 @@ export default function ChatPage() {
             currentUserId={user?.id || ''}
           />
 
-          {/* Active Window */}
+          {/* Active Window (Full width on mobile when active chat is open, hidden on mobile when no chat) */}
           {activeConvId && activeDetails ? (
-            <ChatWindow
-              messages={messages}
-              currentUserId={user?.id || ''}
-              conversationName={activeDetails.name}
-              conversationAvatar={activeDetails.avatarUrl}
-              isGroup={activeDetails.isGroup}
-              members={activeConv?.members || []}
-              conversationData={activeConv}
-              onSendMessage={handleSendMessage}
-              onStartLiveCall={handleStartLiveCall}
-            />
+            <div className="flex-1 h-full flex flex-col w-full">
+              <ChatWindow
+                messages={messages}
+                currentUserId={user?.id || ''}
+                conversationName={activeDetails.name}
+                conversationAvatar={activeDetails.avatarUrl}
+                isGroup={activeDetails.isGroup}
+                members={activeConv?.members || []}
+                conversationData={activeConv}
+                onSendMessage={handleSendMessage}
+                onStartLiveCall={handleStartLiveCall}
+                onBack={() => setActiveConvId(null)}
+              />
+            </div>
           ) : (
-            <div className="flex-1 h-full flex flex-col items-center justify-center p-6 text-center select-none bg-zinc-950/20">
+            <div className="hidden md:flex flex-1 h-full flex-col items-center justify-center p-6 text-center select-none bg-zinc-950/20">
               <div className="h-12 w-12 rounded-2xl bg-zinc-900 border border-zinc-850 flex items-center justify-center text-zinc-550 mb-3 animate-pulse">
                 <MessageSquare size={20} />
               </div>

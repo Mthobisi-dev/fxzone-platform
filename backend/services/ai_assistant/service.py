@@ -177,14 +177,38 @@ class AIAssistantService:
                 "watchlist_symbols": ["BTCUSD", "EURUSD", "AAPL"]
             }
         
+        # Fetch real-time live market prices for streaming context
+        real_market_feed = []
+        try:
+            from services.market_data.providers import price_engine
+            prices = await price_engine.get_all_prices()
+            if prices:
+                for sym, pd in prices.items():
+                    p = pd.get("price", 0)
+                    c = pd.get("daily_change_pct", 0)
+                    h = pd.get("high", p)
+                    l = pd.get("low", p)
+                    p_str = f"${p:,.2f}" if p > 10 else f"${p:,.4f}"
+                    h_str = f"${h:,.2f}" if h > 10 else f"${h:,.4f}"
+                    l_str = f"${l:,.2f}" if l > 10 else f"${l:,.4f}"
+                    real_market_feed.append(f"  • {sym}: {p_str} ({c:+.2f}%, High: {h_str}, Low: {l_str})")
+        except Exception as pe:
+            logger.warning(f"Streaming prompt price compile notice: {pe}")
+
+        market_feed_str = "\n".join(real_market_feed[:18]) if real_market_feed else "  Live market prices streaming."
+
         history_str = ""
         for msg in history:
             role = "User" if msg["role"] == "user" else "Assistant"
             history_str += f"{role}: {msg['content']}\n"
             
         full_prompt = (
+            f"LIVE REAL-TIME MARKET DATA (Verified Public APIs):\n"
+            f"{market_feed_str}\n\n"
             f"User Profile Info:\n"
             f"- Experience: {user_ctx['experience_level']}\n"
+            f"Instructions:\n"
+            f"- Base all price levels, market trends, and technical analysis strictly on the real-time prices above.\n\n"
             f"History:\n{history_str}\n"
             f"User: {message}\n"
             f"Assistant:"

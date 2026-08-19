@@ -96,7 +96,7 @@ export function AIChatPanel({ isOpen, onClose }: AIChatPanelProps) {
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 400, opacity: 0.9 }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="w-96 border-l border-zinc-850 bg-gradient-to-b from-zinc-950 via-purple-950/20 to-zinc-950 backdrop-blur-2xl h-full flex flex-col justify-between shadow-2xl z-30 shrink-0 overscroll-contain"
+      className="w-full sm:w-96 fixed inset-0 sm:inset-y-0 sm:right-0 sm:left-auto border-l border-zinc-850 bg-gradient-to-b from-zinc-950 via-purple-950/20 to-zinc-950 backdrop-blur-2xl h-full flex flex-col justify-between shadow-2xl z-50 shrink-0 overscroll-contain"
     >
       {/* Header */}
       <div className="h-14 px-4 border-b border-zinc-850 flex items-center justify-between bg-zinc-950/80 backdrop-blur-md">

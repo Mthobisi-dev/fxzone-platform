@@ -43,6 +43,7 @@ interface ChatSidebarProps {
   startingChatUserId?: string | null;
   onNewChat: () => void;
   currentUserId: string;
+  className?: string;
 }
 
 export function ChatSidebar({
@@ -55,6 +56,7 @@ export function ChatSidebar({
   startingChatUserId,
   onNewChat,
   currentUserId,
+  className,
 }: ChatSidebarProps) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'chats' | 'people'>('chats');
@@ -104,7 +106,7 @@ export function ChatSidebar({
   });
 
   return (
-    <div className="w-80 border-r border-zinc-850 h-full flex flex-col bg-zinc-950/20 shrink-0">
+    <div className={cn('w-full md:w-80 border-r border-zinc-850 h-full flex flex-col bg-zinc-950/20 shrink-0', className)}>
       {/* Header */}
       <div className="p-4 border-b border-zinc-850 flex items-center justify-between select-none">
         <h3 className="text-sm font-bold text-white tracking-wide">Messages</h3>

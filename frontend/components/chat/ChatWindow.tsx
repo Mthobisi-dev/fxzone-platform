@@ -35,6 +35,7 @@ interface ChatWindowProps {
   onStartLiveCall?: () => void;
   onTyping?: () => void;
   typingUsers?: string[];
+  onBack?: () => void;
 }
 
 export function ChatWindow({
@@ -50,6 +51,7 @@ export function ChatWindow({
   onStartLiveCall,
   onTyping,
   typingUsers = [],
+  onBack,
 }: ChatWindowProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showGroupProfile, setShowGroupProfile] = React.useState(false);
@@ -106,16 +108,25 @@ export function ChatWindow({
   return (
     <div className="flex-1 h-full flex flex-col justify-between bg-zinc-950/40 relative overflow-hidden">
       {/* Header */}
-      <div className="h-14 px-4 border-b border-zinc-850 flex items-center justify-between bg-zinc-900/20 select-none">
-        <div className="flex items-center gap-3">
+      <div className="h-14 px-3 sm:px-4 border-b border-zinc-850 flex items-center justify-between bg-zinc-900/20 select-none shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="md:hidden p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors shrink-0"
+              title="Back to Conversations"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
           <Avatar src={conversationAvatar} alt={conversationName} size="sm" />
-          <div>
-            <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
-              {conversationName}
+          <div className="min-w-0">
+            <h4 className="text-xs font-semibold text-white flex items-center gap-1.5 truncate">
+              <span className="truncate">{conversationName}</span>
               {isGroup && (
                 <button
                   onClick={() => setShowGroupProfile(true)}
-                  className="text-[8px] bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 px-1.5 py-0.5 rounded font-bold uppercase transition-colors flex items-center gap-1"
+                  className="text-[8px] bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 px-1.5 py-0.5 rounded font-bold uppercase transition-colors flex items-center gap-1 shrink-0"
                 >
                   <Info size={9} /> Explore Group Profile
                 </button>
@@ -169,7 +180,7 @@ export function ChatWindow({
             return (
               <div
                 key={msg.id}
-                className={cn('flex gap-2 max-w-[70%]', isSelf ? 'self-end flex-row-reverse' : 'self-start')}
+                className={cn('flex gap-2 max-w-[88%] sm:max-w-[70%]', isSelf ? 'self-end flex-row-reverse' : 'self-start')}
               >
                 {!isSelf && (
                   <Avatar
