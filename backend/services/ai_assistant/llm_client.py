@@ -232,15 +232,15 @@ class MockClient(LLMClient):
         prices = await self._get_real_prices()
         prompt_lower = prompt.lower()
 
-        # ── Sentiment JSON request ──
+        # ── Sentiment JSON request (from AI insights widgets) ──
         if "sentiment" in prompt_lower and "json" in prompt_lower:
             return self._sentiment_json(prompt_lower, prices)
 
-        # ── Detailed analysis ──
-        if "comprehensive" in prompt_lower or "analysis" in prompt_lower:
+        # ── Detailed analysis (explicit request) ──
+        if any(kw in prompt_lower for kw in ["comprehensive analysis", "technical analysis", "full analysis", "analyze "]):
             return self._detailed_analysis(prompt_lower, prices)
 
-        # ── General chat ──
+        # ── All other chat — smart market-aware chat ──
         return self._general_chat(prompt_lower, prices)
 
     async def stream(self, prompt: str, system_prompt: str = "") -> AsyncGenerator[str, None]:
@@ -251,45 +251,54 @@ class MockClient(LLMClient):
             yield response_text[i:i + chunk_size]
             await asyncio.sleep(0.03)
 
-    def _detect_symbol(self, text: str) -> str:
-        """Detect which asset the user is asking about across all available markets."""
+    def _detect_symbol(self, text: str) -> Optional[str]:
+        """Detect which asset the user is asking about across all available markets. Returns None if no match."""
         symbol_keywords = {
             # Crypto
-            "BTCUSD": ["btc", "bitcoin", "btcusd"],
-            "ETHUSD": ["eth", "ethereum", "ethusd", "ether"],
+            "BTCUSD": ["btc", "bitcoin", "btcusd", "crypto king", "bit coin"],
+            "ETHUSD": ["eth", "ethereum", "ethusd", "ether", "eth/usd"],
             "SOLUSD": ["sol", "solana", "solusd"],
             "XRPUSD": ["xrp", "ripple", "xrpusd"],
             "ADAUSD": ["ada", "cardano", "adausd"],
             "DOTUSD": ["dot", "polkadot", "dotusd"],
             # Stocks
-            "AAPL": ["aapl", "apple", "iphone"],
-            "GOOGL": ["googl", "google", "alphabet"],
-            "MSFT": ["msft", "microsoft", "windows", "azure"],
-            "AMZN": ["amzn", "amazon", "aws"],
-            "TSLA": ["tsla", "tesla", "elon"],
-            "NVDA": ["nvda", "nvidia", "gpu", "chips"],
-            "META": ["meta", "facebook", "instagram"],
+            "AAPL": ["aapl", "apple", "iphone", "apple stock", "apple share"],
+            "GOOGL": ["googl", "google", "alphabet", "goog"],
+            "MSFT": ["msft", "microsoft", "windows", "azure", "ms stock"],
+            "AMZN": ["amzn", "amazon", "aws", "amazon stock"],
+            "TSLA": ["tsla", "tesla", "elon", "tesla stock", "tesla share"],
+            "NVDA": ["nvda", "nvidia", "gpu chips", "nvidia stock"],
+            "META": ["meta", "facebook", "instagram", "meta stock"],
             # Forex
-            "EURUSD": ["eurusd", "eur/usd", "euro", "eur usd"],
-            "GBPUSD": ["gbpusd", "gbp/usd", "pound", "sterling", "cable", "gbp usd"],
-            "USDJPY": ["usdjpy", "usd/jpy", "yen", "usd jpy", "japanese yen"],
-            "AUDUSD": ["audusd", "aud/usd", "aussie", "australian dollar", "aud usd"],
-            "USDCAD": ["usdcad", "usd/cad", "loonie", "canadian dollar", "usd cad"],
+            "EURUSD": ["eurusd", "eur/usd", "euro dollar", "eur usd", "euro usd", "euro vs dollar", "euro price", "the euro"],
+            "GBPUSD": ["gbpusd", "gbp/usd", "pound", "sterling", "cable", "gbp usd", "british pound", "gbp dollar"],
+            "USDJPY": ["usdjpy", "usd/jpy", "yen", "usd jpy", "japanese yen", "dollar yen"],
+            "AUDUSD": ["audusd", "aud/usd", "aussie", "australian dollar", "aud usd", "aud dollar"],
+            "USDCAD": ["usdcad", "usd/cad", "loonie", "canadian dollar", "usd cad", "cad"],
             "NZDUSD": ["nzdusd", "nzd/usd", "kiwi", "new zealand dollar", "nzd usd"],
             "USDCHF": ["usdchf", "usd/chf", "swiss franc", "franc", "swissie", "usd chf"],
             "EURGBP": ["eurgbp", "eur/gbp", "chunnel", "eur gbp"],
             # Commodities
-            "XAUUSD": ["xauusd", "xau/usd", "gold", "gold price", "bullion", "xau"],
-            "XAGUSD": ["xagusd", "xag/usd", "silver", "silver price", "xag"],
+            "XAUUSD": ["xauusd", "xau/usd", "gold", "gold price", "bullion", "xau", "gold usd", "price of gold"],
+            "XAGUSD": ["xagusd", "xag/usd", "silver", "silver price", "xag", "silver usd"],
         }
         for symbol, keywords in symbol_keywords.items():
             for kw in keywords:
                 if kw in text:
                     return symbol
-        return "BTCUSD"
+        return None  # No asset detected — don't assume BTCUSD
+
+    def _format_price_str(self, price: float) -> str:
+        """Format price to readable string."""
+        if price >= 1000:
+            return f"${price:,.2f}"
+        elif price >= 1:
+            return f"${price:,.4f}"
+        else:
+            return f"${price:,.6f}"
 
     def _sentiment_json(self, prompt_lower: str, prices: Dict) -> str:
-        symbol = self._detect_symbol(prompt_lower)
+        symbol = self._detect_symbol(prompt_lower) or "BTCUSD"
         pd = prices.get(symbol, {})
         price = pd.get("price", 0)
         change = pd.get("daily_change_pct", 0)
@@ -301,7 +310,7 @@ class MockClient(LLMClient):
         else:
             sentiment, confidence = "Neutral", 0.60
 
-        price_str = f"${price:,.2f}" if price > 10 else f"${price:,.4f}"
+        price_str = self._format_price_str(price)
         return json.dumps({
             "sentiment": sentiment,
             "confidence": confidence,
@@ -310,16 +319,16 @@ class MockClient(LLMClient):
         })
 
     def _detailed_analysis(self, prompt_lower: str, prices: Dict) -> str:
-        symbol = self._detect_symbol(prompt_lower)
+        symbol = self._detect_symbol(prompt_lower) or "BTCUSD"
         pd = prices.get(symbol, {})
         price = pd.get("price", 0)
         change = pd.get("daily_change_pct", 0)
         high = pd.get("high", price)
         low = pd.get("low", price)
         volume = pd.get("volume", 0)
-        price_str = f"${price:,.2f}" if price > 10 else f"${price:,.4f}"
-        high_str = f"${high:,.2f}" if high > 10 else f"${high:,.4f}"
-        low_str = f"${low:,.2f}" if low > 10 else f"${low:,.4f}"
+        price_str = self._format_price_str(price)
+        high_str = self._format_price_str(high)
+        low_str = self._format_price_str(low)
 
         if change > 1:
             sentiment, outlook = "Bullish", "positive momentum suggests continuation"
@@ -352,104 +361,172 @@ The price is currently trading {'above' if change > 0 else 'below'} the daily op
     def _general_chat(self, prompt_lower: str, prices: Dict) -> str:
         import re
 
-        # Extract user message from structured prompt
+        # Extract user message from structured prompt (strip system context)
         user_msg = prompt_lower
         if "user:" in prompt_lower:
             parts = prompt_lower.split("user:")
             user_msg = parts[-1].split("assistant:")[0].strip()
+        # Also strip lines starting with "live market context:" injected by service
+        user_msg_clean = "\n".join(
+            line for line in user_msg.splitlines()
+            if not line.strip().startswith("live market") and not line.strip().startswith("-")
+        ).strip() or user_msg
 
         def has_word(word: str) -> bool:
-            return bool(re.search(rf"\b{re.escape(word)}\b", user_msg))
+            return bool(re.search(rf"\b{re.escape(word)}\b", user_msg_clean))
 
-        # Greeting
-        if has_word("hello") or has_word("hi") or user_msg.strip() in ["hi", "hello", "hey"]:
-            # Build a quick market snapshot
+        # ── Greeting ──
+        if has_word("hello") or has_word("hi") or has_word("hey") or user_msg_clean.strip() in ["hi", "hello", "hey", "hiya"]:
             snapshot_lines = []
-            for sym in ["BTCUSD", "EURUSD", "AAPL"]:
+            for sym in ["BTCUSD", "EURUSD", "XAUUSD", "AAPL", "TSLA"]:
                 pd = prices.get(sym, {})
                 if pd:
                     p = pd.get("price", 0)
                     c = pd.get("daily_change_pct", 0)
                     icon = "🟢" if c >= 0 else "🔴"
-                    p_str = f"${p:,.2f}" if p > 10 else f"${p:,.4f}"
+                    p_str = self._format_price_str(p)
                     snapshot_lines.append(f"  {icon} **{sym}**: {p_str} ({c:+.2f}%)")
 
             snapshot = "\n".join(snapshot_lines) if snapshot_lines else "  Market data loading..."
             return (
-                f"Hello! I'm your FxZone AI Assistant. Here's a quick market snapshot:\n\n"
-                f"{snapshot}\n\n"
-                f"Ask me about any asset for a detailed analysis, or ask about risk management, market trends, or trading strategies!"
+                f"Hello! I'm your **FxZone AI Market Assistant** 🤖\n\n"
+                f"Here's your live market snapshot:\n\n{snapshot}\n\n"
+                f"Ask me anything about markets — price, analysis, trends, risk management, or trading strategies!"
             )
 
-        # Detect specific asset queries
-        symbol = self._detect_symbol(user_msg)
-        pd = prices.get(symbol, {})
-        if pd and any(kw in user_msg for kw in ["price", "how", "what", "outlook", "analysis", "tell me about",
-                                                   symbol.lower()]):
+        # ── Detect specific asset — ALWAYS answer with live price if detected ──
+        symbol = self._detect_symbol(user_msg_clean)
+        if symbol:
+            pd = prices.get(symbol, {})
             price = pd.get("price", 0)
             change = pd.get("daily_change_pct", 0)
-            high = pd.get("high", price)
-            low = pd.get("low", price)
-            p_str = f"${price:,.2f}" if price > 10 else f"${price:,.4f}"
-            h_str = f"${high:,.2f}" if high > 10 else f"${high:,.4f}"
-            l_str = f"${low:,.2f}" if low > 10 else f"${low:,.4f}"
+            high = pd.get("high", price * 1.005)
+            low = pd.get("low", price * 0.995)
+            volume = pd.get("volume", 0)
+
+            p_str = self._format_price_str(price)
+            h_str = self._format_price_str(high)
+            l_str = self._format_price_str(low)
 
             direction = "up" if change > 0 else "down" if change < 0 else "flat"
-            emoji = "📈" if change > 0 else "📉" if change < 0 else "➡️"
+            trend_emoji = "📈" if change > 0 else "📉" if change < 0 else "➡️"
 
-            return (
-                f"**{symbol}** — Live Market Data {emoji}\n\n"
-                f"**Price:** {p_str} ({change:+.2f}% today)\n"
-                f"**Day Range:** {l_str} — {h_str}\n\n"
-                f"The price is currently {direction} for the day. "
-                f"{'Momentum looks constructive with buyers defending support.' if change > 0.5 else 'Selling pressure is evident, watch key support levels.' if change < -0.5 else 'Price is consolidating in a tight range.'}\n\n"
-                f"Would you like a full technical analysis or sentiment check?"
+            if change > 1.5:
+                sentiment = "**Bullish** — strong upward momentum, buyers in control."
+                advice_hint = "Watch for continuation above resistance."
+            elif change > 0:
+                sentiment = "**Slightly Bullish** — mild positive momentum."
+                advice_hint = "Watch for confirmation before adding positions."
+            elif change < -1.5:
+                sentiment = "**Bearish** — strong selling pressure, watch key support."
+                advice_hint = "Be cautious with longs; manage risk tightly."
+            elif change < 0:
+                sentiment = "**Slightly Bearish** — mild downside pressure."
+                advice_hint = "Consider tightening stops on existing positions."
+            else:
+                sentiment = "**Neutral** — price consolidating, no clear direction."
+                advice_hint = "Wait for a breakout setup before taking new positions."
+
+            # Detect if user is asking buy/sell/should/worth/invest
+            asking_for_recommendation = any(kw in user_msg_clean for kw in
+                ["buy", "sell", "should i", "worth", "invest", "long", "short", "entry", "good time"])
+
+            rec_note = (
+                f"\n\n**Should you buy/sell?**\n{advice_hint}\n"
+                f"⚠️ *This is informational only — not financial advice. Always manage your risk.*"
+                if asking_for_recommendation else
+                f"\n\nWant a full technical analysis? Just ask *'Analyze {symbol}'*."
             )
 
-        # Watchlist overview
-        if "watchlist" in user_msg or "portfolio" in user_msg:
+            return (
+                f"**{symbol}** — Live Price {trend_emoji}\n\n"
+                f"**Current Price:** {p_str}\n"
+                f"**24h Change:** {change:+.2f}% ({direction})\n"
+                f"**Day Range:** {l_str} — {h_str}\n"
+                f"**Volume:** {volume:,}\n\n"
+                f"**Market Sentiment:** {sentiment}"
+                f"{rec_note}"
+            )
+
+        # ── Full market overview ──
+        if any(kw in user_msg_clean for kw in ["market", "overview", "all prices", "watchlist", "portfolio", "what's happening", "markets today"]):
             lines = []
-            for sym in ["BTCUSD", "ETHUSD", "AAPL", "TSLA", "EURUSD"]:
+            for sym in ["BTCUSD", "ETHUSD", "XAUUSD", "EURUSD", "GBPUSD", "AAPL", "TSLA", "NVDA"]:
                 pd2 = prices.get(sym, {})
                 if pd2:
                     p = pd2.get("price", 0)
                     c = pd2.get("daily_change_pct", 0)
                     icon = "🟢" if c >= 0 else "🔴"
-                    p_str = f"${p:,.2f}" if p > 10 else f"${p:,.4f}"
+                    p_str = self._format_price_str(p)
                     lines.append(f"  {icon} **{sym}**: {p_str} ({c:+.2f}%)")
             overview = "\n".join(lines) if lines else "  Loading prices..."
-            return f"Here's your watchlist overview with live prices:\n\n{overview}\n\nWant a detailed analysis on any of these?"
-
-        # Risk management
-        if "risk" in user_msg:
             return (
-                "**Risk Management Essentials:**\n\n"
-                "1. **Position Sizing**: Never risk more than 1-2% of capital per trade\n"
-                "2. **Stop Loss**: Always set stops before entering — no exceptions\n"
-                "3. **Risk/Reward**: Target minimum 1:2 ratio\n"
-                "4. **Diversification**: Don't concentrate in one asset class\n"
-                "5. **Leverage**: Use cautiously — it amplifies losses too\n\n"
-                "Would you like me to calculate position sizes for a specific trade?"
+                f"**Live Market Overview** 🌐\n\n{overview}\n\n"
+                f"Ask me about any specific asset for detailed analysis!"
             )
 
-        # Default response with market overview
-        overview_lines = []
-        for sym in ["BTCUSD", "AAPL", "EURUSD"]:
-            pd3 = prices.get(sym, {})
-            if pd3:
-                p = pd3.get("price", 0)
-                c = pd3.get("daily_change_pct", 0)
-                p_str = f"${p:,.2f}" if p > 10 else f"${p:,.4f}"
-                overview_lines.append(f"  • **{sym}**: {p_str} ({c:+.2f}%)")
-        overview = "\n".join(overview_lines) if overview_lines else ""
+        # ── Risk management ──
+        if any(kw in user_msg_clean for kw in ["risk", "stop loss", "position size", "money management", "leverage"]):
+            return (
+                "**Risk Management Essentials 🛡️**\n\n"
+                "1. **Position Sizing**: Never risk more than 1-2% of your account per trade\n"
+                "2. **Stop Loss**: Always set stops before entering — no exceptions\n"
+                "3. **Risk/Reward**: Target a minimum 1:2 risk-to-reward ratio\n"
+                "4. **Diversification**: Don't concentrate everything in one asset\n"
+                "5. **Leverage**: Use cautiously — it amplifies losses as much as gains\n"
+                "6. **Drawdown**: If you lose 5 trades in a row, take a break and reassess\n\n"
+                "Would you like me to calculate a position size for a specific trade?"
+            )
+
+        # ── Crypto-specific fallback ──
+        if any(kw in user_msg_clean for kw in ["crypto", "defi", "nft", "blockchain", "altcoin", "token"]):
+            btc = prices.get("BTCUSD", {})
+            eth = prices.get("ETHUSD", {})
+            sol = prices.get("SOLUSD", {})
+            lines = []
+            for sym, pd3 in [("BTCUSD", btc), ("ETHUSD", eth), ("SOLUSD", sol)]:
+                if pd3:
+                    p = pd3.get("price", 0)
+                    c = pd3.get("daily_change_pct", 0)
+                    icon = "🟢" if c >= 0 else "🔴"
+                    lines.append(f"  {icon} **{sym}**: {self._format_price_str(p)} ({c:+.2f}%)")
+            overview = "\n".join(lines)
+            return f"**Crypto Market Overview 🔗**\n\n{overview}\n\nAsk me about a specific coin for detailed analysis!"
+
+        # ── Forex fallback ──
+        if any(kw in user_msg_clean for kw in ["forex", "fx", "currency", "currencies", "pips", "spread"]):
+            pairs = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD"]
+            lines = []
+            for sym in pairs:
+                pd4 = prices.get(sym, {})
+                if pd4:
+                    p = pd4.get("price", 0)
+                    c = pd4.get("daily_change_pct", 0)
+                    icon = "🟢" if c >= 0 else "🔴"
+                    lines.append(f"  {icon} **{sym}**: {self._format_price_str(p)} ({c:+.2f}%)")
+            overview = "\n".join(lines)
+            return f"**Forex Market Overview 💱**\n\n{overview}\n\nAsk about a specific pair for detailed analysis!"
+
+        # ── Default: show full market snapshot ──
+        lines = []
+        for sym in ["BTCUSD", "XAUUSD", "EURUSD", "AAPL"]:
+            pd5 = prices.get(sym, {})
+            if pd5:
+                p = pd5.get("price", 0)
+                c = pd5.get("daily_change_pct", 0)
+                icon = "🟢" if c >= 0 else "🔴"
+                lines.append(f"  {icon} **{sym}**: {self._format_price_str(p)} ({c:+.2f}%)")
+        overview = "\n".join(lines)
 
         return (
-            f"Here's what I can help with:\n\n"
-            f"📊 **Live Market Data:**\n{overview}\n\n"
+            f"I'm your **FxZone AI Assistant** 🤖 — here's the live market pulse:\n\n"
+            f"{overview}\n\n"
             f"Try asking:\n"
-            f"• *\"What's the outlook for Bitcoin?\"*\n"
-            f"• *\"Analyze EURUSD\"*\n"
-            f"• *\"How is Tesla doing?\"*\n"
+            f"• *\"What is the price of Gold?\"*\n"
+            f"• *\"Analyze Bitcoin\"*\n"
+            f"• *\"Is EURUSD going up?\"*\n"
+            f"• *\"Should I buy NVDA?\"*\n"
+            f"• *\"Crypto market overview\"*\n"
             f"• *\"Risk management tips\"*"
         )
 

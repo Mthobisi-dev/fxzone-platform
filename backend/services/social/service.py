@@ -724,38 +724,29 @@ class SocialService:
         }
 
     async def get_active_stories(self, user_id: Any) -> List[Post]:
-        """Fetch stories that haven't expired (expires_at > now)."""
+        """Fetch stories that haven't expired (expires_at > now), newest first."""
         u_uuid = to_uuid(user_id)
         now = datetime.utcnow()
-        
-        following_subquery = select(Follow.following_id).where(Follow.follower_id == u_uuid)
         
         query = (
             select(Post)
             .where(
                 and_(
                     Post.is_story == True,
-                    Post.expires_at > now,
-                    Post.user_id.in_(following_subquery)
+                    or_(Post.expires_at == None, Post.expires_at > now)
                 )
             )
-            .options(selectinload(Post.user))
+            .options(
+                selectinload(Post.user),
+                selectinload(Post.tagged_assets),
+                selectinload(Post.reactions),
+                selectinload(Post.comments)
+            )
             .order_by(Post.created_at.desc())
+            .limit(50)
         )
         result = await self.db.execute(query)
         stories = list(result.scalars().all())
-
-        if not stories:
-            fallback_query = (
-                select(Post)
-                .where(and_(Post.is_story == True, Post.expires_at > now))
-                .options(selectinload(Post.user))
-                .order_by(Post.created_at.desc())
-                .limit(10)
-            )
-            result = await self.db.execute(fallback_query)
-            stories = list(result.scalars().all())
-
         return stories
 
     async def get_all_users(self, query: str = "", limit: int = 20, offset: int = 0, current_user_id=None) -> List[Dict[str, Any]]:
