@@ -223,11 +223,6 @@ export default function LandingPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-3 border-r border-zinc-800/80 pr-4 mr-1">
-            <a href="https://www.instagram.com/it.is_jack?igsh=MXV1dW1uM3o5NjI1Zg==" target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-pink-400 transition-colors" title="Instagram"><Instagram size={16} /></a>
-            <a href="https://www.linkedin.com/in/mthobisi-mzimela-136835354?utm_source=share_via&utm_content=profile&utm_medium=member_android" target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-400 transition-colors" title="LinkedIn"><Linkedin size={16} /></a>
-            <a href="https://github.com/Mthobisi-dev" target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-white transition-colors" title="GitHub"><Github size={16} /></a>
-          </div>
           <Link href="/login">
             <Button variant="ghost" size="sm" className="text-xs text-zinc-300 hover:text-white hover:bg-zinc-900/60 font-semibold px-4">
               Sign In

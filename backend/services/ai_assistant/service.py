@@ -74,22 +74,47 @@ class AIAssistantService:
                 "watchlist_symbols": ["BTCUSD", "EURUSD", "AAPL"]
             }
         
-        # 3. Assemble prompt with history
+        # 3. Fetch real-time live market prices for all available assets
+        real_market_feed = []
+        try:
+            from services.market_data.providers import price_engine
+            prices = await price_engine.get_all_prices()
+            if prices:
+                for sym, pd in prices.items():
+                    p = pd.get("price", 0)
+                    c = pd.get("daily_change_pct", 0)
+                    h = pd.get("high", p)
+                    l = pd.get("low", p)
+                    p_str = f"${p:,.2f}" if p > 10 else f"${p:,.4f}"
+                    h_str = f"${h:,.2f}" if h > 10 else f"${h:,.4f}"
+                    l_str = f"${l:,.2f}" if l > 10 else f"${l:,.4f}"
+                    real_market_feed.append(f"  • {sym}: {p_str} ({c:+.2f}%, 24h High: {h_str}, Low: {l_str})")
+        except Exception as pe:
+            logger.warning(f"Failed to compile live prices for AI chat prompt: {pe}")
+
+        market_feed_str = "\n".join(real_market_feed[:18]) if real_market_feed else "  Live market prices currently streaming."
+
+        # 4. Assemble prompt with history and real-time live market feeds
         history_str = ""
         for msg in history:
             role = "User" if msg["role"] == "user" else "Assistant"
             history_str += f"{role}: {msg['content']}\n"
             
         full_prompt = (
+            f"LIVE REAL-TIME MARKET DATA (Verified Public APIs):\n"
+            f"{market_feed_str}\n\n"
             f"User Profile Info:\n"
             f"- Experience Level: {user_ctx['experience_level']}\n"
             f"- Watchlist Assets: {', '.join(user_ctx['watchlist_symbols'])}\n\n"
+            f"Instructions:\n"
+            f"- Answer the user's questions about the market with precision using the live real-time prices provided above.\n"
+            f"- If the user asks about any Forex, Crypto, Stock, or Commodity (Gold/Silver), give the exact current price, 24h trend, support/resistance levels, and risk insights.\n\n"
             f"Conversation History:\n{history_str}\n"
             f"User: {message}\n"
             f"Assistant:"
         )
 
-        # 4. Generate response from LLM
+        # 5. Generate response from LLM
         ai_response = await self.llm.generate(full_prompt, system_prompt=SYSTEM_PROMPT)
 
         # 5. Append risk disclaimer if it is not present

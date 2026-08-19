@@ -252,24 +252,35 @@ class MockClient(LLMClient):
             await asyncio.sleep(0.03)
 
     def _detect_symbol(self, text: str) -> str:
-        """Detect which asset the user is asking about."""
+        """Detect which asset the user is asking about across all available markets."""
         symbol_keywords = {
-            "BTCUSD": ["btc", "bitcoin"],
-            "ETHUSD": ["eth", "ethereum"],
-            "SOLUSD": ["sol", "solana"],
-            "XRPUSD": ["xrp", "ripple"],
-            "ADAUSD": ["ada", "cardano"],
-            "DOTUSD": ["dot", "polkadot"],
-            "AAPL": ["aapl", "apple"],
+            # Crypto
+            "BTCUSD": ["btc", "bitcoin", "btcusd"],
+            "ETHUSD": ["eth", "ethereum", "ethusd", "ether"],
+            "SOLUSD": ["sol", "solana", "solusd"],
+            "XRPUSD": ["xrp", "ripple", "xrpusd"],
+            "ADAUSD": ["ada", "cardano", "adausd"],
+            "DOTUSD": ["dot", "polkadot", "dotusd"],
+            # Stocks
+            "AAPL": ["aapl", "apple", "iphone"],
             "GOOGL": ["googl", "google", "alphabet"],
-            "MSFT": ["msft", "microsoft"],
-            "AMZN": ["amzn", "amazon"],
-            "TSLA": ["tsla", "tesla"],
-            "NVDA": ["nvda", "nvidia"],
-            "META": ["meta", "facebook"],
-            "EURUSD": ["eurusd", "eur/usd", "euro"],
-            "GBPUSD": ["gbpusd", "gbp/usd", "pound", "sterling"],
-            "USDJPY": ["usdjpy", "usd/jpy", "yen"],
+            "MSFT": ["msft", "microsoft", "windows", "azure"],
+            "AMZN": ["amzn", "amazon", "aws"],
+            "TSLA": ["tsla", "tesla", "elon"],
+            "NVDA": ["nvda", "nvidia", "gpu", "chips"],
+            "META": ["meta", "facebook", "instagram"],
+            # Forex
+            "EURUSD": ["eurusd", "eur/usd", "euro", "eur usd"],
+            "GBPUSD": ["gbpusd", "gbp/usd", "pound", "sterling", "cable", "gbp usd"],
+            "USDJPY": ["usdjpy", "usd/jpy", "yen", "usd jpy", "japanese yen"],
+            "AUDUSD": ["audusd", "aud/usd", "aussie", "australian dollar", "aud usd"],
+            "USDCAD": ["usdcad", "usd/cad", "loonie", "canadian dollar", "usd cad"],
+            "NZDUSD": ["nzdusd", "nzd/usd", "kiwi", "new zealand dollar", "nzd usd"],
+            "USDCHF": ["usdchf", "usd/chf", "swiss franc", "franc", "swissie", "usd chf"],
+            "EURGBP": ["eurgbp", "eur/gbp", "chunnel", "eur gbp"],
+            # Commodities
+            "XAUUSD": ["xauusd", "xau/usd", "gold", "gold price", "bullion", "xau"],
+            "XAGUSD": ["xagusd", "xag/usd", "silver", "silver price", "xag"],
         }
         for symbol, keywords in symbol_keywords.items():
             for kw in keywords:

@@ -42,7 +42,7 @@ export default function DashboardLayout({
         <Sidebar />
 
         {/* Center: Main Dashboard Viewport */}
-        <main className="flex-1 overflow-y-auto bg-zinc-950/30 relative">
+        <main className="flex-1 overflow-y-auto bg-zinc-950/30 relative pb-16 md:pb-0">
           {children}
         </main>
 

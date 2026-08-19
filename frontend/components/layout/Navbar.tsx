@@ -65,26 +65,26 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
 
   return (
     <>
-      <nav className="h-14 border-b border-zinc-850 bg-zinc-950/80 backdrop-blur-md px-6 flex items-center justify-between shrink-0 select-none z-40 relative">
+      <nav className="h-14 border-b border-zinc-850 bg-zinc-950/80 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between shrink-0 select-none z-40 relative">
         {/* Left Side: Brand Logo */}
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => (window.location.href = '/')}>
+        <div className="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onClick={() => (window.location.href = '/')}>
           <img
             src="/fxzone-logo.jpg"
             alt="FxZone Logo"
-            className="h-9 w-9 rounded-lg object-cover shadow-[0_0_14px_rgba(255,255,255,0.12)] border border-zinc-800"
+            className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg object-cover shadow-[0_0_14px_rgba(255,255,255,0.12)] border border-zinc-800"
           />
           <div>
-            <span className="font-extrabold text-sm tracking-wider bg-gradient-to-r from-white via-zinc-200 to-blue-500 bg-clip-text text-transparent">
+            <span className="font-extrabold text-xs sm:text-sm tracking-wider bg-gradient-to-r from-white via-zinc-200 to-blue-500 bg-clip-text text-transparent">
               FXZONE
             </span>
-            <span className="text-[8px] block font-bold text-zinc-500 tracking-widest mt-[-2px] uppercase">
+            <span className="text-[7px] sm:text-[8px] block font-bold text-zinc-500 tracking-widest mt-[-2px] uppercase">
               Trading Intelligence
             </span>
           </div>
         </div>
 
         {/* Center: Search Box */}
-        <div className="hidden md:flex items-center w-80 relative">
+        <div className="hidden md:flex items-center w-72 lg:w-80 relative">
           <Search size={14} className="text-zinc-500 absolute left-3.5" />
           <input
             type="text"
@@ -94,20 +94,20 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
         </div>
 
         {/* Right Side: Navigation Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* AI Toggle Button */}
           {onToggleAI && (
             <button
               onClick={onToggleAI}
               className={cn(
-                'relative p-2 rounded-lg hover:bg-white/5 transition-all focus:outline-none flex items-center gap-1.5 border text-xs font-semibold',
+                'relative p-1.5 sm:p-2 rounded-lg hover:bg-white/5 transition-all focus:outline-none flex items-center gap-1.5 border text-xs font-semibold shrink-0',
                 isAIOpen
                   ? 'bg-blue-600/15 border-blue-500/30 text-blue-400'
                   : 'border-zinc-850 text-zinc-400 hover:text-white'
               )}
             >
-              <MessageSquareCode size={16} />
-              <span className="hidden sm:inline">AI Analyst</span>
+              <MessageSquareCode size={15} />
+              <span className="hidden sm:inline text-xs">AI Analyst</span>
               {isAIOpen && (
                 <span className="absolute top-1 right-1 flex h-1.5 w-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
@@ -122,10 +122,10 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
             href="https://one.exnesstrack.net"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold transition-all shadow-sm"
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold transition-all shadow-sm"
             title="Trade live markets on Exness Broker"
           >
-            <TrendingUp size={14} />
+            <TrendingUp size={13} />
             <span>Trade Exness</span>
           </a>
 
@@ -134,13 +134,13 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
             href="https://www.tradingview.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs font-bold transition-all shadow-sm"
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs font-bold transition-all shadow-sm"
             title="Open TradingView Charting"
           >
             <span>TradingView</span>
           </a>
 
-          <div className="h-5 w-[1px] bg-zinc-850" />
+          <div className="hidden sm:block h-5 w-[1px] bg-zinc-850" />
 
           {/* Real-time Notifications */}
           <NotificationDropdown />
@@ -149,7 +149,7 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
           {user && (
             <Dropdown
               trigger={
-                <div className="flex items-center gap-2.5 pl-1.5">
+                <div className="flex items-center gap-2 pl-1 cursor-pointer">
                   <Avatar name={user.display_name || user.username} src={user.avatar_url} size="sm" isOnline />
                   <div className="hidden lg:flex flex-col text-left">
                     <span className="text-xs font-semibold text-zinc-200">{user.display_name || user.username}</span>

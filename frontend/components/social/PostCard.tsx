@@ -256,6 +256,11 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       if (res && typeof res.is_bookmarked === 'boolean') {
         setIsBookmarked(res.is_bookmarked);
       }
+      // Immediately notify profile and feed to sync saved bookmarks
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fxzone_refresh_saved_posts'));
+        window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
+      }
     } catch (err) {
       console.error('Bookmark error:', err);
     } finally {
@@ -270,24 +275,26 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const [sharedSent, setSharedSent] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const openShareModal = (e: React.MouseEvent) => {
+  const openShareModal = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setShareModalOpen(true);
     setLoadingShareUsers(true);
-    api
-      .get('/api/social/users?limit=30')
-      .then((res: any) => {
-        if (Array.isArray(res)) {
-          setShareUsers(res.filter((u: any) => u.id !== user?.id));
-        }
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoadingShareUsers(false));
+    try {
+      const res = await api.get('/api/social/users?limit=30');
+      if (Array.isArray(res)) {
+        setShareUsers(res.filter((u: any) => u.id !== user?.id));
+      }
+    } catch (err) {
+      console.error('Failed to load users for sharing:', err);
+    } finally {
+      setLoadingShareUsers(false);
+    }
   };
 
-  const handleCopyLink = () => {
-    const postUrl = `${window.location.origin}/feed#post-${post.id}`;
-    navigator.clipboard.writeText(postUrl).then(() => {
+  const handleCopyLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/feed#post-${post.id}`;
+    navigator.clipboard.writeText(url).then(() => {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2500);
     });
@@ -315,14 +322,28 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
 
   const getTimestamps = () => {
     try {
-      if (!createdAt) return { rel: 'recently', exact: '' };
-      const d = typeof createdAt === 'string' ? parseISO(createdAt) : new Date(createdAt);
-      if (isNaN(d.getTime())) return { rel: 'recently', exact: '' };
-      const rel = formatDistanceToNow(d, { addSuffix: true });
-      const exact = format(d, "MMM d, yyyy 'at' h:mm a");
+      if (!createdAt) return { rel: 'just now', exact: '' };
+      let dateStr = String(createdAt).trim();
+      // Ensure ISO string without offset is parsed as UTC
+      if (dateStr.includes('T') && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+        dateStr += 'Z';
+      }
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return { rel: 'just now', exact: '' };
+
+      const now = new Date();
+      const diffSecs = Math.max(0, Math.floor((now.getTime() - d.getTime()) / 1000));
+      
+      let rel = '';
+      if (diffSecs < 45) {
+        rel = 'just now';
+      } else {
+        rel = formatDistanceToNow(d, { addSuffix: true });
+      }
+      const exact = format(d, "MMM d, yyyy · h:mm a");
       return { rel, exact };
     } catch {
-      return { rel: 'recently', exact: '' };
+      return { rel: 'just now', exact: '' };
     }
   };
   const { rel: timeRel, exact: timeExact } = getTimestamps();

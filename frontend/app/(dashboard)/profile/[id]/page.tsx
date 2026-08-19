@@ -104,6 +104,20 @@ export default function ProfilePage() {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    const handleSavedRefresh = () => {
+      if (activeTab === 'saved') {
+        fetchSavedPosts();
+      }
+    };
+    window.addEventListener('fxzone_refresh_saved_posts', handleSavedRefresh);
+    window.addEventListener('fxzone_refresh_feed', handleSavedRefresh);
+    return () => {
+      window.removeEventListener('fxzone_refresh_saved_posts', handleSavedRefresh);
+      window.removeEventListener('fxzone_refresh_feed', handleSavedRefresh);
+    };
+  }, [activeTab]);
+
   // Edit profile state
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editUsername, setEditUsername] = useState('');
