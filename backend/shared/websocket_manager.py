@@ -107,6 +107,16 @@ class ConnectionManager:
                     channels.append(ch_name)
         return channels
 
+    @property
+    def active_connections(self) -> Dict[str, Set]:
+        """Alias for backward-compat: channel -> set of websockets."""
+        return self._channels
+
+    def get_channel_user_ids(self, channel: str) -> list:
+        """Return list of user_ids currently connected to a channel."""
+        ws_set = self._channels.get(channel, set())
+        return [self._ws_to_user[ws] for ws in ws_set if ws in self._ws_to_user]
+
 
 # Global connection manager instance
 manager = ConnectionManager()

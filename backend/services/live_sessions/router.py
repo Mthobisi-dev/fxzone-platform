@@ -466,10 +466,15 @@ async def session_chat_websocket_endpoint(websocket: WebSocket, session_id: str)
                 })
 
             # 2. WebRTC Peer-to-Peer Signaling (Screen Share & Audio Routing)
-            elif msg_type in ["rtc_signal", "offer", "answer", "candidate", "peer_joined", "request_stream", "presenter_stream_started", "presenter_stream_stopped"]:
-                inner_data = payload.get("data", {})
+            elif msg_type in [
+                "rtc_signal", "offer", "answer", "candidate",
+                "peer_joined", "request_stream",
+                "presenter_stream_started", "presenter_stream_stopped"
+            ]:
+                inner_data = payload.get("data", {}) or {}
                 target_user_id = payload.get("target_user_id") or inner_data.get("target_user_id")
-                signal_type = inner_data.get("type") or msg_type
+                # Resolve signal type from inner data (wrapped rtc_signal) or outer payload
+                signal_type = inner_data.get("type") or (msg_type if msg_type != "rtc_signal" else "rtc_signal")
 
                 signal_message = {
                     "type": "rtc_signal",
@@ -477,16 +482,32 @@ async def session_chat_websocket_endpoint(websocket: WebSocket, session_id: str)
                         **inner_data,
                         "type": signal_type,
                         "sender_id": user_id,
-                        "sender_username": user["username"]
+                        "sender_username": user.get("username", "")
                     }
                 }
 
                 if target_user_id and str(target_user_id) != user_id:
-                    # Send direct signal to targeted participant
+                    # Targeted: deliver directly to the specific peer (offer/answer/candidate/request_stream)
+                    logger.debug(f"RTC direct: {signal_type} from {user_id} → {target_user_id}")
                     await manager.send_personal(str(target_user_id), signal_message)
                 else:
-                    # Broadcast signal to all room participants (e.g. host starting screen share)
-                    await manager.broadcast(channel_name, signal_message)
+                    # Broadcast: send to everyone in the room EXCEPT the sender
+                    # (peer_joined, presenter_stream_started, presenter_stream_stopped)
+                    logger.debug(f"RTC broadcast: {signal_type} from {user_id} to room {session_id}")
+                    if channel_name in manager.active_connections:
+                        data_str = json.dumps(signal_message, default=str)
+                        dead = set()
+                        for ws in list(manager.active_connections.get(channel_name, set())):
+                            # Skip the sender's own socket
+                            ws_user = manager._ws_to_user.get(ws)
+                            if ws_user == user_id:
+                                continue
+                            try:
+                                await ws.send_text(data_str)
+                            except Exception:
+                                dead.add(ws)
+                        for ws in dead:
+                            await manager.disconnect(ws, channel_name)
 
             # 3. Live Recording Status (Broadcast when host toggles recording)
             elif msg_type == "recording_status":

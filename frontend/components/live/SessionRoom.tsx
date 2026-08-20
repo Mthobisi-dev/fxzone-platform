@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ScreenShare } from './ScreenShare';
 import { SessionChat, SessionChatMessage } from './SessionChat';
 import { SessionControls } from './SessionControls';
@@ -8,16 +8,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import {
   Shield,
-  Eye,
   Users,
   AlertTriangle,
   Check,
   X,
   Clock,
   Disc,
-  Download,
-  Radio,
-  CheckCircle2,
 } from 'lucide-react';
 import { WebRTCClient } from '@/lib/webrtc';
 import { api } from '@/lib/api';
@@ -42,25 +38,30 @@ export function SessionRoom({
   onLeave,
 }: SessionRoomProps) {
   const { user } = useAuth();
+
+  // ─── UI state ────────────────────────────────────────────────────────────────
   const [participantsCount, setParticipantsCount] = useState(1);
   const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
   const [isSharingScreen, setIsSharingScreen] = useState(false);
-  const [remotePresenterName, setRemotePresenterName] = useState<string>('');
+  const [remotePresenterName, setRemotePresenterName] = useState('');
   const [chatMessages, setChatMessages] = useState<SessionChatMessage[]>([]);
-  const [rtcClient, setRtcClient] = useState<WebRTCClient | null>(null);
   const [copilotAlerts, setCopilotAlerts] = useState<string[]>([]);
-
-  // Participants and Approval State
   const [participants, setParticipants] = useState<any[]>([]);
   const [shareTimeLeft, setShareTimeLeft] = useState<number | null>(null);
-
-  // Live Recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isRoomBeingRecorded, setIsRoomBeingRecorded] = useState(false);
+
+  // ─── Refs (never go stale in callbacks) ─────────────────────────────────────
+  // The WebRTC client lives in a ref so it is NEVER re-created when state changes.
+  const rtcClientRef = useRef<WebRTCClient | null>(null);
+  const isSharingRef = useRef(false);          // mirrors isSharingScreen without closure staleness
+  const activeStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<any>(null);
+  const shareTimerRef = useRef<any>(null);
+  const participantFetchRef = useRef<any>(null);
 
   // Admin override detection
   const isAdmin = !!(
@@ -71,31 +72,31 @@ export function SessionRoom({
       user.email === 'admin@fxzone.io')
   );
 
-  // WebSocket signaling channel
+  // ─── WebSocket ────────────────────────────────────────────────────────────────
+  // IMPORTANT: rtc_signal handler reads from rtcClientRef (not stale state).
   const socketRef = useWebSocket(`/ws/session/${sessionId}`, {
     chat_message: (payload) => {
       const msg = payload.data as SessionChatMessage;
       setChatMessages((prev) => [...prev, msg]);
     },
     rtc_signal: (payload) => {
-      rtcClient?.handleSignal(payload.data || payload);
+      // Always use the ref — never a captured stale closure value.
+      rtcClientRef.current?.handleSignal(payload.data || payload);
     },
     members_update: (payload) => {
       setParticipantsCount(payload.data?.count || payload.count || 1);
     },
-    participant_approved: (payload) => {
+    participant_approved: () => {
       fetchParticipants();
-      // If presenting an active stream, announce stream presence
-      if (activeStream && rtcClient) {
+      // If we are currently presenting, announce stream so newly approved viewer gets the offer.
+      if (isSharingRef.current && rtcClientRef.current) {
         socketRef.current?.send({
           type: 'rtc_signal',
-          data: { type: 'presenter_stream_started', active: true, presenter_id: user?.id },
+          data: { type: 'presenter_stream_started', active: true },
         });
       }
     },
-    participant_rejected: (payload) => {
-      fetchParticipants();
-    },
+    participant_rejected: () => fetchParticipants(),
     recording_status: (payload) => {
       const recData = payload.data || payload;
       setIsRoomBeingRecorded(!!recData.isRecording);
@@ -109,30 +110,26 @@ export function SessionRoom({
     },
   });
 
-  // Fetch participants (active + pending)
-  const fetchParticipants = async () => {
+  // ─── Participants ─────────────────────────────────────────────────────────────
+  const fetchParticipants = useCallback(async () => {
     try {
       const res = await api.get(`/api/sessions/${sessionId}/participants`);
-      if (Array.isArray(res)) {
-        setParticipants(res);
-      }
+      if (Array.isArray(res)) setParticipants(res);
     } catch (e) {
       console.error('Error fetching participants:', e);
     }
-  };
+  }, [sessionId]);
 
   useEffect(() => {
     fetchParticipants();
-    let interval: any;
     if (isHost) {
-      interval = setInterval(fetchParticipants, 3500);
+      participantFetchRef.current = setInterval(fetchParticipants, 3500);
     }
     return () => {
-      if (interval) clearInterval(interval);
+      if (participantFetchRef.current) clearInterval(participantFetchRef.current);
     };
-  }, [sessionId, isHost]);
+  }, [sessionId, isHost, fetchParticipants]);
 
-  // Host approves a pending participant
   const handleApproveParticipant = async (targetUserId: string) => {
     try {
       await api.post(`/api/sessions/${sessionId}/approve/${targetUserId}`);
@@ -142,7 +139,6 @@ export function SessionRoom({
     }
   };
 
-  // Host rejects a pending participant
   const handleRejectParticipant = async (targetUserId: string) => {
     try {
       await api.post(`/api/sessions/${sessionId}/reject/${targetUserId}`);
@@ -152,9 +148,15 @@ export function SessionRoom({
     }
   };
 
-  // Initialize WebRTC client
+  // ─── WebRTC client — created ONCE per session mount, lives in a ref ──────────
   useEffect(() => {
     if (!user) return;
+
+    // Tear down any existing client before creating a new one
+    if (rtcClientRef.current) {
+      rtcClientRef.current.close();
+      rtcClientRef.current = null;
+    }
 
     const client = new WebRTCClient({
       sessionId,
@@ -162,21 +164,24 @@ export function SessionRoom({
       isHost,
       isPresenter: isHost,
       onStream: (stream, presenterInfo) => {
-        if (!isSharingScreen) {
+        // Only set remote stream when we are NOT the one sharing
+        if (!isSharingRef.current) {
           setActiveStream(stream);
+          activeStreamRef.current = stream;
           if (presenterInfo?.username) {
             setRemotePresenterName(presenterInfo.username);
           }
         }
       },
       onPresenterStatusChange: (isLive, presenterName) => {
-        if (presenterName) {
-          setRemotePresenterName(presenterName);
-        }
-        if (!isLive && !isSharingScreen) {
+        if (presenterName) setRemotePresenterName(presenterName);
+        if (!isLive && !isSharingRef.current) {
           setActiveStream(null);
+          activeStreamRef.current = null;
         }
       },
+      // This callback routes outgoing WebRTC signals through the WebSocket.
+      // socketRef.current is also a ref — always current.
       onSignal: (signal) => {
         socketRef.current?.send({
           type: 'rtc_signal',
@@ -186,10 +191,11 @@ export function SessionRoom({
       },
     });
 
-    setRtcClient(client);
+    rtcClientRef.current = client;
 
-    // Announce presence to room peers
-    setTimeout(() => {
+    // Announce our presence to all peers already in the room.
+    // Both host and viewers send peer_joined so everyone can initiate offers.
+    const announceTimer = setTimeout(() => {
       socketRef.current?.send({
         type: 'rtc_signal',
         data: {
@@ -198,14 +204,18 @@ export function SessionRoom({
           username: user.username,
         },
       });
-    }, 400);
+    }, 500);
 
     return () => {
+      clearTimeout(announceTimer);
       client.close();
+      rtcClientRef.current = null;
     };
-  }, [sessionId, isHost, user, isSharingScreen]);
+    // NOTE: isSharingScreen intentionally NOT in deps — that's exactly the bug we're fixing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, isHost, user]);
 
-  // Start Screen Share
+  // ─── Screen Share ─────────────────────────────────────────────────────────────
   const handleStartScreenShare = async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -213,8 +223,6 @@ export function SessionRoom({
           cursor: 'always',
           displaySurface: 'monitor',
           frameRate: { ideal: 30, max: 60 },
-          width: { ideal: 1920, max: 2560 },
-          height: { ideal: 1080, max: 1440 },
         } as any,
         audio: {
           echoCancellation: true,
@@ -223,55 +231,24 @@ export function SessionRoom({
         },
       });
 
+      // Update refs immediately — callbacks read these, not stale state.
+      isSharingRef.current = true;
+      activeStreamRef.current = stream;
       setActiveStream(stream);
       setIsSharingScreen(true);
 
-      if (rtcClient) {
-        await rtcClient.setLocalStream(stream);
+      // Push stream into the existing (ref-stable) WebRTC client.
+      if (rtcClientRef.current) {
+        await rtcClientRef.current.setLocalStream(stream);
       }
 
-      // Handle user stopping screen share via native browser bar
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.onended = () => {
-          handleStopScreenShare();
-        };
-      }
-    } catch (err: any) {
-      console.warn('Display media capture cancelled or rejected:', err);
-    }
-  };
-
-  // Stop Screen Share
-  const handleStopScreenShare = () => {
-    if (activeStream) {
-      activeStream.getTracks().forEach((track) => track.stop());
-    }
-    setActiveStream(null);
-    setIsSharingScreen(false);
-    if (rtcClient) {
-      rtcClient.setLocalStream(null);
-    }
-  };
-
-  const handleShareToggle = (enabled: boolean) => {
-    if (enabled) {
-      handleStartScreenShare();
-    } else {
-      handleStopScreenShare();
-    }
-  };
-
-  // Screen share 30-minute limit (1800 seconds)
-  useEffect(() => {
-    let interval: any;
-    if (isSharingScreen && isHost) {
+      // Start 30-minute share limit timer
       setShareTimeLeft(1800);
-      interval = setInterval(() => {
+      shareTimerRef.current = setInterval(() => {
         setShareTimeLeft((prev) => {
           if (prev === null) return null;
           if (prev <= 1) {
-            clearInterval(interval);
+            clearInterval(shareTimerRef.current);
             handleStopScreenShare();
             alert('Your screen sharing reached the 30-minute session limit and was safely stopped.');
             return null;
@@ -279,73 +256,79 @@ export function SessionRoom({
           return prev - 1;
         });
       }, 1000);
-    } else {
-      setShareTimeLeft(null);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isSharingScreen, isHost]);
 
-  // ============================================================
-  // Session Recording Feature (MediaRecorder API)
-  // ============================================================
+      // Handle user stopping via the native browser "Stop sharing" bar.
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => handleStopScreenShare();
+      }
+    } catch (err: any) {
+      console.warn('Display media capture cancelled or rejected:', err);
+    }
+  };
+
+  const handleStopScreenShare = () => {
+    // Stop all tracks
+    if (activeStreamRef.current) {
+      activeStreamRef.current.getTracks().forEach((track) => track.stop());
+    }
+
+    isSharingRef.current = false;
+    activeStreamRef.current = null;
+    setActiveStream(null);
+    setIsSharingScreen(false);
+    setShareTimeLeft(null);
+
+    if (shareTimerRef.current) {
+      clearInterval(shareTimerRef.current);
+      shareTimerRef.current = null;
+    }
+
+    // Notify all peers the stream stopped
+    if (rtcClientRef.current) {
+      rtcClientRef.current.setLocalStream(null);
+    }
+  };
+
+  const handleShareToggle = (enabled: boolean) => {
+    if (enabled) handleStartScreenShare();
+    else handleStopScreenShare();
+  };
+
+  // ─── Recording ───────────────────────────────────────────────────────────────
   const startRecording = async () => {
     try {
       let recordStream: MediaStream;
-
-      if (activeStream && activeStream.active) {
-        // Use active screen share / camera stream
-        recordStream = activeStream;
+      if (activeStreamRef.current && activeStreamRef.current.active) {
+        recordStream = activeStreamRef.current;
       } else {
-        // Capture screen or audio for recording
-        recordStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
+        recordStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       }
 
       recordedChunksRef.current = [];
-
-      // Determine supported MIME type
       const mimeType = [
         'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
         'video/webm',
         'video/mp4',
-      ].find((type) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) || '';
+      ].find((t) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t)) || '';
 
-      const options = mimeType ? { mimeType } : {};
-      const recorder = new MediaRecorder(recordStream, options);
-
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
+      const recorder = new MediaRecorder(recordStream, mimeType ? { mimeType } : {});
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
       };
+      recorder.onstop = () => exportRecording();
+      recorder.start(1000);
 
-      recorder.onstop = () => {
-        exportRecording();
-      };
-
-      recorder.start(1000); // 1-second timeslices
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
       setRecordingSeconds(0);
 
-      // Notify WebSocket channel that recording started
-      socketRef.current?.send({
-        type: 'recording_status',
-        data: { isRecording: true, hostName },
-      });
-
-      // Start duration timer
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
-      }, 1000);
+      socketRef.current?.send({ type: 'recording_status', data: { isRecording: true, hostName } });
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds((p) => p + 1), 1000);
     } catch (err) {
-      console.error('Failed to start session recording:', err);
-      alert('Unable to start recording: permissions were denied or no stream was available.');
+      console.error('Failed to start recording:', err);
+      alert('Unable to start recording: permissions denied or no stream available.');
     }
   };
 
@@ -353,50 +336,35 @@ export function SessionRoom({
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-    }
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     setIsRecording(false);
-
-    // Notify WebSocket channel that recording stopped
-    socketRef.current?.send({
-      type: 'recording_status',
-      data: { isRecording: false, hostName },
-    });
+    socketRef.current?.send({ type: 'recording_status', data: { isRecording: false, hostName } });
   };
 
   const exportRecording = () => {
-    if (recordedChunksRef.current.length === 0) return;
-
+    if (!recordedChunksRef.current.length) return;
     const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-    const sanitizedTitle = sessionTitle.replace(/[^a-zA-Z0-9_-]/g, '_');
-    a.download = `FxZone-Recording-${sanitizedTitle}-${new Date().toISOString().slice(0, 10)}.webm`;
+    a.download = `FxZone-Recording-${sessionTitle.replace(/[^a-zA-Z0-9_-]/g, '_')}-${new Date().toISOString().slice(0, 10)}.webm`;
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
   };
 
   const handleToggleRecord = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
-    }
+    if (isRecording) stopRecording();
+    else startRecording();
   };
 
-  // Format recording timer seconds to MM:SS
-  const formatRecordTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-  };
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
+  const formatRecordTime = (s: number) =>
+    `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+
+  const formatTime = (s: number) =>
+    `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
   const handleSendChat = (text: string) => {
     if (!user) return;
@@ -414,15 +382,10 @@ export function SessionRoom({
     });
   };
 
-  const handleMicToggle = (enabled: boolean) => {
-    rtcClient?.toggleAudio(enabled);
-  };
+  // Audio/video mute toggles — always use the ref.
+  const handleMicToggle = (enabled: boolean) => rtcClientRef.current?.toggleAudio(enabled);
+  const handleCamToggle = (enabled: boolean) => rtcClientRef.current?.toggleVideo(enabled);
 
-  const handleCamToggle = (enabled: boolean) => {
-    rtcClient?.toggleVideo(enabled);
-  };
-
-  // Admin hard cutoff
   const handleEndSessionAdmin = async () => {
     if (!isAdmin) return;
     if (!confirm('Terminate this live broadcast session? All participants will be disconnected.')) return;
@@ -435,14 +398,9 @@ export function SessionRoom({
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const pendingParticipants = participants.filter((p) => p.role === 'pending');
 
+  // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="flex-1 h-full flex flex-col justify-between select-none">
       {/* Title Bar */}
@@ -459,7 +417,6 @@ export function SessionRoom({
         </div>
 
         <div className="flex items-center gap-3 text-xs font-semibold text-zinc-300">
-          {/* Room Recording Status Banner */}
           {(isRecording || isRoomBeingRecorded) && (
             <div className="flex items-center gap-1.5 bg-red-500/15 border border-red-500/30 text-red-400 px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider">
               <Disc size={11} className="animate-spin text-red-500" />
@@ -526,7 +483,7 @@ export function SessionRoom({
             />
           </div>
 
-          {/* Interactive Controls Bar with Screen Share and Recording */}
+          {/* Controls Bar */}
           <SessionControls
             isHost={isHost}
             isSharing={isSharingScreen}
@@ -537,9 +494,7 @@ export function SessionRoom({
             onToggleShare={handleShareToggle}
             onToggleRecord={handleToggleRecord}
             onLeave={() => {
-              if (isRecording) {
-                stopRecording();
-              }
+              if (isRecording) stopRecording();
               onLeave();
             }}
           />
