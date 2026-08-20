@@ -304,16 +304,31 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
           />
         </div>
 
-        {/* Input box */}
+          {/* Input box */}
         <div className="flex-1 min-w-0">
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onFocus={() => setIsExpanded(true)}
-            placeholder="Share technical analysis, charts, video walkthroughs, or voice memos..."
-            rows={isExpanded ? 3 : 1}
-            className="w-full bg-transparent border-0 text-xs text-white placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[30px]"
+            placeholder={
+              mediaFiles.length > 0
+                ? "Write a caption or technical analysis for your attached chart/media..."
+                : "Share technical analysis, charts, video walkthroughs, or voice memos..."
+            }
+            rows={isExpanded ? (mediaFiles.length > 0 ? 3 : 3) : 1}
+            className="w-full bg-transparent border-0 text-xs text-white placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[36px] leading-relaxed"
           />
+
+          {/* Dedicated Media Caption Indicator if files attached */}
+          {mediaFiles.length > 0 && (
+            <div className="flex items-center justify-between text-[10px] text-zinc-500 border-t border-zinc-800/40 pt-1.5 mt-1">
+              <span className="flex items-center gap-1 text-purple-400 font-medium">
+                <FileText size={10} />
+                <span>Caption attached to {mediaFiles.length} media file{mediaFiles.length > 1 ? 's' : ''}</span>
+              </span>
+              <span>{content.length} characters</span>
+            </div>
+          )}
 
           {/* Expanded Tools & Previews */}
           {isExpanded && (

@@ -30,6 +30,12 @@ export default function ProfilePage() {
   const { user: currentUser, logout } = useAuth();
   const rawId = params.id as string;
   const targetId = rawId === 'me' && currentUser?.id ? String(currentUser.id) : rawId;
+  const isSelf = Boolean(
+    currentUser &&
+    (String(currentUser.id) === targetId ||
+      currentUser.username === targetId ||
+      rawId === 'me')
+  );
 
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -99,6 +105,12 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
+    if (isSelf) {
+      fetchSavedPosts();
+    }
+  }, [isSelf]);
+
+  useEffect(() => {
     if (activeTab === 'saved') {
       fetchSavedPosts();
     }
@@ -106,9 +118,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const handleSavedRefresh = () => {
-      if (activeTab === 'saved') {
-        fetchSavedPosts();
-      }
+      fetchSavedPosts();
     };
     window.addEventListener('fxzone_refresh_saved_posts', handleSavedRefresh);
     window.addEventListener('fxzone_refresh_feed', handleSavedRefresh);
@@ -116,7 +126,7 @@ export default function ProfilePage() {
       window.removeEventListener('fxzone_refresh_saved_posts', handleSavedRefresh);
       window.removeEventListener('fxzone_refresh_feed', handleSavedRefresh);
     };
-  }, [activeTab]);
+  }, []);
 
   // Edit profile state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -335,13 +345,6 @@ export default function ProfilePage() {
     }
   };
 
-  const isSelf =
-    targetId === 'me' ||
-    String(currentUser?.id) === String(targetId) ||
-    String(currentUser?.id) === String(profile?.id) ||
-    currentUser?.username === targetId ||
-    currentUser?.username === profile?.username;
-
   const handlePostDeleted = (deletedId: string) => {
     setPosts((prev) => prev.filter((p) => p.id !== deletedId));
     setSavedPosts((prev) => prev.filter((p) => p.id !== deletedId));
@@ -507,7 +510,7 @@ export default function ProfilePage() {
             }`}
           >
             <Bookmark size={12} />
-            <span>Saved Bookmarks</span>
+            <span>Saved Posts ({savedPosts.length})</span>
           </button>
         )}
 

@@ -203,13 +203,13 @@ export function StoryBar() {
             )}
 
             <div>
-              <label className="text-[10px] text-zinc-400 block mb-1">Story Tagline / Text</label>
+              <label className="text-[10px] text-purple-300 font-semibold block mb-1">Story Caption & Description</label>
               <textarea
                 value={newContent}
                 onChange={(e) => setNewContent(e.target.value)}
-                placeholder="E.g., EURUSD target hit! 🚀 Share your trading idea..."
+                placeholder="Add a caption, technical note, or signal to your story (e.g. 'Gold breakout on 4H chart 🚀')..."
                 rows={3}
-                className="w-full bg-zinc-950 border border-zinc-850 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-750 resize-none"
+                className="w-full bg-zinc-950 border border-zinc-850 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-purple-500/50 resize-none"
               />
             </div>
 

@@ -967,13 +967,28 @@ class SocialService:
         res = await self.db.execute(stmt)
         posts = list(res.scalars().all())
 
+        # Fetch user's reactions on these saved posts for accurate interaction state
+        p_ids = [p.id for p in posts]
+        user_liked_ids = set()
+        user_reposted_ids = set()
+        if p_ids:
+            u_react_res = await self.db.execute(
+                select(Reaction).where(and_(Reaction.user_id == u_uuid, Reaction.post_id.in_(p_ids)))
+            )
+            for r in u_react_res.scalars().all():
+                if r.reaction_type == 'like':
+                    user_liked_ids.add(str(r.post_id))
+                elif r.reaction_type == 'repost':
+                    user_reposted_ids.add(str(r.post_id))
+
         formatted = []
         for p in posts:
+            p_id_str = str(p.id)
             actual_likes = len([r for r in p.reactions if r.reaction_type == 'like']) if p.reactions else (p.likes_count or 0)
             actual_comments = len(p.comments) if p.comments else (p.comments_count or 0)
             actual_reposts = len([r for r in p.reactions if r.reaction_type == 'repost']) if p.reactions else (p.reposts_count or 0)
             formatted.append({
-                "id": str(p.id),
+                "id": p_id_str,
                 "user_id": str(p.user_id),
                 "user": {
                     "id": str(p.user.id),
@@ -997,8 +1012,8 @@ class SocialService:
                 "allow_share": getattr(p, "allow_share", True) if getattr(p, "allow_share", None) is not None else True,
                 "expires_at": p.expires_at,
                 "created_at": p.created_at,
-                "is_liked_by_user": False,
-                "is_reposted_by_user": False,
+                "is_liked_by_user": p_id_str in user_liked_ids,
+                "is_reposted_by_user": p_id_str in user_reposted_ids,
                 "is_bookmarked_by_user": True,
                 "reposted_by": None
             })
