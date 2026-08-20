@@ -43,32 +43,67 @@ async def lifespan(app: FastAPI):
     """Lifecycle events to manage database connection pools on startup/shutdown."""
     logger.info("Initializing FxZone database connections (Postgres, Redis, MongoDB)...")
     await init_all_databases()
-    
-    # Seed news articles into MongoDB if none exist
+
+    from shared.database import get_mongodb
+    mongo_db = get_mongodb()
+
+    # ── News seeding: ONLY seed if using real MongoDB (Motor), never seed MockMongoDB ──
+    # MockMongoDB is in-memory — it loses all data on every restart. Seeding it on
+    # every cold start creates duplicate articles and gives the appearance of
+    # "old data being restored" when in fact it's just re-inserted each time.
     try:
-        mongo_db = get_mongodb()
-        if mongo_db is not None:
+        if mongo_db is not None and "Mock" not in type(mongo_db).__name__:
             from services.news.ingester import NewsIngester
             ingester = NewsIngester(mongo_db)
-            await ingester.ingest_demo_data()
-            logger.info("MongoDB news articles verified/seeded successfully.")
+            count = await ingester.ingest_demo_data()
+            logger.info(f"MongoDB news verified/seeded ({count} new articles).")
+        else:
+            logger.info("MockMongoDB active — skipping news seed (no persistent MongoDB configured).")
     except Exception as e:
-        logger.error(f"Error seeding MongoDB demo news on startup: {e}")
+        logger.error(f"News seeding error on startup: {e}")
 
-    # Launch FxZone Bot periodic AI market update poster
+    # ── FxZone Bot poster — weekly cadence, safe to start every boot ──
     try:
         from services.ai_assistant.bot_poster import start_bot_poster
         asyncio.create_task(start_bot_poster())
-        logger.info("FxZone Bot AI background market update service started.")
+        logger.info("FxZone Bot background market update service started.")
     except Exception as e:
         logger.error(f"Failed to launch FxZone Bot poster: {e}")
 
-    logger.info("FxZone Backend services started successfully.")
+    # ── Self-ping keep-alive: prevent Render free-tier spin-down ──
+    # Render free tier sleeps after 15 min of inactivity — when it wakes up,
+    # the process restarts and ALL in-memory data is lost (MockRedis, MockMongoDB).
+    # This pinger keeps the service awake 24/7 by hitting /health every 10 minutes.
+    async def _self_ping():
+        import os
+        import httpx
+        render_url = os.environ.get("RENDER_EXTERNAL_URL", "")
+        if not render_url:
+            # Try to derive from Render environment
+            service_name = os.environ.get("RENDER_SERVICE_NAME", "")
+            if service_name:
+                render_url = f"https://{service_name}.onrender.com"
+        if render_url:
+            logger.info(f"Self-ping keep-alive enabled: hitting {render_url}/health every 10 min")
+            while True:
+                await asyncio.sleep(600)  # every 10 minutes
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        resp = await client.get(f"{render_url}/health")
+                        logger.debug(f"Self-ping: {resp.status_code}")
+                except Exception as e:
+                    logger.debug(f"Self-ping skipped: {e}")
+        else:
+            logger.info("RENDER_EXTERNAL_URL not set — self-ping keep-alive disabled (local dev mode).")
+
+    asyncio.create_task(_self_ping())
+
+    logger.info("FxZone Backend is LIVE and fully operational.")
     yield
-    
+
     logger.info("Shutting down FxZone database connections...")
     await close_all_databases()
-    logger.info("FxZone Backend shutdown completed.")
+    logger.info("FxZone Backend shutdown complete.")
 
 
 app = FastAPI(

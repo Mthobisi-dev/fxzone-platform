@@ -519,12 +519,12 @@ async def seed_assets_if_empty():
         try:
             result = await session.execute(select(Asset).limit(1))
             if result.scalars().first() is not None:
-                return
+                return  # Assets already seeded — do not touch existing data
         except Exception as e:
             logger.debug(f"Asset check query notice: {e}")
             return
 
-        logger.info("Seeding initial trading asset symbols...")
+        logger.info("Seeding initial trading asset symbols (first-time only)...")
         initial_assets = [
             # Forex
             ("EURUSD", "Euro / US Dollar", "forex", "The most traded currency pair in the world"),
@@ -550,6 +550,9 @@ async def seed_assets_if_empty():
             ("ADAUSD", "Cardano / US Dollar", "crypto", "Proof-of-stake blockchain platform"),
             ("DOTUSD", "Polkadot / US Dollar", "crypto", "Multi-chain interoperability protocol"),
             ("XRPUSD", "Ripple / US Dollar", "crypto", "Digital payment network"),
+            # Commodities
+            ("XAUUSD", "Gold / US Dollar", "commodity", "Safe-haven precious metal"),
+            ("XAGUSD", "Silver / US Dollar", "commodity", "Industrial and precious metal"),
         ]
 
         for symbol, name, atype, desc in initial_assets:
@@ -561,6 +564,25 @@ async def seed_assets_if_empty():
         except Exception as e:
             await session.rollback()
             logger.warning(f"Failed to seed default assets: {e}")
+
+
+async def _keep_postgres_alive():
+    """
+    Background task that pings PostgreSQL every 4 minutes to:
+    1. Prevent Render's free-tier service from spinning down (which would wipe in-memory state)
+    2. Keep the connection pool warm (prevents cold-start latency)
+    3. Detect connection drops early before a user request fails
+    """
+    while True:
+        try:
+            await asyncio.sleep(240)  # ping every 4 minutes
+            async with AsyncSessionLocal() as session:
+                await session.execute(text("SELECT 1"))
+            logger.debug("PostgreSQL keep-alive ping: OK")
+        except Exception as e:
+            logger.warning(f"PostgreSQL keep-alive ping failed: {e} — connection pool will auto-reconnect on next request.")
+
+
 
 
 # ============================================================
@@ -633,6 +655,9 @@ async def init_all_databases():
 
             logger.info("PostgreSQL database tables and schema verified successfully.")
             await seed_assets_if_empty()
+            # Start keep-alive pinger to prevent Render free-tier spin-down and pool expiry
+            asyncio.create_task(_keep_postgres_alive())
+            logger.info("PostgreSQL keep-alive background task started (ping every 4 minutes).")
         else:
             if has_postgres_configured:
                 logger.error(
