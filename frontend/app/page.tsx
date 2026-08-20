@@ -240,17 +240,7 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="pt-28 sm:pt-36 pb-16 sm:pb-20 px-4 sm:px-6 max-w-6xl mx-auto text-center flex flex-col items-center relative z-10">
         
-        {/* Release Pill */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 backdrop-blur-md text-[10px] sm:text-xs font-semibold text-purple-300 mb-6 sm:mb-8 shadow-inner max-w-full"
-        >
-          <Sparkles size={12} className="text-purple-400 animate-pulse shrink-0" />
-          <span className="truncate">Introducing FxZone v2.5 with Gemini AI Insights</span>
-          <ChevronRight size={12} className="text-purple-400 shrink-0" />
-        </motion.div>
+
 
         {/* BOLD AND BIG FxZone TITLE */}
         <motion.div
