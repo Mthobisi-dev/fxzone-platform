@@ -45,6 +45,7 @@ export function SessionRoom({
   const [participantsCount, setParticipantsCount] = useState(1);
   const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
   const [isSharingScreen, setIsSharingScreen] = useState(false);
+  const [remotePresenterName, setRemotePresenterName] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<SessionChatMessage[]>([]);
   const [rtcClient, setRtcClient] = useState<WebRTCClient | null>(null);
   const [copilotAlerts, setCopilotAlerts] = useState<string[]>([]);
@@ -84,11 +85,11 @@ export function SessionRoom({
     },
     participant_approved: (payload) => {
       fetchParticipants();
-      // If host, announce stream presence
-      if (isHost && activeStream && rtcClient) {
+      // If presenting an active stream, announce stream presence
+      if (activeStream && rtcClient) {
         socketRef.current?.send({
           type: 'rtc_signal',
-          data: { type: 'presenter_stream_started', active: true },
+          data: { type: 'presenter_stream_started', active: true, presenter_id: user?.id },
         });
       }
     },
@@ -157,11 +158,23 @@ export function SessionRoom({
 
     const client = new WebRTCClient({
       sessionId,
+      currentUserId: String(user.id),
       isHost,
       isPresenter: isHost,
-      onStream: (stream) => {
-        if (!isHost) {
+      onStream: (stream, presenterInfo) => {
+        if (!isSharingScreen) {
           setActiveStream(stream);
+          if (presenterInfo?.username) {
+            setRemotePresenterName(presenterInfo.username);
+          }
+        }
+      },
+      onPresenterStatusChange: (isLive, presenterName) => {
+        if (presenterName) {
+          setRemotePresenterName(presenterName);
+        }
+        if (!isLive && !isSharingScreen) {
+          setActiveStream(null);
         }
       },
       onSignal: (signal) => {
@@ -175,24 +188,22 @@ export function SessionRoom({
 
     setRtcClient(client);
 
-    // If viewer, announce presence to presenter
-    if (!isHost) {
-      setTimeout(() => {
-        socketRef.current?.send({
-          type: 'rtc_signal',
-          data: {
-            type: 'peer_joined',
-            user_id: user.id,
-            username: user.username,
-          },
-        });
-      }, 600);
-    }
+    // Announce presence to room peers
+    setTimeout(() => {
+      socketRef.current?.send({
+        type: 'rtc_signal',
+        data: {
+          type: 'peer_joined',
+          user_id: user.id,
+          username: user.username,
+        },
+      });
+    }, 400);
 
     return () => {
       client.close();
     };
-  }, [sessionId, isHost, user]);
+  }, [sessionId, isHost, user, isSharingScreen]);
 
   // Start Screen Share
   const handleStartScreenShare = async () => {
@@ -201,9 +212,15 @@ export function SessionRoom({
         video: {
           cursor: 'always',
           displaySurface: 'monitor',
-          frameRate: { max: 30 },
+          frameRate: { ideal: 30, max: 60 },
+          width: { ideal: 1920, max: 2560 },
+          height: { ideal: 1080, max: 1440 },
         } as any,
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
 
       setActiveStream(stream);
@@ -238,9 +255,9 @@ export function SessionRoom({
   };
 
   const handleShareToggle = (enabled: boolean) => {
-    if (enabled && isHost) {
+    if (enabled) {
       handleStartScreenShare();
-    } else if (isHost) {
+    } else {
       handleStopScreenShare();
     }
   };
@@ -500,8 +517,12 @@ export function SessionRoom({
           <div className="flex-1 min-h-0">
             <ScreenShare
               stream={activeStream}
-              presenterName={isHost ? 'You (Sharing Screen)' : hostName}
-              isLocal={isHost}
+              presenterName={
+                isSharingScreen
+                  ? 'You (Sharing Screen)'
+                  : (remotePresenterName ? `@${remotePresenterName}` : hostName)
+              }
+              isLocal={isSharingScreen}
             />
           </div>
 

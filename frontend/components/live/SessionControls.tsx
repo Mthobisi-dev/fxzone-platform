@@ -128,21 +128,19 @@ export function SessionControls({
           </button>
         )}
 
-        {/* Screen Share (Presenters / Hosts) */}
-        {isHost && (
-          <button
-            onClick={handleShare}
-            className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
-              isSharing
-                ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30 animate-pulse'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
-            }`}
-            title={isSharing ? 'Stop Screen Share' : 'Share Screen with Room'}
-          >
-            {isSharing ? <ScreenShareOff size={15} /> : <ScreenShare size={15} />}
-            <span className="hidden sm:inline">{isSharing ? 'Stop Share' : 'Share Screen'}</span>
-          </button>
-        )}
+        {/* Screen Share (Available to all traders in the room) */}
+        <button
+          onClick={handleShare}
+          className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
+            isSharing
+              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30 animate-pulse'
+              : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
+          }`}
+          title={isSharing ? 'Stop Screen Share' : 'Share Screen with Room'}
+        >
+          {isSharing ? <ScreenShareOff size={15} /> : <ScreenShare size={15} />}
+          <span className="hidden sm:inline">{isSharing ? 'Stop Share' : 'Share Screen'}</span>
+        </button>
 
         {/* Session Recording Button (Opt-in recording) */}
         {onToggleRecord && (
