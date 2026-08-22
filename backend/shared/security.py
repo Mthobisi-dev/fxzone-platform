@@ -142,46 +142,17 @@ async def get_current_user(
     user = result.scalar_one_or_none()
 
     if not user:
-        # Auto-register/sync Supabase Google Auth user signing in for the first time
-        email = payload.get("email")
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email claim required in token",
-            )
-            
-        user_metadata = payload.get("user_metadata", {})
-        display_name = user_metadata.get("full_name") or user_metadata.get("name") or email.split("@")[0]
-        avatar_url = user_metadata.get("avatar_url") or user_metadata.get("picture")
-        username = user_metadata.get("user_name") or user_metadata.get("username") or email.split("@")[0]
-        
-        # Ensure username is unique
-        check_user = await db.execute(select(User).where(User.username == username))
-        if check_user.scalar_one_or_none():
-            username = f"{username}_{uuid.uuid4().hex[:6]}"
-
-        user = User(
-            id=user_uuid,
-            email=email,
-            username=username,
-            display_name=display_name,
-            avatar_url=avatar_url,
-            password_hash="supabase_oauth_user",
-            role=UserRole.trader,
-            is_active=True
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account not found or has been permanently deleted.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        db.add(user)
-        try:
-            await db.commit()
-            await db.refresh(user)
-            logger.info(f"Automatically created local user for Supabase auth sub: {user_id}")
-        except Exception as e:
-            await db.rollback()
-            logger.error(f"Failed to auto-create local user: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to sync authenticated user profile."
-            )
+
+    if not getattr(user, "is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated or deleted.",
+        )
 
     return UserSession({
         "user_id": str(user.id),

@@ -27,7 +27,7 @@ export default function ProfilePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user: currentUser, logout } = useAuth();
+  const { user: currentUser, logout, deleteAccount } = useAuth();
   const rawId = params.id as string;
   const targetId = rawId === 'me' && currentUser?.id ? String(currentUser.id) : rawId;
   const isSelf = Boolean(
@@ -343,10 +343,7 @@ export default function ProfilePage() {
     }
     setDeletingAccount(true);
     try {
-      // Execute account deletion
-      await api.delete('/api/auth/me').catch(() => api.delete('/api/social/users/me'));
-      logout();
-      window.location.href = '/login';
+      await deleteAccount();
     } catch (err: any) {
       console.error('Account deletion error:', err);
       alert(err?.detail || err?.message || 'Failed to delete account. Please try again.');

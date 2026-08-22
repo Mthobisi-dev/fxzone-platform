@@ -23,6 +23,7 @@ interface AuthState {
   loginWithGoogle: (email?: string, name?: string, avatar_url?: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
+  deleteAccount: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
   initialize: () => Promise<void>;
 }
@@ -164,12 +165,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  deleteAccount: async () => {
+    try {
+      await api.delete('/api/auth/me').catch(() => api.delete('/api/social/users/me'));
+    } finally {
+      supabase.auth.signOut().catch(() => {});
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('fxzone_access_token');
+        localStorage.removeItem('fxzone_refresh_token');
+        localStorage.removeItem('fxzone_user');
+        localStorage.removeItem('fxzone_saved_posts');
+        sessionStorage.clear();
+      }
+      set({
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isInitialized: true,
+        error: null,
+      });
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
+  },
+
   logout: () => {
     supabase.auth.signOut().catch(() => {});
     if (typeof window !== 'undefined') {
       localStorage.removeItem('fxzone_access_token');
       localStorage.removeItem('fxzone_refresh_token');
       localStorage.removeItem('fxzone_user');
+      localStorage.removeItem('fxzone_saved_posts');
+      sessionStorage.clear();
     }
     set({
       user: null,

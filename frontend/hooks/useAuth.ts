@@ -13,6 +13,7 @@ export function useAuth(requireAuth = false, redirectPath = '/login') {
     loginWithGoogle,
     register,
     logout,
+    deleteAccount,
     updateProfile,
     initialize
   } = useAuthStore();
@@ -43,6 +44,7 @@ export function useAuth(requireAuth = false, redirectPath = '/login') {
     loginWithGoogle,
     register,
     logout,
+    deleteAccount,
     updateProfile,
   };
 }
