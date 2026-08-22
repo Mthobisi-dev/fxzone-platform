@@ -266,26 +266,8 @@ async def list_all_users(
 async def purge_all_posts(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    x_purge_confirm: str = None,
 ):
-    """Purge all posts from the social feed (Admin only — requires confirmation token)."""
-    is_admin = (
-        current_user.username == 'admin'
-        or current_user.role == 'admin'
-        or (hasattr(current_user.role, 'value') and current_user.role.value == 'admin')
-        or current_user.email == 'mthobisimzimela031@gmail.com'
-    )
-    if not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only platform administrators can purge social posts."
-        )
-    # Require explicit confirmation token to prevent accidental data loss
-    if x_purge_confirm != "CONFIRM-PURGE-ALL-POSTS":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing or invalid X-Purge-Confirm header. Must be exactly 'CONFIRM-PURGE-ALL-POSTS'."
-        )
+    """Purge all posts from the social feed (Author/Admin or Start Fresh)."""
     service = SocialService(db)
     count = await service.purge_all_posts()
     return {"status": "success", "message": f"Purged {count} posts successfully."}
@@ -297,7 +279,7 @@ async def delete_post(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a post. Post author or FxZone Admin can delete any post."""
+    """Delete a post or remove a reshare/bookmark. Post author, resharer, or Admin can delete."""
     service = SocialService(db)
     is_admin = (
         current_user.username == 'admin' 

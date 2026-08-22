@@ -66,12 +66,21 @@ WEEKLY_THEMES = [
 ]
 
 
+_last_bot_run_timestamp = 0
+
 async def start_bot_poster():
     """Background task running on a strict 1-week cadence to post diverse market analyses as FxZone Bot."""
+    global _last_bot_run_timestamp
     llm = get_llm_client()
 
     while True:
         try:
+            now_ts = datetime.utcnow().timestamp()
+            # If bot ran recently in this runtime, wait out the remaining 7 days
+            if _last_bot_run_timestamp > 0 and (now_ts - _last_bot_run_timestamp) < SEVEN_DAYS_SECONDS:
+                await asyncio.sleep(3600)
+                continue
+
             async with AsyncSessionLocal() as db:
                 # Find FxZone Bot user
                 res = await db.execute(select(User).where(User.username == 'fxzone_bot'))
@@ -87,12 +96,15 @@ async def start_bot_poster():
 
                     should_post = False
                     if not last_post:
-                        should_post = True
+                        # Only post if we have never run before or past 7 days
+                        if _last_bot_run_timestamp == 0:
+                            should_post = True
                     else:
                         time_since_last_post = (datetime.utcnow() - last_post.created_at).total_seconds()
                         if time_since_last_post >= SEVEN_DAYS_SECONDS:
                             should_post = True
                         else:
+                            _last_bot_run_timestamp = last_post.created_at.timestamp()
                             logger.info(
                                 f"FxZone Bot weekly post on schedule — last post was {int(time_since_last_post / 3600)}h ago. "
                                 f"Next weekly analysis in {int((SEVEN_DAYS_SECONDS - time_since_last_post) / 3600)}h."

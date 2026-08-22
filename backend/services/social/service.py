@@ -15,15 +15,22 @@ logger = logging.getLogger(__name__)
 
 
 def to_uuid(val: Any) -> Any:
-    """Helper to convert string/int/UUID values safely to UUID instances."""
+    """Helper to convert string/int/UUID values safely to UUID instances, stripping any UI prefixes or suffixes."""
     if val is None:
         return None
     if isinstance(val, uuid.UUID):
         return val
+    s = str(val).strip()
+    if "_repost_" in s:
+        s = s.split("_repost_")[0]
+    if s.startswith("rep_"):
+        s = s[4:]
+    if s.startswith("orig_"):
+        s = s[5:]
     try:
-        return uuid.UUID(str(val))
+        return uuid.UUID(s)
     except (ValueError, AttributeError):
-        return val
+        return s
 
 
 class SocialService:
@@ -814,27 +821,66 @@ class SocialService:
         return res.rowcount or 0
 
     async def delete_post(self, post_id: Any, user_id: Any, is_admin: bool = False) -> bool:
-        """Permanently delete a post from database. Post author or FxZone Admin can delete any post."""
-        p_uuid = to_uuid(post_id)
+        """
+        Permanently delete a post from database.
+        If user is author or admin: deletes the Post and all child records (comments, reactions, bookmarks, asset tags).
+        If user is NOT author, but had reshared or bookmarked it: removes the user's repost reaction / bookmark.
+        """
+        raw_str = str(post_id).strip()
+        if "_repost_" in raw_str:
+            raw_str = raw_str.split("_repost_")[0]
+        if raw_str.startswith("rep_"):
+            raw_str = raw_str[4:]
+        if raw_str.startswith("orig_"):
+            raw_str = raw_str[5:]
+
+        p_uuid = to_uuid(raw_str)
         u_uuid = to_uuid(user_id)
 
-        if is_admin:
-            stmt = select(Post).where(Post.id == p_uuid)
-        else:
-            stmt = select(Post).where(and_(Post.id == p_uuid, Post.user_id == u_uuid))
-        res = await self.db.execute(stmt)
+        # Check if the post exists
+        post_stmt = select(Post).where(or_(Post.id == p_uuid, Post.id == raw_str))
+        res = await self.db.execute(post_stmt)
         post = res.scalar_one_or_none()
-        if not post:
-            return False
 
-        # Cleanly remove all associations first to ensure no DB constraints block deletion
-        await self.db.execute(delete(Comment).where(Comment.post_id == p_uuid))
-        await self.db.execute(delete(Reaction).where(Reaction.post_id == p_uuid))
-        await self.db.execute(delete(Bookmark).where(Bookmark.post_id == p_uuid))
-        await self.db.execute(delete(post_asset_tags).where(post_asset_tags.c.post_id == p_uuid))
-        await self.db.delete(post)
-        await self.db.commit()
-        return True
+        # If user is admin or author of the post -> hard delete the post & cascade
+        if post and (is_admin or str(post.user_id) == str(u_uuid)):
+            real_p_id = post.id
+            await self.db.execute(delete(Comment).where(Comment.post_id == real_p_id))
+            await self.db.execute(delete(Reaction).where(Reaction.post_id == real_p_id))
+            await self.db.execute(delete(Bookmark).where(Bookmark.post_id == real_p_id))
+            await self.db.execute(delete(post_asset_tags).where(post_asset_tags.c.post_id == real_p_id))
+            await self.db.delete(post)
+            await self.db.commit()
+            return True
+
+        # If user is not the post author, check if it was a reshare/repost or bookmark by this user to remove
+        if post:
+            real_p_id = post.id
+            deleted_anything = False
+            # Remove user's repost reaction
+            rep_stmt = select(Reaction).where(
+                and_(Reaction.post_id == real_p_id, Reaction.user_id == u_uuid, Reaction.reaction_type == "repost")
+            )
+            rep_res = await self.db.execute(rep_stmt)
+            rep = rep_res.scalar_one_or_none()
+            if rep:
+                await self.db.delete(rep)
+                post.reposts_count = max(0, (post.reposts_count or 1) - 1)
+                deleted_anything = True
+
+            # Remove user's bookmark
+            bm_stmt = select(Bookmark).where(and_(Bookmark.post_id == real_p_id, Bookmark.user_id == u_uuid))
+            bm_res = await self.db.execute(bm_stmt)
+            bm = bm_res.scalar_one_or_none()
+            if bm:
+                await self.db.delete(bm)
+                deleted_anything = True
+
+            if deleted_anything:
+                await self.db.commit()
+                return True
+
+        return False
 
     async def toggle_pin_post(self, post_id: Any, user_id: Any) -> Optional[Post]:
         """Toggle pinned status for a post authored by the current user."""

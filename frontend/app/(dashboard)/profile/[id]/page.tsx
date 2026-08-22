@@ -216,6 +216,15 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
+    const handleRefresh = () => {
+      fetchProfile();
+    };
+    window.addEventListener('fxzone_refresh_feed', handleRefresh);
+    window.addEventListener('fxzone_refresh_saved_posts', handleRefresh);
+    return () => {
+      window.removeEventListener('fxzone_refresh_feed', handleRefresh);
+      window.removeEventListener('fxzone_refresh_saved_posts', handleRefresh);
+    };
   }, [targetId]);
 
   const handleFollowToggle = async () => {

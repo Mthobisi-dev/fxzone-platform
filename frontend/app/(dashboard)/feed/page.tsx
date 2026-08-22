@@ -145,6 +145,8 @@ export default function SocialFeedPage() {
     try {
       await api.delete('/api/social/posts/purge-all');
       setPosts([]);
+      window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
+      window.dispatchEvent(new CustomEvent('fxzone_refresh_saved_posts'));
     } catch (err) {
       console.error(err);
       setPosts([]);
