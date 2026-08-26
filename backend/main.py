@@ -151,11 +151,20 @@ app.include_router(ml_router)
 # Health check endpoint
 @app.get("/health", tags=["System"])
 async def health_check():
-    """Simple check to verify API service health."""
+    """Detailed health check reporting database engine type and service status."""
+    from shared import database as _db
+    from config import settings
+    redis_cls = type(_db._redis_client).__name__ if _db._redis_client else "none"
+    mongo_cls = type(_db._mongo_db).__name__ if _db._mongo_db else "none"
+    db_engine = "sqlite" if _db._use_sqlite else "postgresql"
     return {
         "status": "healthy",
         "app": "FxZone",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "database": db_engine,
+        "redis": redis_cls,
+        "mongodb": mongo_cls,
+        "app_env": settings.APP_ENV,
     }
 
 

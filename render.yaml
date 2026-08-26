@@ -24,6 +24,12 @@ services:
         value: "30"
       - key: CORS_ORIGINS
         value: '["http://localhost:3000","https://fxzone-platform-4dqe.vercel.app","https://fxzone-platform.vercel.app"]'
+      - key: ALPHA_VANTAGE_KEY
+        value: QH4RURKPH3A8S2MX
+      - key: FRED_API_KEY
+        value: b6fb9b5c82d9ab687d281dcad40e377c
+      - key: FMP_API_KEY
+        value: pOXbkN6XSF1MeruhUROz3pZIxWwOLpWk
 
 databases:
   - name: fxzone-postgres

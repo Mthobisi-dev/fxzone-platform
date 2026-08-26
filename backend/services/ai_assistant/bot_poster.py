@@ -73,21 +73,18 @@ async def start_bot_poster():
     global _last_bot_run_timestamp
     llm = get_llm_client()
 
+    # Wait 60s after startup before first check — prevents posting storms on rapid restarts
+    await asyncio.sleep(60)
+
     while True:
         try:
-            now_ts = datetime.utcnow().timestamp()
-            # If bot ran recently in this runtime, wait out the remaining 7 days
-            if _last_bot_run_timestamp > 0 and (now_ts - _last_bot_run_timestamp) < SEVEN_DAYS_SECONDS:
-                await asyncio.sleep(3600)
-                continue
-
             async with AsyncSessionLocal() as db:
                 # Find FxZone Bot user
                 res = await db.execute(select(User).where(User.username == 'fxzone_bot'))
                 bot_user = res.scalar_one_or_none()
 
                 if bot_user:
-                    # Count existing bot posts to determine next rotating theme index
+                    # Count existing bot posts
                     count_res = await db.execute(
                         select(Post).where(Post.user_id == bot_user.id).order_by(Post.created_at.desc())
                     )
@@ -95,27 +92,34 @@ async def start_bot_poster():
                     last_post = bot_posts[0] if bot_posts else None
 
                     should_post = False
-                    if not last_post:
-                        # Only post if we have never run before or past 7 days
-                        if _last_bot_run_timestamp == 0:
-                            should_post = True
-                    else:
-                        time_since_last_post = (datetime.utcnow() - last_post.created_at).total_seconds()
+                    if last_post:
+                        # Use DB timestamp — survives restarts
+                        last_ts = last_post.created_at
+                        if last_ts.tzinfo is None:
+                            last_ts = last_ts.replace(tzinfo=timezone.utc)
+                        time_since_last_post = (datetime.now(timezone.utc) - last_ts).total_seconds()
                         if time_since_last_post >= SEVEN_DAYS_SECONDS:
                             should_post = True
                         else:
-                            _last_bot_run_timestamp = last_post.created_at.timestamp()
+                            _last_bot_run_timestamp = last_ts.timestamp()
                             logger.info(
                                 f"FxZone Bot weekly post on schedule — last post was {int(time_since_last_post / 3600)}h ago. "
                                 f"Next weekly analysis in {int((SEVEN_DAYS_SECONDS - time_since_last_post) / 3600)}h."
                             )
+                    else:
+                        # No posts in DB — only post if we've been running for > 7 days this session
+                        # This prevents flooding the feed on fresh deploys
+                        if _last_bot_run_timestamp > 0:
+                            elapsed = datetime.now(timezone.utc).timestamp() - _last_bot_run_timestamp
+                            if elapsed >= SEVEN_DAYS_SECONDS:
+                                should_post = True
+                        # else: _last_bot_run_timestamp == 0 means fresh deploy with no history
+                        # Do NOT post immediately — wait for the 7-day cycle to fire naturally
 
                     if should_post:
-                        # Pick next rotating theme to ensure every single weekly post is unique
                         theme_idx = len(bot_posts) % len(WEEKLY_THEMES)
                         theme = WEEKLY_THEMES[theme_idx]
 
-                        # Fetch live market data to inject into LLM prompt
                         live_prices_str = ""
                         try:
                             from services.market_data.providers import price_engine
@@ -123,9 +127,9 @@ async def start_bot_poster():
                             price_snippets = []
                             for sym in theme["symbols"]:
                                 if sym in all_prices:
-                                    pd = all_prices[sym]
+                                    pd_data = all_prices[sym]
                                     price_snippets.append(
-                                        f"{sym}: ${pd.get('price', 0):,.2f} ({pd.get('daily_change_pct', 0):+.2f}%)"
+                                        f"{sym}: ${pd_data.get('price', 0):,.2f} ({pd_data.get('daily_change_pct', 0):+.2f}%)"
                                     )
                             if price_snippets:
                                 live_prices_str = "\nLive Market Quotes: " + ", ".join(price_snippets)
@@ -141,7 +145,6 @@ async def start_bot_poster():
                         content = await llm.generate(full_prompt, system_prompt=system_prompt)
 
                         if content and len(content) > 30:
-                            # Resolve tagged assets
                             stmt = select(Asset).where(Asset.symbol.in_(theme["symbols"]))
                             tag_res = await db.execute(stmt)
                             tagged = list(tag_res.scalars().all())
@@ -157,6 +160,7 @@ async def start_bot_poster():
                             )
                             db.add(new_post)
                             await db.commit()
+                            _last_bot_run_timestamp = datetime.now(timezone.utc).timestamp()
                             logger.info(
                                 f"FxZone Bot published weekly market analysis on '{theme['category']}' "
                                 f"(Post ID: {new_post.id})."

@@ -58,6 +58,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   }
 
   const [content, setContent] = useState('');
+  const [caption, setCaption] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [assetTags, setAssetTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -221,6 +222,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       await api.post('/api/social/posts', {
         content: finalContent,
         image_url: primaryUrl,
+        caption: caption || undefined,
         asset_tags: assetTags,
         show_comments_count: showCommentsCount,
         show_likes_count: showLikesCount,
@@ -231,6 +233,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
       // Reset state
       setContent('');
+      setCaption('');
       setAssetTags([]);
       mediaFiles.forEach((m) => {
         if (m.previewUrl) URL.revokeObjectURL(m.previewUrl);
@@ -317,6 +320,15 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             }
             rows={isExpanded ? (mediaFiles.length > 0 ? 3 : 3) : 1}
             className="w-full bg-transparent border-0 text-xs text-white placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[36px] leading-relaxed"
+          />
+
+          <input
+            type="text"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            maxLength={200}
+            placeholder="Add a caption... (optional)"
+            className="w-full px-3 py-2 text-sm bg-gray-800/50 border border-gray-700/50 rounded-lg text-gray-300 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors mt-2"
           />
 
           {/* Dedicated Media Caption Indicator if files attached */}
@@ -636,6 +648,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                     onClick={() => {
                       setIsExpanded(false);
                       setContent('');
+                      setCaption('');
                       setAssetTags([]);
                       mediaFiles.forEach((m) => {
                         if (m.previewUrl) URL.revokeObjectURL(m.previewUrl);

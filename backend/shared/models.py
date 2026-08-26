@@ -181,6 +181,7 @@ class Post(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     content = Column(Text, nullable=False)
     image_url = Column(Text)
+    caption = Column(String(200), nullable=True)
     likes_count = Column(Integer, default=0)
     comments_count = Column(Integer, default=0)
     reposts_count = Column(Integer, default=0)

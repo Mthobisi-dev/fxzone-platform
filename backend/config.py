@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # Market Data (optional)
     ALPHA_VANTAGE_KEY: Optional[str] = None
     FINNHUB_KEY: Optional[str] = None
+    FRED_API_KEY: Optional[str] = None
+    FMP_API_KEY: Optional[str] = None
 
     # App
     CORS_ORIGINS: str = '["http://localhost:3000","https://fxzone-platform-4dqe.vercel.app","https://fxzone-platform.vercel.app"]'

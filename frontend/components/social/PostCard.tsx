@@ -45,6 +45,7 @@ export interface Post {
   };
   content: string;
   imageUrl?: string;
+  caption?: string | null;
   assetTags: string[];
   likesCount: number;
   commentsCount: number;
@@ -200,28 +201,42 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     }
   };
 
+  const [repostModalOpen, setRepostModalOpen] = useState(false);
+  const [repostCaption, setRepostCaption] = useState('');
+
   // Repost / Reshare Post
   const handleRepost = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (repostLoading) return;
+    setRepostModalOpen(true);
+  };
+
+  const submitRepost = async () => {
     setRepostLoading(true);
-
-    const nextReposted = !isReposted;
-    setIsReposted(nextReposted);
-    setReposts((prev) => (nextReposted ? prev + 1 : Math.max(0, prev - 1)));
-
     try {
-      const res = await api.post(`/api/social/posts/${post.id}/repost`, {});
-      if (res && typeof res.reposts_count === 'number') {
-        setReposts(res.reposts_count);
-        setIsReposted(res.is_reposted ?? nextReposted);
+      if (repostCaption.trim()) {
+        await api.post('/api/social/posts', {
+          content: `[Reshared from @${postUser.username}]: ${post.content}`,
+          caption: repostCaption,
+          image_url: imageUrl,
+          asset_tags: assetTags
+        });
+        setReposts(prev => prev + 1);
+        setIsReposted(true);
+      } else {
+        const nextReposted = !isReposted;
+        setIsReposted(nextReposted);
+        setReposts((prev) => (nextReposted ? prev + 1 : Math.max(0, prev - 1)));
+        const res = await api.post(`/api/social/posts/${post.id}/repost`, {});
+        if (res && typeof res.reposts_count === 'number') {
+          setReposts(res.reposts_count);
+          setIsReposted(res.is_reposted ?? nextReposted);
+        }
       }
-      // Refresh the feed so reshared posts appear immediately
       window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
+      setRepostModalOpen(false);
     } catch (err) {
       console.error('Repost error:', err);
-      setIsReposted(!nextReposted);
-      setReposts((prev) => (!nextReposted ? prev + 1 : Math.max(0, prev - 1)));
     } finally {
       setRepostLoading(false);
     }
@@ -609,6 +624,10 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             </div>
           )}
 
+          {post.caption && (
+            <p className="text-xs text-gray-400 italic mt-1 px-1 mb-3">{post.caption}</p>
+          )}
+
           {/* Asset Tags */}
           {assetTags && assetTags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
@@ -774,7 +793,32 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
         </div>
       </div>
 
-      {/* Share / Reshare Post Modal */}
+      {/* Repost Modal */}
+      {repostModalOpen && (
+        <Modal
+          isOpen={repostModalOpen}
+          onClose={() => setRepostModalOpen(false)}
+          title="Repost"
+        >
+          <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-850 text-xs text-zinc-300">
+              <span className="text-zinc-500 font-bold block mb-1">@{postUser.username}:</span>
+              <p className="line-clamp-3 italic">&quot;{post.content}&quot;</p>
+            </div>
+            <textarea
+              value={repostCaption}
+              onChange={(e) => setRepostCaption(e.target.value)}
+              placeholder="Add a caption... (optional)"
+              className="w-full h-20 bg-zinc-950 border border-zinc-800 rounded p-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+            />
+            <Button onClick={submitRepost} disabled={repostLoading} className="w-full">
+              {repostLoading ? 'Reposting...' : 'Repost'}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Share Post Modal */}
       {shareModalOpen && (
         <Modal
           isOpen={shareModalOpen}

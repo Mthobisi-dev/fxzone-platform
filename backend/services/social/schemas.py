@@ -48,6 +48,7 @@ class PostCreate(BaseModel):
     """Schema to create a new feed post or story."""
     content: str = Field(..., max_length=1000, description="The textual content of the post.")
     image_url: Optional[str] = Field(None, description="Optional image/chart URL attached to the post.")
+    caption: Optional[str] = Field(None, max_length=200, description="Short caption displayed below image.")
     asset_tags: List[str] = Field(default_factory=list, description="Assets tagged in this post, e.g. ['BTCUSD'].")
     is_story: bool = Field(False, description="Whether this is a 24h expiring story.")
     show_comments_count: Optional[bool] = Field(True, description="Whether to display the comments counter.")
@@ -71,6 +72,7 @@ class PostResponse(camel_model):
     user: UserShort
     content: str
     image_url: Optional[str] = None
+    caption: Optional[str] = None
     asset_tags: Optional[List[str]] = []
     likes_count: int
     comments_count: int
