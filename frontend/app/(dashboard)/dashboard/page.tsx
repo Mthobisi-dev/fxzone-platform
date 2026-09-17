@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { CandlestickChart } from '@/components/trading/CandlestickChart';
 import { WatchlistPanel } from '@/components/trading/WatchlistPanel';
 import { OrderBook } from '@/components/trading/OrderBook';
-import { MarketOverview } from '@/components/trading/MarketOverview';
+import { StockScreenerDashboard } from '@/components/trading/StockScreenerDashboard';
 import { NewsFeed } from '@/components/news/NewsFeed';
 import { AIInsightCard } from '@/components/ai/AIInsightCard';
 import { useMarketStore } from '@/stores/marketStore';
@@ -71,7 +71,6 @@ export default function DashboardPage() {
         });
         setAIInsights(formatted);
       } else {
-        // No insights available — show empty state
         setAIInsights([]);
       }
     } catch (err) {
@@ -83,7 +82,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchInsights();
-    // Auto-refresh Google AI Watchlist Insights every 10 minutes
     const interval = setInterval(() => {
       fetchInsights();
     }, 600000);
@@ -92,12 +90,12 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Top Heatmap Overview */}
+      {/* ─── REAL STOCK SCREENER & SECTOR HEATMAP DASHBOARD (TRADINGVIEW REPRODUCTION) ─── */}
       <div className="w-full">
-        <MarketOverview />
+        <StockScreenerDashboard />
       </div>
 
-      {/* Main Core Trading Layout */}
+      {/* ─── CORE TRADING SUITE: WATCHLIST + CANDLESTICK CHART + ORDERBOOK ─── */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Left Side: Watchlist Panel */}
         <div className="xl:col-span-1 h-[470px]">
@@ -115,7 +113,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Bottom Insights and News Splits */}
+      {/* ─── AI INSIGHTS & MARKET NEWS FEED ─── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Left/Middle: Google AI Insights */}
         <div className="xl:col-span-2 space-y-4">
