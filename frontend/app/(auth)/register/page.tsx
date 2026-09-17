@@ -22,6 +22,7 @@ export default function RegisterPage() {
   const [role, setRole] = useState<'trader' | 'analyst' | 'verified_educator'>('trader');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,7 +53,8 @@ export default function RegisterPage() {
         role,
         display_name: displayName,
       });
-      router.push('/dashboard');
+      // If register() didn't redirect (email confirmation required), show confirmation screen
+      setEmailSent(true);
     } catch (err: any) {
       console.error(err);
       setError(err?.detail || authError || 'Registration parameters validation failed.');
@@ -125,6 +127,27 @@ export default function RegisterPage() {
                 <p className="text-[10px] text-zinc-400">Set up your FxZone trading profile.</p>
               </div>
 
+              {/* Email confirmation success screen */}
+              {emailSent ? (
+                <div className="text-center py-6 space-y-4">
+                  <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                    <Shield size={28} className="text-emerald-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-bold text-sm mb-1">Check your email</h4>
+                    <p className="text-[10px] text-zinc-400 leading-relaxed">
+                      We sent a confirmation link to <span className="text-white font-semibold">{email}</span>.<br />
+                      Click the link to activate your account, then sign in.
+                    </p>
+                  </div>
+                  <Link href="/login" className="block w-full mt-4">
+                    <Button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 h-9 font-semibold text-xs">
+                      Go to Sign In
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <>
               {/* Error messages */}
               {error && (
                 <div className="mb-4 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/25 flex gap-2 items-start text-[10px] text-rose-400 leading-normal animate-pulse">
@@ -243,6 +266,8 @@ export default function RegisterPage() {
                   </Link>
                 </span>
               </div>
+              </>
+              )}
             </Card>
           </motion.div>
         </div>

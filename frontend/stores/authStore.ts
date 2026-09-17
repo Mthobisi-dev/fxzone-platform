@@ -124,11 +124,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // If email confirmation is enabled, Supabase won't return a session immediately
       if (!data.session) {
         set({ isLoading: false, isInitialized: true, error: null });
-        // Show user a message that they need to confirm email
-        if (typeof window !== 'undefined') {
-          alert('Registration successful! Please check your email to confirm your account, then log in.');
-          window.location.href = '/login';
-        }
+        // Return without redirecting — let the calling page handle confirmation UI
         return;
       }
 
