@@ -418,9 +418,9 @@ try:
     db_url = settings.async_database_url
 
     # Detect Supabase connection
-    if settings.use_supabase and "supabase" in db_url:
+    if settings.use_supabase or "supabase" in db_url.lower():
         _db_source = "supabase"
-        logger.info(f"Database configured for Supabase PostgreSQL: {settings.SUPABASE_URL}")
+        logger.info("Database configured for Supabase PostgreSQL.")
     elif "render.com" in db_url or "dpg-" in db_url:
         _db_source = "render_postgres"
         logger.info("Database configured for Render Managed PostgreSQL.")

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://fxzone:fxzone@localhost:5432/fxzone"
+    SUPABASE_DATABASE_URL: Optional[str] = None
     REDIS_URL: str = "redis://localhost:6379"
     MONGODB_URL: str = "mongodb://localhost:27017"
 
@@ -49,7 +50,7 @@ class Settings(BaseSettings):
     @property
     def async_database_url(self) -> str:
         """Ensure the DATABASE_URL uses the asyncpg driver dialect for SQLAlchemy and sanitize query parameters."""
-        url = self.DATABASE_URL
+        url = self.SUPABASE_DATABASE_URL or self.DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
@@ -67,8 +68,12 @@ class Settings(BaseSettings):
 
     @property
     def use_supabase(self) -> bool:
-        """Check if Supabase credentials are configured."""
-        return bool(self.SUPABASE_URL and self.SUPABASE_ANON_KEY)
+        """Check if Supabase credentials or database URL are configured."""
+        return bool(
+            (self.SUPABASE_URL and self.SUPABASE_ANON_KEY)
+            or self.SUPABASE_DATABASE_URL
+            or ("supabase" in self.DATABASE_URL.lower())
+        )
 
     class Config:
         env_file = "../.env"
