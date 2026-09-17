@@ -16,10 +16,9 @@ export default function MarketPage() {
     watchlists,
     fetchAssets,
     fetchWatchlists,
-    createWatchlist,
-    addToWatchlist,
-    removeFromWatchlist,
     setSelectedAsset,
+    toggleWatchlist,
+    isAssetInWatchlist,
   } = useMarketStore();
 
   const [activeTab, setActiveTab] = useState<'all' | 'forex' | 'stock' | 'crypto'>('all');
@@ -31,30 +30,9 @@ export default function MarketPage() {
     Promise.all([fetchAssets(), fetchWatchlists()]).finally(() => setLoading(false));
   }, [fetchAssets, fetchWatchlists]);
 
-  const activeWatchlist = watchlists.length > 0 ? watchlists[0] : null;
-
-  const isStarred = (assetId: string) => {
-    return activeWatchlist?.items.some((item) => item.id === assetId) || false;
-  };
-
-  const handleStarToggle = async (assetId: string, e: React.MouseEvent) => {
+  const handleStarToggle = async (symbol: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    let wl = activeWatchlist;
-    if (!wl) {
-      // Auto-create a default watchlist
-      await createWatchlist('My Watchlist');
-      await fetchWatchlists();
-      const updated = useMarketStore.getState().watchlists;
-      wl = updated.length > 0 ? updated[0] : null;
-      if (!wl) return;
-    }
-
-    if (isStarred(assetId)) {
-      await removeFromWatchlist(wl.id, assetId);
-    } else {
-      await addToWatchlist(wl.id, assetId);
-    }
-    await fetchWatchlists();
+    await toggleWatchlist(symbol);
   };
 
   const handleTradeClick = (asset: any) => {
@@ -152,7 +130,7 @@ export default function MarketPage() {
                   const changePct = priceData ? priceData.change_pct : 0;
                   const volume = priceData ? priceData.volume : null;
                   const isUp = changePct >= 0;
-                  const starred = isStarred(asset.id);
+                  const starred = isAssetInWatchlist(asset.symbol);
 
                   return (
                     <tr
@@ -160,7 +138,7 @@ export default function MarketPage() {
                       className="hover:bg-zinc-900/10 cursor-pointer transition-colors"
                       onClick={() => handleTradeClick(asset)}
                     >
-                      <td className="p-4 text-center" onClick={(e) => handleStarToggle(asset.id, e)}>
+                      <td className="p-4 text-center" onClick={(e) => handleStarToggle(asset.symbol, e)}>
                         {starred ? (
                           <Star size={14} className="text-amber-400 fill-amber-400/20 hover:scale-115 transition-transform" />
                         ) : (

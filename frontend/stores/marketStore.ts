@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { api } from '@/lib/api';
 
-interface Asset {
+export interface Asset {
   id: string;
   symbol: string;
   name: string;
@@ -10,7 +10,7 @@ interface Asset {
   is_active: boolean;
 }
 
-interface PriceData {
+export interface PriceData {
   symbol: string;
   price: number;
   change: number;
@@ -24,7 +24,7 @@ interface PriceData {
   timestamp: string;
 }
 
-interface Watchlist {
+export interface Watchlist {
   id: string;
   name: string;
   items: Asset[];
@@ -37,22 +37,51 @@ interface MarketState {
   selectedAsset: Asset | null;
   isLoading: boolean;
   error: string | null;
-  
+
   fetchAssets: (type?: string) => Promise<void>;
   fetchPrices: () => Promise<void>;
   fetchWatchlists: () => Promise<void>;
   createWatchlist: (name: string) => Promise<void>;
-  addToWatchlist: (watchlistId: string, assetId: string) => Promise<void>;
-  removeFromWatchlist: (watchlistId: string, assetId: string) => Promise<void>;
+  addToWatchlist: (watchlistId: string, assetIdOrSymbol: string) => Promise<void>;
+  removeFromWatchlist: (watchlistId: string, assetIdOrSymbol: string) => Promise<void>;
+  toggleWatchlist: (asset: Asset | string) => Promise<void>;
+  isAssetInWatchlist: (assetIdOrSymbol: string) => boolean;
   setSelectedAsset: (asset: Asset | string) => void;
   updatePrice: (symbol: string, priceData: PriceData) => void;
   updateBulkPrices: (pricesMap: Record<string, PriceData>) => void;
 }
 
+const STORAGE_KEY = 'fxzone_user_watchlist_items';
+
+function getStoredWatchlistItems(): Asset[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function setStoredWatchlistItems(items: Asset[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export const useMarketStore = create<MarketState>((set, get) => ({
   assets: [],
   prices: {},
-  watchlists: [],
+  watchlists: [
+    {
+      id: 'watchlist-default',
+      name: 'My Watchlist',
+      items: getStoredWatchlistItems(),
+    },
+  ],
   selectedAsset: null,
   isLoading: false,
   error: null,
@@ -63,14 +92,16 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       const data = await api.get('/api/market/assets', {
         params: type ? { asset_type: type } : {},
       });
-      set({ assets: data, isLoading: false });
-      
-      // Default select the first asset if none is selected
-      if (data.length > 0 && !get().selectedAsset) {
-        set({ selectedAsset: data[0] });
+      if (Array.isArray(data)) {
+        set({ assets: data, isLoading: false });
+        if (data.length > 0 && !get().selectedAsset) {
+          set({ selectedAsset: data[0] });
+        }
+      } else {
+        set({ isLoading: false });
       }
     } catch (err: any) {
-      set({ error: err.detail || 'Failed to load assets.', isLoading: false });
+      set({ error: err?.detail || 'Failed to load assets.', isLoading: false });
     }
   },
 
@@ -80,7 +111,9 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       if (Array.isArray(data)) {
         const pricesMap: Record<string, PriceData> = {};
         data.forEach((p: any) => {
-          pricesMap[p.symbol.toUpperCase()] = p;
+          if (p && p.symbol) {
+            pricesMap[p.symbol.toUpperCase()] = p;
+          }
         });
         get().updateBulkPrices(pricesMap);
       }
@@ -92,9 +125,22 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   fetchWatchlists: async () => {
     try {
       const data = await api.get('/api/market/watchlist');
-      set({ watchlists: data });
+      if (Array.isArray(data) && data.length > 0) {
+        const localItems = getStoredWatchlistItems();
+        const mergedItems = [...data[0].items];
+        
+        localItems.forEach((lItem) => {
+          if (!mergedItems.some((m) => m.symbol.toUpperCase() === lItem.symbol.toUpperCase())) {
+            mergedItems.push(lItem);
+          }
+        });
+
+        const updatedWl = [{ id: data[0].id || 'watchlist-default', name: data[0].name || 'My Watchlist', items: mergedItems }];
+        set({ watchlists: updatedWl });
+        setStoredWatchlistItems(mergedItems);
+      }
     } catch (err: any) {
-      console.error('Watchlist fetch failed:', err);
+      console.error('Watchlist fetch warning:', err);
     }
   },
 
@@ -107,22 +153,73 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     }
   },
 
-  addToWatchlist: async (watchlistId, assetId) => {
+  addToWatchlist: async (watchlistId, assetIdOrSymbol) => {
+    const state = get();
+    const assets = state.assets;
+    const currentWl = state.watchlists.length > 0 ? state.watchlists[0] : { id: 'watchlist-default', name: 'My Watchlist', items: [] };
+
+    // Find asset object from symbol or id
+    const foundAsset = assets.find(
+      (a) => a.id === assetIdOrSymbol || a.symbol.toUpperCase() === String(assetIdOrSymbol).toUpperCase()
+    ) || {
+      id: String(assetIdOrSymbol).toLowerCase(),
+      symbol: String(assetIdOrSymbol).toUpperCase(),
+      name: String(assetIdOrSymbol).toUpperCase(),
+      asset_type: 'stock',
+      is_active: true,
+    };
+
+    if (!currentWl.items.some((i) => i.symbol.toUpperCase() === foundAsset.symbol.toUpperCase())) {
+      const newItems = [...currentWl.items, foundAsset];
+      const newWl = [{ ...currentWl, items: newItems }];
+      set({ watchlists: newWl });
+      setStoredWatchlistItems(newItems);
+    }
+
     try {
-      await api.post(`/api/market/watchlist/${watchlistId}/items`, { asset_id: assetId });
-      await get().fetchWatchlists();
+      await api.post(`/api/market/watchlist/${watchlistId || 'watchlist-default'}/items`, { asset_id: foundAsset.id, symbol: foundAsset.symbol });
     } catch (err: any) {
-      console.error('Add to watchlist failed:', err);
+      console.warn('Watchlist API sync notice:', err);
     }
   },
 
-  removeFromWatchlist: async (watchlistId, assetId) => {
+  removeFromWatchlist: async (watchlistId, assetIdOrSymbol) => {
+    const state = get();
+    const currentWl = state.watchlists.length > 0 ? state.watchlists[0] : { id: 'watchlist-default', name: 'My Watchlist', items: [] };
+
+    const newItems = currentWl.items.filter(
+      (i) => i.id !== assetIdOrSymbol && i.symbol.toUpperCase() !== String(assetIdOrSymbol).toUpperCase()
+    );
+
+    const newWl = [{ ...currentWl, items: newItems }];
+    set({ watchlists: newWl });
+    setStoredWatchlistItems(newItems);
+
     try {
-      await api.delete(`/api/market/watchlist/${watchlistId}/items/${assetId}`);
-      await get().fetchWatchlists();
+      await api.delete(`/api/market/watchlist/${watchlistId || 'watchlist-default'}/items/${assetIdOrSymbol}`);
     } catch (err: any) {
-      console.error('Remove from watchlist failed:', err);
+      console.warn('Watchlist API remove notice:', err);
     }
+  },
+
+  toggleWatchlist: async (asset) => {
+    const symbolOrId = typeof asset === 'string' ? asset : asset.symbol;
+    const state = get();
+    const isIn = state.isAssetInWatchlist(symbolOrId);
+    const wlId = state.watchlists.length > 0 ? state.watchlists[0].id : 'watchlist-default';
+
+    if (isIn) {
+      await state.removeFromWatchlist(wlId, symbolOrId);
+    } else {
+      await state.addToWatchlist(wlId, symbolOrId);
+    }
+  },
+
+  isAssetInWatchlist: (assetIdOrSymbol) => {
+    const watchlists = get().watchlists;
+    if (watchlists.length === 0) return false;
+    const target = String(assetIdOrSymbol).toUpperCase();
+    return watchlists[0].items.some((item) => item.id === assetIdOrSymbol || item.symbol.toUpperCase() === target);
   },
 
   setSelectedAsset: (asset) => {

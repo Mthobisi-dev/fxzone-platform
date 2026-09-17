@@ -114,7 +114,7 @@ const ALL_STOCKS: HeatmapStock[] = [
 
 export function StockScreenerDashboard() {
   const router = useRouter();
-  const { assets, prices, fetchAssets, fetchPrices, setSelectedAsset } = useMarketStore();
+  const { assets, prices, fetchAssets, fetchPrices, setSelectedAsset, toggleWatchlist, isAssetInWatchlist, watchlists } = useMarketStore();
   const [stocks, setStocks] = useState<HeatmapStock[]>(ALL_STOCKS);
 
   // Top Category Tab Switcher ('all' | 'stock' | 'crypto' | 'forex')
@@ -245,7 +245,7 @@ export function StockScreenerDashboard() {
       if (aiFilterActive && !s.aiTag) return false;
 
       // Watchlist Filter
-      if (watchlistOnly && !s.isWatchlist) return false;
+      if (watchlistOnly && !isAssetInWatchlist(s.symbol)) return false;
 
       // Price Range Filter
       if (priceRange === 'under50' && s.price >= 50) return false;
@@ -997,6 +997,21 @@ export function StockScreenerDashboard() {
             <div className="flex justify-end gap-2 pt-2 border-t border-zinc-850">
               <Button size="sm" variant="ghost" onClick={() => setDetailModalOpen(false)}>
                 Close
+              </Button>
+              <Button
+                size="sm"
+                className={cn(
+                  "font-bold transition-all flex items-center gap-1.5",
+                  isAssetInWatchlist(selectedStock.symbol)
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
+                    : "bg-zinc-800 text-zinc-200 border border-zinc-700 hover:bg-zinc-700"
+                )}
+                onClick={() => {
+                  toggleWatchlist(selectedStock.symbol);
+                }}
+              >
+                <Star size={13} className={isAssetInWatchlist(selectedStock.symbol) ? "text-amber-400 fill-amber-400" : "text-zinc-400"} />
+                <span>{isAssetInWatchlist(selectedStock.symbol) ? 'In Watchlist' : 'Add to Watchlist'}</span>
               </Button>
               <Button
                 size="sm"
