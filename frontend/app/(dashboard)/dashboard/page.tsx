@@ -86,7 +86,7 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-2.5 sm:p-4 md:p-6 pb-24 md:pb-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto">
       {/* ─── REAL STOCK SCREENER & SECTOR HEATMAP DASHBOARD (TRADINGVIEW REPRODUCTION) ─── */}
       <div className="w-full">
         <StockScreenerDashboard />

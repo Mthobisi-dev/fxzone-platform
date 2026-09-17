@@ -397,15 +397,15 @@ export function StockScreenerDashboard() {
     >
       <div className="w-full bg-[#070a11] border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden text-zinc-200">
         {/* ─── TOP SCREENER CATEGORY TABS (STOCKS / CRYPTO / FOREX / ALL) ─── */}
-        <div className="bg-[#080c16] px-4 py-2 border-b border-zinc-850 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex bg-zinc-950/80 border border-zinc-800 p-0.5 rounded-xl gap-0.5">
+        <div className="bg-[#080c16] px-2.5 sm:px-4 py-2 border-b border-zinc-850 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none">
+          <div className="flex bg-zinc-950/80 border border-zinc-800 p-0.5 rounded-xl gap-0.5 shrink-0 overflow-x-auto scrollbar-none">
             <button
               onClick={() => {
                 setActiveMarketTab('all');
                 setSelectedCountry('US');
               }}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                "px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap",
                 activeMarketTab === 'all'
                   ? "bg-blue-600 text-white shadow-md shadow-blue-900/30"
                   : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -421,7 +421,7 @@ export function StockScreenerDashboard() {
                 setSelectedCountry('US');
               }}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                "px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap",
                 activeMarketTab === 'stock'
                   ? "bg-blue-600 text-white shadow-md shadow-blue-900/30"
                   : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -437,7 +437,7 @@ export function StockScreenerDashboard() {
                 setSelectedCountry('CRYPTO');
               }}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                "px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap",
                 activeMarketTab === 'crypto'
                   ? "bg-amber-500 text-black shadow-md shadow-amber-900/30 font-extrabold"
                   : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -453,7 +453,7 @@ export function StockScreenerDashboard() {
                 setSelectedCountry('GLOBAL');
               }}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                "px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap",
                 activeMarketTab === 'forex'
                   ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/30"
                   : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
@@ -464,10 +464,10 @@ export function StockScreenerDashboard() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-zinc-400">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-zinc-400 shrink-0">
             <button
               onClick={handleResetFilters}
-              className="p-1.5 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors flex items-center gap-1 text-xs"
+              className="p-1.5 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors flex items-center gap-1 text-[11px] sm:text-xs"
               title="Reset All Filters"
             >
               <RotateCcw size={14} />
@@ -670,25 +670,25 @@ export function StockScreenerDashboard() {
           </div>
 
           {/* Right Metrics: Search, Refresh, Fullscreen */}
-          <div className="flex items-center gap-2">
-            <div className="relative hidden lg:block">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="relative flex-1 sm:w-44">
               <Search size={12} className="absolute left-2.5 top-2.5 text-zinc-500" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search symbol, sector..."
-                className="w-36 h-7 pl-7 pr-2.5 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
+                className="w-full h-7 pl-7 pr-2.5 bg-zinc-950 border border-zinc-850 rounded-lg text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
               />
             </div>
 
-            <span className="text-zinc-500 text-[11px] font-semibold">{filteredStocks.length} assets shown</span>
+            <span className="text-zinc-500 text-[11px] font-semibold shrink-0 hidden sm:inline">{filteredStocks.length} assets</span>
 
             <button
               onClick={() => {
                 fetchPrices();
               }}
-              className="p-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-lg transition-colors"
+              className="p-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-lg transition-colors shrink-0"
               title="Refresh API Prices"
             >
               <RefreshCw size={13} />
@@ -696,7 +696,7 @@ export function StockScreenerDashboard() {
 
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-lg transition-colors"
+              className="p-1.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white rounded-lg transition-colors shrink-0"
               title="Toggle Fullscreen"
             >
               {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -705,9 +705,9 @@ export function StockScreenerDashboard() {
         </div>
 
         {/* ─── MAIN DISPLAY AREA: HEATMAP TREEMAP GRID ─── */}
-        <div className="p-4 bg-[#05070e] min-h-[540px]">
+        <div className="p-2.5 sm:p-4 bg-[#05070e] min-h-[500px]">
           {viewMode === 'heatmap' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {sectorNames.map((sectorName) => {
                 const sectorStocks = sectorsMap[sectorName];
 
