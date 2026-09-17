@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Globe,
@@ -31,7 +31,8 @@ import {
   Check,
   X,
   Bot,
-  Sliders
+  Coins,
+  DollarSign
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMarketStore } from '@/stores/marketStore';
@@ -54,61 +55,78 @@ export interface HeatmapStock {
   aiTag?: boolean;
   isWatchlist?: boolean;
   country: 'US' | 'EU' | 'GLOBAL' | 'CRYPTO';
+  assetType: 'stock' | 'crypto' | 'forex' | 'commodity';
   logoBg: string;
   logoType?: 'apple' | 'nvidia' | 'google' | 'microsoft' | 'meta' | 'amazon' | 'tesla' | 'lilly' | 'jnj' | 'generic';
 }
 
-const DEFAULT_HEATMAP_STOCKS: HeatmapStock[] = [
+const ALL_STOCKS: HeatmapStock[] = [
   // ─── STOCKS (US & EU) ───
-  { symbol: 'NVDA', name: 'NVIDIA Corp', sector: 'Electronic technology', marketCap: '3.12T', marketCapNum: 3120, price: 126.80, changePct: 0.84, peRatio: 72.4, aiTag: true, country: 'US', logoBg: '#76b900', logoType: 'nvidia' },
-  { symbol: 'AAPL', name: 'Apple Inc.', sector: 'Electronic technology', marketCap: '3.45T', marketCapNum: 3450, price: 221.40, changePct: -2.51, peRatio: 33.1, country: 'US', logoBg: '#000000', logoType: 'apple' },
-  { symbol: 'AVGO', name: 'Broadcom Inc.', sector: 'Electronic technology', marketCap: '780B', marketCapNum: 780, price: 168.20, changePct: 0.21, peRatio: 48.2, aiTag: true, country: 'US', logoBg: '#cc092f', logoType: 'generic' },
-  { symbol: 'INTC', name: 'Intel Corp', sector: 'Electronic technology', marketCap: '95B', marketCapNum: 195, price: 21.50, changePct: 4.69, peRatio: 18.4, country: 'US', logoBg: '#0068b5', logoType: 'generic' },
-  { symbol: 'QCOM', name: 'Qualcomm Inc.', sector: 'Electronic technology', marketCap: '190B', marketCapNum: 290, price: 172.10, changePct: 4.51, peRatio: 22.1, country: 'US', logoBg: '#3253dc', logoType: 'generic' },
-  { symbol: 'AMD', name: 'Advanced Micro Devices', sector: 'Electronic technology', marketCap: '250B', marketCapNum: 350, price: 154.30, changePct: 0.52, peRatio: 110.2, aiTag: true, country: 'US', logoBg: '#ed1c24', logoType: 'generic' },
+  { symbol: 'NVDA', name: 'NVIDIA Corp', sector: 'Electronic technology', marketCap: '3.12T', marketCapNum: 3120, price: 126.80, changePct: 0.84, peRatio: 72.4, aiTag: true, country: 'US', assetType: 'stock', logoBg: '#76b900', logoType: 'nvidia' },
+  { symbol: 'AAPL', name: 'Apple Inc.', sector: 'Electronic technology', marketCap: '3.45T', marketCapNum: 3450, price: 221.40, changePct: -2.51, peRatio: 33.1, country: 'US', assetType: 'stock', logoBg: '#000000', logoType: 'apple' },
+  { symbol: 'AVGO', name: 'Broadcom Inc.', sector: 'Electronic technology', marketCap: '780B', marketCapNum: 780, price: 168.20, changePct: 0.21, peRatio: 48.2, aiTag: true, country: 'US', assetType: 'stock', logoBg: '#cc092f', logoType: 'generic' },
+  { symbol: 'INTC', name: 'Intel Corp', sector: 'Electronic technology', marketCap: '95B', marketCapNum: 195, price: 21.50, changePct: 4.69, peRatio: 18.4, country: 'US', assetType: 'stock', logoBg: '#0068b5', logoType: 'generic' },
+  { symbol: 'QCOM', name: 'Qualcomm Inc.', sector: 'Electronic technology', marketCap: '190B', marketCapNum: 290, price: 172.10, changePct: 4.51, peRatio: 22.1, country: 'US', assetType: 'stock', logoBg: '#3253dc', logoType: 'generic' },
+  { symbol: 'AMD', name: 'Advanced Micro Devices', sector: 'Electronic technology', marketCap: '250B', marketCapNum: 350, price: 154.30, changePct: 0.52, peRatio: 110.2, aiTag: true, country: 'US', assetType: 'stock', logoBg: '#ed1c24', logoType: 'generic' },
 
-  { symbol: 'GOOGL', name: 'Alphabet Inc.', sector: 'Technology services', marketCap: '2.10T', marketCapNum: 2100, price: 158.40, changePct: -1.11, peRatio: 24.2, aiTag: true, country: 'US', logoBg: '#ffffff', logoType: 'google' },
-  { symbol: 'MSFT', name: 'Microsoft Corp', sector: 'Technology services', marketCap: '3.28T', marketCapNum: 3280, price: 432.10, changePct: -2.04, peRatio: 36.5, aiTag: true, country: 'US', logoBg: '#00a4ef', logoType: 'microsoft' },
-  { symbol: 'META', name: 'Meta Platforms Inc.', sector: 'Technology services', marketCap: '1.30T', marketCapNum: 1300, price: 512.60, changePct: 1.00, peRatio: 26.8, aiTag: true, country: 'US', logoBg: '#0081fb', logoType: 'meta' },
-  { symbol: 'NFLX', name: 'Netflix Inc.', sector: 'Technology services', marketCap: '280B', marketCapNum: 280, price: 685.10, changePct: -5.30, peRatio: 42.1, country: 'US', logoBg: '#e50914', logoType: 'generic' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', sector: 'Technology services', marketCap: '2.10T', marketCapNum: 2100, price: 158.40, changePct: -1.11, peRatio: 24.2, aiTag: true, country: 'US', assetType: 'stock', logoBg: '#ffffff', logoType: 'google' },
+  { symbol: 'MSFT', name: 'Microsoft Corp', sector: 'Technology services', marketCap: '3.28T', marketCapNum: 3280, price: 432.10, changePct: -2.04, peRatio: 36.5, aiTag: true, country: 'US', assetType: 'stock', logoBg: '#00a4ef', logoType: 'microsoft' },
+  { symbol: 'META', name: 'Meta Platforms Inc.', sector: 'Technology services', marketCap: '1.30T', marketCapNum: 1300, price: 512.60, changePct: 1.00, peRatio: 26.8, aiTag: true, country: 'US', assetType: 'stock', logoBg: '#0081fb', logoType: 'meta' },
+  { symbol: 'NFLX', name: 'Netflix Inc.', sector: 'Technology services', marketCap: '280B', marketCapNum: 280, price: 685.10, changePct: -5.30, peRatio: 42.1, country: 'US', assetType: 'stock', logoBg: '#e50914', logoType: 'generic' },
 
-  { symbol: 'LLY', name: 'Eli Lilly and Co.', sector: 'Health technology', marketCap: '820B', marketCapNum: 820, price: 945.10, changePct: -0.88, peRatio: 115.0, country: 'US', logoBg: '#d51900', logoType: 'lilly' },
-  { symbol: 'JNJ', name: 'Johnson & Johnson', sector: 'Health technology', marketCap: '390B', marketCapNum: 390, price: 162.30, changePct: -1.15, peRatio: 21.5, country: 'US', logoBg: '#d51900', logoType: 'jnj' },
+  { symbol: 'LLY', name: 'Eli Lilly and Co.', sector: 'Health technology', marketCap: '820B', marketCapNum: 820, price: 945.10, changePct: -0.88, peRatio: 115.0, country: 'US', assetType: 'stock', logoBg: '#d51900', logoType: 'lilly' },
+  { symbol: 'JNJ', name: 'Johnson & Johnson', sector: 'Health technology', marketCap: '390B', marketCapNum: 390, price: 162.30, changePct: -1.15, peRatio: 21.5, country: 'US', assetType: 'stock', logoBg: '#d51900', logoType: 'jnj' },
 
-  { symbol: 'AMZN', name: 'Amazon.com Inc.', sector: 'Retail trade', marketCap: '1.92T', marketCapNum: 1920, price: 186.20, changePct: -0.15, peRatio: 41.2, aiTag: true, country: 'US', logoBg: '#ff9900', logoType: 'amazon' },
-  { symbol: 'WMT', name: 'Walmart Inc.', sector: 'Retail trade', marketCap: '580B', marketCapNum: 580, price: 72.80, changePct: 0.80, peRatio: 34.0, country: 'US', logoBg: '#0071ce', logoType: 'generic' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.', sector: 'Retail trade', marketCap: '1.92T', marketCapNum: 1920, price: 186.20, changePct: -0.15, peRatio: 41.2, aiTag: true, country: 'US', assetType: 'stock', logoBg: '#ff9900', logoType: 'amazon' },
+  { symbol: 'WMT', name: 'Walmart Inc.', sector: 'Retail trade', marketCap: '580B', marketCapNum: 580, price: 72.80, changePct: 0.80, peRatio: 34.0, country: 'US', assetType: 'stock', logoBg: '#0071ce', logoType: 'generic' },
 
-  { symbol: 'CAT', name: 'Caterpillar Inc.', sector: 'Producer manufacturing', marketCap: '180B', marketCapNum: 280, price: 345.80, changePct: 4.30, peRatio: 16.2, country: 'US', logoBg: '#ffcd00', logoType: 'generic' },
-  { symbol: 'GE', name: 'General Electric', sector: 'Producer manufacturing', marketCap: '190B', marketCapNum: 290, price: 172.40, changePct: 1.20, peRatio: 31.0, country: 'US', logoBg: '#056dae', logoType: 'generic' },
+  { symbol: 'CAT', name: 'Caterpillar Inc.', sector: 'Producer manufacturing', marketCap: '180B', marketCapNum: 280, price: 345.80, changePct: 4.30, peRatio: 16.2, country: 'US', assetType: 'stock', logoBg: '#ffcd00', logoType: 'generic' },
+  { symbol: 'GE', name: 'General Electric', sector: 'Producer manufacturing', marketCap: '190B', marketCapNum: 290, price: 172.40, changePct: 1.20, peRatio: 31.0, country: 'US', assetType: 'stock', logoBg: '#056dae', logoType: 'generic' },
 
-  { symbol: 'TSLA', name: 'Tesla Inc.', sector: 'Consumer durables', marketCap: '680B', marketCapNum: 1680, price: 215.20, changePct: -5.92, peRatio: 65.4, aiTag: true, country: 'US', logoBg: '#e82127', logoType: 'tesla' },
+  { symbol: 'TSLA', name: 'Tesla Inc.', sector: 'Consumer durables', marketCap: '680B', marketCapNum: 1680, price: 215.20, changePct: -5.92, peRatio: 65.4, aiTag: true, country: 'US', assetType: 'stock', logoBg: '#e82127', logoType: 'tesla' },
 
-  // ─── FOREX MAJORS & COMMODITIES (GLOBAL) ───
-  { symbol: 'EURUSD', name: 'Euro / US Dollar', sector: 'Forex Majors', marketCap: 'Global', marketCapNum: 2000, price: 1.0854, changePct: 0.15, peRatio: 0, country: 'GLOBAL', logoBg: '#003399', logoType: 'generic' },
-  { symbol: 'GBPUSD', name: 'British Pound / USD', sector: 'Forex Majors', marketCap: 'Global', marketCapNum: 1800, price: 1.2980, changePct: -0.22, peRatio: 0, country: 'GLOBAL', logoBg: '#c8102e', logoType: 'generic' },
-  { symbol: 'USDJPY', name: 'US Dollar / Yen', sector: 'Forex Majors', marketCap: 'Global', marketCapNum: 1700, price: 145.20, changePct: 0.45, peRatio: 0, country: 'GLOBAL', logoBg: '#bc002d', logoType: 'generic' },
-  { symbol: 'XAUUSD', name: 'Gold / US Dollar', sector: 'Precious Metals', marketCap: 'Global', marketCapNum: 2500, price: 2514.80, changePct: 1.12, peRatio: 0, country: 'GLOBAL', logoBg: '#ffd700', logoType: 'generic' },
+  // ─── FOREX & COMMODITIES ───
+  { symbol: 'EURUSD', name: 'Euro / US Dollar', sector: 'USD Majors', marketCap: 'Global', marketCapNum: 2200, price: 1.0854, changePct: 0.15, peRatio: 0, country: 'GLOBAL', assetType: 'forex', logoBg: '#003399', logoType: 'generic' },
+  { symbol: 'GBPUSD', name: 'British Pound / USD', sector: 'USD Majors', marketCap: 'Global', marketCapNum: 1900, price: 1.2980, changePct: -0.22, peRatio: 0, country: 'GLOBAL', assetType: 'forex', logoBg: '#c8102e', logoType: 'generic' },
+  { symbol: 'USDJPY', name: 'US Dollar / Yen', sector: 'USD Majors', marketCap: 'Global', marketCapNum: 1800, price: 145.20, changePct: 0.45, peRatio: 0, country: 'GLOBAL', assetType: 'forex', logoBg: '#bc002d', logoType: 'generic' },
+  { symbol: 'AUDUSD', name: 'Australian Dollar / USD', sector: 'USD Majors', marketCap: 'Global', marketCapNum: 1400, price: 0.6650, changePct: 0.35, peRatio: 0, country: 'GLOBAL', assetType: 'forex', logoBg: '#00008b', logoType: 'generic' },
+  { symbol: 'USDCAD', name: 'US Dollar / CAD', sector: 'USD Majors', marketCap: 'Global', marketCapNum: 1300, price: 1.3520, changePct: -0.10, peRatio: 0, country: 'GLOBAL', assetType: 'forex', logoBg: '#ff0000', logoType: 'generic' },
+  { symbol: 'USDCHF', name: 'US Dollar / Swiss Franc', sector: 'USD Majors', marketCap: 'Global', marketCapNum: 1200, price: 0.8540, changePct: -0.05, peRatio: 0, country: 'GLOBAL', assetType: 'forex', logoBg: '#d51900', logoType: 'generic' },
 
-  // ─── CRYPTO MARKET (CRYPTO) ───
-  { symbol: 'BTCUSD', name: 'Bitcoin / USD', sector: 'Crypto Assets', marketCap: '1.24T', marketCapNum: 2240, price: 62840.00, changePct: 2.85, peRatio: 0, aiTag: true, country: 'CRYPTO', logoBg: '#f7931a', logoType: 'generic' },
-  { symbol: 'ETHUSD', name: 'Ethereum / USD', sector: 'Crypto Assets', marketCap: '310B', marketCapNum: 1310, price: 2640.50, changePct: 3.40, peRatio: 0, aiTag: true, country: 'CRYPTO', logoBg: '#627eea', logoType: 'generic' },
-  { symbol: 'SOLUSD', name: 'Solana / USD', sector: 'Crypto Assets', marketCap: '68B', marketCapNum: 968, price: 154.20, changePct: 5.80, peRatio: 0, aiTag: true, country: 'CRYPTO', logoBg: '#00ffa3', logoType: 'generic' },
-  { symbol: 'XRPUSD', name: 'XRP Ledger / USD', sector: 'Crypto Assets', marketCap: '32B', marketCapNum: 732, price: 0.584, changePct: -1.10, peRatio: 0, country: 'CRYPTO', logoBg: '#23292f', logoType: 'generic' },
+  { symbol: 'EURGBP', name: 'Euro / British Pound', sector: 'Cross Pairs', marketCap: 'Global', marketCapNum: 1500, price: 0.8360, changePct: 0.40, peRatio: 0, country: 'GLOBAL', assetType: 'forex', logoBg: '#003399', logoType: 'generic' },
+
+  { symbol: 'XAUUSD', name: 'Gold / US Dollar', sector: 'Precious Metals', marketCap: 'Global', marketCapNum: 2500, price: 2514.80, changePct: 1.12, peRatio: 0, country: 'GLOBAL', assetType: 'commodity', logoBg: '#ffd700', logoType: 'generic' },
+  { symbol: 'XAGUSD', name: 'Silver / US Dollar', sector: 'Precious Metals', marketCap: 'Global', marketCapNum: 1600, price: 29.40, changePct: 2.05, peRatio: 0, country: 'GLOBAL', assetType: 'commodity', logoBg: '#c0c0c0', logoType: 'generic' },
+
+  // ─── CRYPTO ASSETS ───
+  { symbol: 'BTCUSD', name: 'Bitcoin / USD', sector: 'Layer 1 Blockchains', marketCap: '1.24T', marketCapNum: 2840, price: 62840.00, changePct: 2.85, peRatio: 0, aiTag: true, country: 'CRYPTO', assetType: 'crypto', logoBg: '#f7931a', logoType: 'generic' },
+  { symbol: 'ETHUSD', name: 'Ethereum / USD', sector: 'Layer 1 Blockchains', marketCap: '310B', marketCapNum: 1810, price: 2640.50, changePct: 3.40, peRatio: 0, aiTag: true, country: 'CRYPTO', assetType: 'crypto', logoBg: '#627eea', logoType: 'generic' },
+  { symbol: 'SOLUSD', name: 'Solana / USD', sector: 'Layer 1 Blockchains', marketCap: '68B', marketCapNum: 1268, price: 154.20, changePct: 5.80, peRatio: 0, aiTag: true, country: 'CRYPTO', assetType: 'crypto', logoBg: '#00ffa3', logoType: 'generic' },
+  { symbol: 'ADAUSD', name: 'Cardano / USD', sector: 'Layer 1 Blockchains', marketCap: '14B', marketCapNum: 914, price: 0.354, changePct: 1.20, peRatio: 0, country: 'CRYPTO', assetType: 'crypto', logoBg: '#0033ad', logoType: 'generic' },
+  { symbol: 'AVAXUSD', name: 'Avalanche / USD', sector: 'Layer 1 Blockchains', marketCap: '10B', marketCapNum: 810, price: 24.10, changePct: 4.10, peRatio: 0, country: 'CRYPTO', assetType: 'crypto', logoBg: '#e84142', logoType: 'generic' },
+
+  { symbol: 'LINKUSD', name: 'Chainlink / USD', sector: 'DeFi & Oracles', marketCap: '6.8B', marketCapNum: 768, price: 11.40, changePct: 2.40, peRatio: 0, aiTag: true, country: 'CRYPTO', assetType: 'crypto', logoBg: '#375bd2', logoType: 'generic' },
+  { symbol: 'UNIUSD', name: 'Uniswap / USD', sector: 'DeFi & Oracles', marketCap: '3.8B', marketCapNum: 638, price: 6.20, changePct: -0.80, peRatio: 0, country: 'CRYPTO', assetType: 'crypto', logoBg: '#ff007a', logoType: 'generic' },
+
+  { symbol: 'XRPUSD', name: 'XRP Ledger / USD', sector: 'Payments & Memes', marketCap: '32B', marketCapNum: 1032, price: 0.584, changePct: -1.10, peRatio: 0, country: 'CRYPTO', assetType: 'crypto', logoBg: '#23292f', logoType: 'generic' },
+  { symbol: 'DOGEUSD', name: 'Dogecoin / USD', sector: 'Payments & Memes', marketCap: '15B', marketCapNum: 915, price: 0.104, changePct: 6.40, peRatio: 0, country: 'CRYPTO', assetType: 'crypto', logoBg: '#c2a633', logoType: 'generic' },
 ];
 
 export function StockScreenerDashboard() {
   const router = useRouter();
   const { assets, prices, fetchAssets, fetchPrices, setSelectedAsset } = useMarketStore();
-  const [stocks, setStocks] = useState<HeatmapStock[]>(DEFAULT_HEATMAP_STOCKS);
+  const [stocks, setStocks] = useState<HeatmapStock[]>(ALL_STOCKS);
 
-  // Active Filter States
+  // Top Category Tab Switcher ('all' | 'stock' | 'crypto' | 'forex')
+  const [activeMarketTab, setActiveMarketTab] = useState<'all' | 'stock' | 'crypto' | 'forex'>('all');
+
+  // Filter States
   const [selectedCountry, setSelectedCountry] = useState<'US' | 'EU' | 'GLOBAL' | 'CRYPTO'>('US');
   const [aiFilterActive, setAiFilterActive] = useState(false);
   const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [priceRange, setPriceRange] = useState<'all' | 'under50' | '50-200' | 'above200'>('all');
   const [changePctFilter, setChangePctFilter] = useState<'all' | 'gainers' | 'bigGainers' | 'losers' | 'bigLosers'>('all');
   const [mktCapFilter, setMktCapFilter] = useState<'all' | 'mega' | 'large'>('all');
-  const [peFilter, setPeFilter] = useState<'all' | 'value' | 'growth'>('all');
   const [selectedSectorFilter, setSelectedSectorFilter] = useState<string>('all');
   const [analystFilter, setAnalystFilter] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -151,7 +169,7 @@ export function StockScreenerDashboard() {
     );
   }, [prices]);
 
-  // Sync assets from API into heatmap if new symbols exist
+  // Sync assets from API into heatmap
   useEffect(() => {
     if (!assets || assets.length === 0) return;
 
@@ -161,7 +179,7 @@ export function StockScreenerDashboard() {
     assets.forEach((a) => {
       const sym = a.symbol.toUpperCase();
       if (!existingSymbols.has(sym)) {
-        const type = a.asset_type || 'stock';
+        const type = (a.asset_type || 'stock') as any;
         let country: 'US' | 'EU' | 'GLOBAL' | 'CRYPTO' = 'US';
         let sector = 'Other Equities';
         let logoType: any = 'generic';
@@ -198,6 +216,7 @@ export function StockScreenerDashboard() {
           changePct: livePriceData ? livePriceData.change_pct : 0,
           peRatio: 25,
           country: country,
+          assetType: type,
           logoBg: '#1e293b',
           logoType: logoType,
         });
@@ -209,64 +228,83 @@ export function StockScreenerDashboard() {
     }
   }, [assets, prices]);
 
-  // Filter application pipeline
-  const filteredStocks = stocks.filter((s) => {
-    // Market / Country filter
-    if (s.country !== selectedCountry && selectedCountry !== 'GLOBAL') return false;
+  // Optimized Filter Pipeline using useMemo
+  const filteredStocks = useMemo(() => {
+    return stocks.filter((s) => {
+      // Top Screener Tab Filter
+      if (activeMarketTab === 'crypto' && s.assetType !== 'crypto') return false;
+      if (activeMarketTab === 'forex' && s.assetType !== 'forex' && s.assetType !== 'commodity') return false;
+      if (activeMarketTab === 'stock' && s.assetType !== 'stock') return false;
 
-    // AI Filter
-    if (aiFilterActive && !s.aiTag) return false;
+      // Market / Country filter
+      if (activeMarketTab === 'all' && selectedCountry !== 'GLOBAL') {
+        if (s.country !== selectedCountry) return false;
+      }
 
-    // Watchlist Filter
-    if (watchlistOnly && !s.isWatchlist) return false;
+      // AI Filter
+      if (aiFilterActive && !s.aiTag) return false;
 
-    // Price Range Filter
-    if (priceRange === 'under50' && s.price >= 50) return false;
-    if (priceRange === '50-200' && (s.price < 50 || s.price > 200)) return false;
-    if (priceRange === 'above200' && s.price <= 200) return false;
+      // Watchlist Filter
+      if (watchlistOnly && !s.isWatchlist) return false;
 
-    // Change % Filter
-    if (changePctFilter === 'gainers' && s.changePct <= 0) return false;
-    if (changePctFilter === 'bigGainers' && s.changePct < 2.0) return false;
-    if (changePctFilter === 'losers' && s.changePct >= 0) return false;
-    if (changePctFilter === 'bigLosers' && s.changePct > -2.0) return false;
+      // Price Range Filter
+      if (priceRange === 'under50' && s.price >= 50) return false;
+      if (priceRange === '50-200' && (s.price < 50 || s.price > 200)) return false;
+      if (priceRange === 'above200' && s.price <= 200) return false;
 
-    // Market Cap Filter
-    if (mktCapFilter === 'mega' && s.marketCapNum < 1000) return false;
-    if (mktCapFilter === 'large' && (s.marketCapNum < 200 || s.marketCapNum >= 1000)) return false;
+      // Change % Filter
+      if (changePctFilter === 'gainers' && s.changePct <= 0) return false;
+      if (changePctFilter === 'bigGainers' && s.changePct < 2.0) return false;
+      if (changePctFilter === 'losers' && s.changePct >= 0) return false;
+      if (changePctFilter === 'bigLosers' && s.changePct > -2.0) return false;
 
-    // P/E Ratio Filter
-    if (peFilter === 'value' && (s.peRatio <= 0 || s.peRatio > 25)) return false;
-    if (peFilter === 'growth' && s.peRatio <= 25) return false;
+      // Market Cap Filter
+      if (mktCapFilter === 'mega' && s.marketCapNum < 1000) return false;
+      if (mktCapFilter === 'large' && (s.marketCapNum < 200 || s.marketCapNum >= 1000)) return false;
 
-    // Sector Filter
-    if (selectedSectorFilter !== 'all' && s.sector !== selectedSectorFilter) return false;
+      // Sector Filter
+      if (selectedSectorFilter !== 'all' && s.sector !== selectedSectorFilter) return false;
 
-    // Search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.sector.toLowerCase().includes(q);
-    }
-    return true;
-  });
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || s.sector.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [
+    stocks,
+    activeMarketTab,
+    selectedCountry,
+    aiFilterActive,
+    watchlistOnly,
+    priceRange,
+    changePctFilter,
+    mktCapFilter,
+    selectedSectorFilter,
+    searchQuery,
+  ]);
 
   // Group by sector
-  const sectorsMap: Record<string, HeatmapStock[]> = {};
-  filteredStocks.forEach((s) => {
-    if (!sectorsMap[s.sector]) sectorsMap[s.sector] = [];
-    sectorsMap[s.sector].push(s);
-  });
+  const sectorsMap = useMemo(() => {
+    const map: Record<string, HeatmapStock[]> = {};
+    filteredStocks.forEach((s) => {
+      if (!map[s.sector]) map[s.sector] = [];
+      map[s.sector].push(s);
+    });
+    return map;
+  }, [filteredStocks]);
 
   const sectorNames = Object.keys(sectorsMap);
 
   // Reset all filters action
   const handleResetFilters = () => {
+    setActiveMarketTab('all');
     setAiFilterActive(false);
     setWatchlistOnly(false);
     setPriceRange('all');
     setChangePctFilter('all');
     setMktCapFilter('all');
-    setPeFilter('all');
     setSelectedSectorFilter('all');
     setAnalystFilter(false);
     setSearchQuery('');
@@ -344,7 +382,7 @@ export function StockScreenerDashboard() {
             className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[10px] shadow-md border border-white/10"
             style={{ backgroundColor: bg || '#1e293b' }}
           >
-            {symbol ? symbol.substring(0, 2) : 'ST'}
+            {symbol ? symbol.substring(0, 3) : 'ST'}
           </div>
         );
     }
@@ -358,15 +396,72 @@ export function StockScreenerDashboard() {
       )}
     >
       <div className="w-full bg-[#070a11] border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden text-zinc-200">
-        {/* ─── TOP CONTROL BAR (TITLE, REFRESH, SETTINGS) ─── */}
-        <div className="bg-[#0a0e1a] px-4 py-3 border-b border-zinc-850 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-extrabold text-white flex items-center gap-2">
-              Stock Screener <ChevronDown size={16} className="text-zinc-400 cursor-pointer" />
-            </h2>
-            <span className="text-[10px] bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold uppercase">
-              Live API Engine
-            </span>
+        {/* ─── TOP SCREENER CATEGORY TABS (STOCKS / CRYPTO / FOREX / ALL) ─── */}
+        <div className="bg-[#080c16] px-4 py-2 border-b border-zinc-850 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex bg-zinc-950/80 border border-zinc-800 p-0.5 rounded-xl gap-0.5">
+            <button
+              onClick={() => {
+                setActiveMarketTab('all');
+                setSelectedCountry('US');
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                activeMarketTab === 'all'
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/30"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+              )}
+            >
+              <Grid size={13} />
+              <span>All Markets</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveMarketTab('stock');
+                setSelectedCountry('US');
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                activeMarketTab === 'stock'
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/30"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+              )}
+            >
+              <BarChart2 size={13} />
+              <span>Stock Screener</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveMarketTab('crypto');
+                setSelectedCountry('CRYPTO');
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                activeMarketTab === 'crypto'
+                  ? "bg-amber-500 text-black shadow-md shadow-amber-900/30 font-extrabold"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+              )}
+            >
+              <Coins size={13} className="text-amber-400" />
+              <span>Crypto Screener</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveMarketTab('forex');
+                setSelectedCountry('GLOBAL');
+              }}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5",
+                activeMarketTab === 'forex'
+                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/30"
+                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900"
+              )}
+            >
+              <DollarSign size={13} className="text-emerald-400" />
+              <span>Forex & Commodities Screener</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 text-zinc-400">
@@ -389,7 +484,7 @@ export function StockScreenerDashboard() {
         </div>
 
         {/* ─── ROW 1: PRIMARY FILTER PILLS ─── */}
-        <div className="px-4 py-2.5 bg-[#080c16] border-b border-zinc-850 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+        <div className="px-4 py-2.5 bg-[#070a13] border-b border-zinc-850 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
           {/* AI Filter Button & AI Assistant Launcher */}
           <button
             onClick={() => {
@@ -411,7 +506,13 @@ export function StockScreenerDashboard() {
           <div className="relative shrink-0">
             <select
               value={selectedCountry}
-              onChange={(e) => setSelectedCountry(e.target.value as any)}
+              onChange={(e) => {
+                const val = e.target.value as any;
+                setSelectedCountry(val);
+                if (val === 'CRYPTO') setActiveMarketTab('crypto');
+                else if (val === 'GLOBAL') setActiveMarketTab('forex');
+                else setActiveMarketTab('stock');
+              }}
               className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white font-bold text-xs rounded-xl px-2.5 py-1.5 focus:outline-none cursor-pointer flex items-center gap-1"
             >
               <option value="US">🇺🇸 US Equities</option>
@@ -471,17 +572,6 @@ export function StockScreenerDashboard() {
             <option value="large">Large Cap ($200B - $1T)</option>
           </select>
 
-          {/* P/E Dropdown */}
-          <select
-            value={peFilter}
-            onChange={(e) => setPeFilter(e.target.value as any)}
-            className="bg-zinc-900 border border-zinc-850 text-zinc-300 text-xs font-medium rounded-xl px-2.5 py-1.5 focus:outline-none cursor-pointer shrink-0"
-          >
-            <option value="all">P/E: All</option>
-            <option value="value">Value (P/E &lt; 25)</option>
-            <option value="growth">Growth (P/E &gt; 25)</option>
-          </select>
-
           {/* Sector Selector Dropdown */}
           <select
             value={selectedSectorFilter}
@@ -493,11 +583,9 @@ export function StockScreenerDashboard() {
             <option value="Technology services">Technology Services</option>
             <option value="Health technology">Health Technology</option>
             <option value="Retail trade">Retail Trade</option>
-            <option value="Producer manufacturing">Producer Manufacturing</option>
-            <option value="Communications">Communications</option>
-            <option value="Consumer durables">Consumer Durables</option>
-            <option value="Forex Majors">Forex Majors</option>
-            <option value="Crypto Assets">Crypto Assets</option>
+            <option value="USD Majors">Forex Majors</option>
+            <option value="Layer 1 Blockchains">Layer 1 Crypto</option>
+            <option value="DeFi & Oracles">DeFi & Oracles</option>
           </select>
         </div>
 
@@ -633,7 +721,7 @@ export function StockScreenerDashboard() {
                       >
                         {sectorName} &gt;
                       </span>
-                      <span className="text-[10px] text-zinc-500 font-semibold">{sectorStocks.length} stocks</span>
+                      <span className="text-[10px] text-zinc-500 font-semibold">{sectorStocks.length} assets</span>
                     </div>
 
                     {/* Stock Tiles Treemap Container */}
@@ -793,7 +881,7 @@ export function StockScreenerDashboard() {
                   {loadingAiText ? 'Querying Gemini AI technical engine...' : aiTextSummary}
                 </p>
                 <div className="p-2 bg-black/50 rounded-lg border border-purple-900/40 text-[11px] text-purple-200">
-                  ⚡ <strong>Market Sector Rating:</strong> High confidence rating across AI semiconductor and forex momentum channels.
+                  ⚡ <strong>Market Sector Rating:</strong> High confidence rating across AI semiconductor, forex, and crypto momentum channels.
                 </div>
               </div>
             </div>

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard,
@@ -24,6 +25,7 @@ import { Avatar } from '../ui/Avatar';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -76,9 +78,9 @@ export function Sidebar() {
             {menuItems.map((item) => {
               const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
               return (
-                <button
+                <Link
                   key={item.path}
-                  onClick={() => (window.location.href = item.path)}
+                  href={item.path}
                   className={cn(
                     'flex items-center gap-3 w-full py-2.5 px-3 rounded-lg text-xs font-semibold transition-all duration-200 focus:outline-none group relative',
                     isActive
@@ -97,7 +99,7 @@ export function Sidebar() {
                       {item.label}
                     </div>
                   )}
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -107,7 +109,7 @@ export function Sidebar() {
         <div className="flex flex-col gap-4 p-3 border-t border-zinc-850/60 bg-zinc-950/30">
           {/* User Card */}
           {user && !isCollapsed && (
-            <div className="flex items-center gap-2.5 py-1 px-1 rounded-lg">
+            <Link href={`/profile/${user.id}`} className="flex items-center gap-2.5 py-1 px-1 rounded-lg hover:bg-zinc-900/50 transition-colors">
               <Avatar name={user.display_name || user.username} src={user.avatar_url} size="sm" />
               <div className="flex flex-col text-left min-w-0">
                 <span className="text-xs font-semibold text-zinc-300 truncate">
@@ -115,14 +117,14 @@ export function Sidebar() {
                 </span>
                 <span className="text-[9px] text-zinc-500 truncate uppercase tracking-wider">{user.role}</span>
               </div>
-            </div>
+            </Link>
           )}
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-1">
             {user && (
-              <button
-                onClick={() => (window.location.href = `/profile/${user.id}`)}
+              <Link
+                href={`/profile/${user.id}`}
                 className={cn(
                   'flex items-center gap-3 w-full py-2 px-3 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white hover:bg-white/5 transition-all group relative',
                   pathname === `/profile/${user.id}` && 'bg-blue-600/10 text-blue-400 border border-blue-500/25'
@@ -135,7 +137,7 @@ export function Sidebar() {
                     Profile
                   </div>
                 )}
-              </button>
+              </Link>
             )}
 
             {/* Contact Links */}
@@ -200,9 +202,9 @@ export function Sidebar() {
         {menuItems.map((item) => {
           const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
           return (
-            <button
+            <Link
               key={item.path}
-              onClick={() => (window.location.href = item.path)}
+              href={item.path}
               className={cn(
                 'flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[9px] font-semibold transition-all',
                 isActive
@@ -214,12 +216,12 @@ export function Sidebar() {
                 {item.icon}
               </span>
               <span className="truncate max-w-[55px] text-[8px] mt-0.5">{item.label}</span>
-            </button>
+            </Link>
           );
         })}
         {user && (
-          <button
-            onClick={() => (window.location.href = `/profile/${user.id}`)}
+          <Link
+            href={`/profile/${user.id}`}
             className={cn(
               'flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[9px] font-semibold transition-all',
               pathname.startsWith('/profile')
@@ -231,7 +233,7 @@ export function Sidebar() {
               <UserIcon size={18} />
             </span>
             <span className="truncate max-w-[55px] text-[8px] mt-0.5">Profile</span>
-          </button>
+          </Link>
         )}
       </nav>
     </>
