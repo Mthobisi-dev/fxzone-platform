@@ -27,7 +27,7 @@ export default function ProfilePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user: currentUser, logout, deleteAccount } = useAuth();
+  const { user: currentUser, logout, deleteAccount, updateProfile } = useAuth();
   const rawId = params.id as string;
   const targetId = rawId === 'me' && currentUser?.id ? String(currentUser.id) : rawId;
   const isSelf = Boolean(
@@ -296,6 +296,15 @@ export default function ProfilePage() {
         bio: editBio.trim() || undefined,
         avatar_url: finalAvatarUrl || undefined,
       });
+
+      if (updateProfile) {
+        await updateProfile({
+          username: res.username || editUsername.trim(),
+          display_name: res.display_name || editDisplayName.trim(),
+          bio: res.bio || editBio.trim(),
+          avatar_url: res.avatar_url || finalAvatarUrl,
+        }).catch(() => {});
+      }
 
       setProfile((prev: any) => ({
         ...prev,
