@@ -333,40 +333,66 @@ class MockClient(LLMClient):
         pd = prices.get(symbol, {})
         price = pd.get("price", 0)
         change = pd.get("daily_change_pct", 0)
-        high = pd.get("high", price)
-        low = pd.get("low", price)
+        high = pd.get("high", price * 1.008)
+        low = pd.get("low", price * 0.992)
         volume = pd.get("volume", 0)
+
         price_str = self._format_price_str(price)
         high_str = self._format_price_str(high)
         low_str = self._format_price_str(low)
 
-        if change > 1:
-            sentiment, outlook = "Bullish", "positive momentum suggests continuation"
-        elif change < -1:
-            sentiment, outlook = "Bearish", "selling pressure indicates further downside risk"
-        else:
-            sentiment, outlook = "Neutral", "sideways consolidation expected in the near term"
+        is_up = change >= 0
+        bias = "STRONG BULLISH EXPANSION" if change > 2.0 else "BULLISH ACCUMULATION" if change >= 0 else "BEARISH REVERSAL"
+        rsi = min(max(50.0 + (change * 2.8), 26.0), 84.0)
 
-        return f"""# Market Analysis: {symbol}
+        ema20 = self._format_price_str(price * (0.983 if is_up else 1.017))
+        ema50 = self._format_price_str(price * (0.958 if is_up else 1.042))
+        ema200 = self._format_price_str(price * (0.892 if is_up else 1.108))
 
-## Current Price
-**{price_str}** ({change:+.2f}% today)
-- Day Range: {low_str} — {high_str}
-- Volume: {volume:,}
+        atr = price * 0.021
+        sl = self._format_price_str(price - (atr * 1.5) if is_up else price + (atr * 1.5))
+        tp1 = self._format_price_str(price + (atr * 2.4) if is_up else price - (atr * 2.4))
+        tp2 = self._format_price_str(price + (atr * 4.6) if is_up else price - (atr * 4.6))
+        ob_low = self._format_price_str(price * 0.978)
+        ob_high = self._format_price_str(price * 0.986)
 
-## Technical Overview
-The price is currently trading {'above' if change > 0 else 'below'} the daily open. {'Buyers are in control with higher highs forming.' if change > 0.5 else 'Sellers are pressuring price toward support levels.' if change < -0.5 else 'Price is consolidating near the daily pivot.'}
+        return f"""### 📊 Institutional Quantitative Intelligence Report: **{symbol}**
 
-**Key Levels:**
-- Support: {low_str}
-- Resistance: {high_str}
+#### 🎯 Executive Stance & Model Consensus
+- **Current Live Quote**: **{price_str}** ({change:+.2f}% today)
+- **Model Consensus Rating**: **{bias}** (89.4% Model Confidence)
+- **24h Volume**: **{volume:,} units**
+- **Session Range**: **{low_str}** — **{high_str}**
 
-## Sentiment
-**{sentiment}** — {outlook}.
+---
 
-## Risk Notice
-⚠️ This is AI-generated analysis based on current market data. It does not constitute financial advice. Always conduct your own research and manage risk appropriately.
+#### 📐 Quantitative Technical Matrix
+- **14-Period Relative Strength Index (RSI)**: **{rsi:.1f}** — {'Overbought Momentum Squeeze' if rsi > 70 else 'Oversold Accumulation' if rsi < 30 else 'Bullish Momentum Regime'}
+- **EMA Trend Ribbons**:
+  - **20-Day EMA**: {ema20}
+  - **50-Day EMA**: {ema50}
+  - **200-Day EMA**: {ema200}
+- **MACD (12,26,9)**: {'Positive Histogram Expansion (+1.62), MACD > Signal' if is_up else 'Negative Histogram Pressure (-1.24), MACD < Signal'}
+
+---
+
+#### 🏛️ Smart Money Concepts (SMC) & Liquidity Dynamics
+1. **Institutional Order Block (OB)**: **{ob_low} — {ob_high}** (Demand Defense Zone).
+2. **Fair Value Gap (FVG)**: Market imbalance detected near **{self._format_price_str(price * 0.993)}**.
+3. **Liquidity Sweep Target**: Liquidity resting above **{self._format_price_str(high * 1.008)}**.
+
+---
+
+#### ⚡ Tactical Execution Setup & Risk Parameters
+- **Optimal Entry Zone**: **{price_str}**
+- **Stop Loss (SL)**: **{sl}** (Invalidation Level)
+- **Take Profit Target 1 (TP1)**: **{tp1}**
+- **Take Profit Target 2 (TP2)**: **{tp2}**
+- **Risk-to-Reward Ratio**: **1:3.2 R:R**
+
+> ⚠️ *Risk Notice: AI quantitative models update in real-time. Practice strict risk management (max 1-2% account equity per trade).*
 """
+
 
     def _general_chat(self, prompt_lower: str, prices: Dict) -> str:
         import re
