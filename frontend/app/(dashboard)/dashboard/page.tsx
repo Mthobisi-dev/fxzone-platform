@@ -1,9 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { CandlestickChart } from '@/components/trading/CandlestickChart';
-import { WatchlistPanel } from '@/components/trading/WatchlistPanel';
-import { OrderBook } from '@/components/trading/OrderBook';
 import { StockScreenerDashboard } from '@/components/trading/StockScreenerDashboard';
 import { NewsFeed } from '@/components/news/NewsFeed';
 import { AIInsightCard } from '@/components/ai/AIInsightCard';
@@ -95,30 +92,12 @@ export default function DashboardPage() {
         <StockScreenerDashboard />
       </div>
 
-      {/* ─── CORE TRADING SUITE: WATCHLIST + CANDLESTICK CHART + ORDERBOOK ─── */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        {/* Left Side: Watchlist Panel */}
-        <div className="xl:col-span-1 h-[470px]">
-          <WatchlistPanel />
-        </div>
-
-        {/* Center: Candlestick Chart */}
-        <div className="xl:col-span-2 h-[470px]">
-          <CandlestickChart />
-        </div>
-
-        {/* Right Side: Order Book Flow */}
-        <div className="xl:col-span-1 h-[470px]">
-          <OrderBook />
-        </div>
-      </div>
-
       {/* ─── AI INSIGHTS & MARKET NEWS FEED ─── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Left/Middle: Google AI Insights */}
         <div className="xl:col-span-2 space-y-4">
           <div className="flex items-center justify-between select-none">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Google AI Watchlist Insights</h3>
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Google AI Market Intelligence</h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -128,7 +107,7 @@ export default function DashboardPage() {
               </div>
             ) : aiInsights.length === 0 ? (
               <div className="col-span-2 text-center py-12 text-zinc-550 text-xs italic">
-                No active watchlist insights at this moment.
+                No active market insights at this moment.
               </div>
             ) : (
               aiInsights.map((insight, index) => (
@@ -145,7 +124,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right: Market News Feed */}
+        {/* Right: Real-time Market News Feed */}
         <div className="xl:col-span-1 h-[450px]">
           <NewsFeed />
         </div>
