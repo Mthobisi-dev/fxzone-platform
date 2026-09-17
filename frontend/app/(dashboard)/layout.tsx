@@ -8,7 +8,7 @@ import { PriceTickerBar } from '@/components/trading/PriceTickerBar';
 import { AIChatPanel } from '@/components/ai/AIChatPanel';
 import { AnimatePresence } from 'framer-motion';
 
-const LOADING_TIMEOUT_MS = 6000; // Max wait before treating as unauthenticated
+const LOADING_TIMEOUT_MS = 6000;
 
 export default function DashboardLayout({
   children,
@@ -17,12 +17,10 @@ export default function DashboardLayout({
 }) {
   const { isLoading, isAuthenticated } = useAuth(true);
   const [isAIOpen, setIsAIOpen] = useState(false);
-
-  // Safety timeout: if auth check takes more than 6 s something is wrong.
-  // We redirect to /login rather than hanging the user on the spinner forever.
   const [timedOut, setTimedOut] = useState(false);
+
   useEffect(() => {
-    if (!isLoading) return; // Already resolved — no timeout needed
+    if (!isLoading) return;
     const id = setTimeout(() => {
       setTimedOut(true);
     }, LOADING_TIMEOUT_MS);
@@ -35,21 +33,20 @@ export default function DashboardLayout({
     }
   }, [timedOut, isAuthenticated]);
 
-  if (isLoading && !timedOut) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-3">
-        <div className="h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs font-semibold text-zinc-500 tracking-wider">
-          Syncing FxZone Terminal...
-        </span>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) return null;
+  const showLoadingOverlay = isLoading && !timedOut;
 
   return (
-    <div className="h-screen bg-zinc-950/70 backdrop-blur-sm flex flex-col overflow-hidden text-zinc-200">
+    <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden text-zinc-200 relative selection:bg-blue-600 selection:text-white">
+      {/* Smooth Loading Shield to prevent flashing during session hydration */}
+      {showLoadingOverlay && (
+        <div className="absolute inset-0 z-50 bg-[#05070d] flex flex-col items-center justify-center gap-3 transition-opacity duration-300">
+          <div className="h-8 w-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-semibold text-zinc-400 tracking-wider">
+            Syncing FxZone Terminal...
+          </span>
+        </div>
+      )}
+
       {/* 1. Price Ticker Bar */}
       <PriceTickerBar />
 
@@ -62,7 +59,7 @@ export default function DashboardLayout({
         <Sidebar />
 
         {/* Center: Main Dashboard Viewport */}
-        <main className="flex-1 overflow-y-auto bg-zinc-950/30 relative pb-16 md:pb-0">
+        <main className="flex-1 overflow-y-auto bg-zinc-950/40 relative pb-16 md:pb-0">
           {children}
         </main>
 
