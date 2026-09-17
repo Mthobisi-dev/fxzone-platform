@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
 interface User {
@@ -28,36 +27,37 @@ interface AuthState {
   initialize: () => Promise<void>;
 }
 
-// Synchronous initial state hydration from localStorage to prevent flash/redirect on refresh
+function buildUserFromSession(session: any): User {
+  const sup = session?.user;
+  if (!sup) throw new Error('No user in session');
+  const meta = sup.user_metadata || {};
+  return {
+    id: sup.id,
+    email: sup.email || '',
+    username: meta.username || meta.name?.replace(/\s+/g, '_').toLowerCase() || sup.email?.split('@')[0] || 'user',
+    display_name: meta.display_name || meta.full_name || meta.name || '',
+    avatar_url: meta.avatar_url || meta.picture || `https://api.dicebear.com/8.x/initials/svg?seed=${sup.email}`,
+    bio: meta.bio || '',
+    role: meta.role || 'trader',
+  };
+}
+
+// Synchronous initial state hydration
 const getInitialState = () => {
   if (typeof window === 'undefined') {
-    return {
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
-      isInitialized: false,
-    };
+    return { user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: false };
   }
-
-  const token = localStorage.getItem('fxzone_access_token');
   const cachedUserStr = localStorage.getItem('fxzone_user');
   let user: User | null = null;
   if (cachedUserStr) {
-    try {
-      user = JSON.parse(cachedUserStr);
-    } catch {
-      user = null;
-    }
+    try { user = JSON.parse(cachedUserStr); } catch { user = null; }
   }
-
-  const hasToken = !!token;
   return {
     user,
-    token,
-    isAuthenticated: hasToken, // Optimistically true while background validation runs
-    isLoading: hasToken,       // Loading true while background validation runs
-    isInitialized: !hasToken,  // If no token exists, marked initialized immediately
+    token: null,
+    isAuthenticated: !!user,
+    isLoading: !!user, // still need to verify session
+    isInitialized: !user,
   };
 };
 
@@ -68,69 +68,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
-      const data = await api.post('/api/auth/login', { email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (!data.session) throw new Error('No session returned from Supabase');
+
+      const user = buildUserFromSession(data.session);
+      const token = data.session.access_token;
+
       if (typeof window !== 'undefined') {
-        localStorage.setItem('fxzone_access_token', data.access_token);
-        localStorage.setItem('fxzone_refresh_token', data.refresh_token);
-        localStorage.setItem('fxzone_user', JSON.stringify(data.user));
+        localStorage.setItem('fxzone_user', JSON.stringify(user));
       }
-      set({
-        user: data.user,
-        token: data.access_token,
-        isAuthenticated: true,
-        isLoading: false,
-        isInitialized: true,
-        error: null,
-      });
-      if (typeof window !== 'undefined') {
-        window.location.href = '/dashboard';
-      }
+      set({ user, token, isAuthenticated: true, isLoading: false, isInitialized: true, error: null });
+      if (typeof window !== 'undefined') window.location.href = '/dashboard';
     } catch (err: any) {
-      set({
-        error: err.detail || 'Failed to authenticate user.',
-        isLoading: false,
-        isInitialized: true,
-      });
-      throw err;
+      const msg = err?.message || 'Invalid email or password.';
+      set({ error: msg, isLoading: false, isInitialized: true });
+      const e: any = new Error(msg);
+      e.detail = msg;
+      throw e;
     }
   },
 
   loginWithGoogle: async (email?: string, name?: string, avatar_url?: string) => {
     set({ isLoading: true, error: null });
     try {
-      const userEmail = email || 'google.trader@fxzone.com';
-      const userName = name || userEmail.split('@')[0].replace('.', ' ').replace(/^./, str => str.toUpperCase());
-      const userAvatar = avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${userEmail}`;
-
-      const googlePayload = {
-        email: userEmail,
-        name: userName,
-        avatar_url: userAvatar,
-      };
-
-      const data = await api.post('/api/auth/google', googlePayload);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('fxzone_access_token', data.access_token);
-        localStorage.setItem('fxzone_refresh_token', data.refresh_token);
-        localStorage.setItem('fxzone_user', JSON.stringify(data.user));
-      }
-      set({
-        user: data.user,
-        token: data.access_token,
-        isAuthenticated: true,
-        isLoading: false,
-        isInitialized: true,
-        error: null,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard` },
       });
-      if (typeof window !== 'undefined') {
-        window.location.href = '/dashboard';
-      }
+      if (error) throw error;
+      // OAuth redirects; state will be resolved by initialize() after redirect
     } catch (err: any) {
-      set({
-        error: err?.detail || 'Google sign-in failed. Please try email login.',
-        isLoading: false,
-        isInitialized: true,
-      });
+      const msg = err?.message || 'Google sign-in failed. Please try email login.';
+      set({ error: msg, isLoading: false, isInitialized: true });
       throw err;
     }
   },
@@ -138,132 +108,115 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (registerData) => {
     set({ isLoading: true, error: null });
     try {
-      const data = await api.post('/api/auth/register', registerData);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('fxzone_access_token', data.access_token);
-        localStorage.setItem('fxzone_refresh_token', data.refresh_token);
-        localStorage.setItem('fxzone_user', JSON.stringify(data.user));
-      }
-      set({
-        user: data.user,
-        token: data.access_token,
-        isAuthenticated: true,
-        isLoading: false,
-        isInitialized: true,
-        error: null,
+      const { data, error } = await supabase.auth.signUp({
+        email: registerData.email,
+        password: registerData.password,
+        options: {
+          data: {
+            username: registerData.username,
+            display_name: registerData.display_name || registerData.username,
+            role: registerData.role || 'trader',
+          },
+        },
       });
-      if (typeof window !== 'undefined') {
-        window.location.href = '/dashboard';
-      }
-    } catch (err: any) {
-      set({
-        error: err.detail || 'Registration failed.',
-        isLoading: false,
-        isInitialized: true,
-      });
-      throw err;
-    }
-  },
+      if (error) throw error;
 
-  deleteAccount: async () => {
-    try {
-      await api.delete('/api/auth/me').catch(() => api.delete('/api/social/users/me'));
-    } finally {
-      supabase.auth.signOut().catch(() => {});
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('fxzone_access_token');
-        localStorage.removeItem('fxzone_refresh_token');
-        localStorage.removeItem('fxzone_user');
-        localStorage.removeItem('fxzone_saved_posts');
-        sessionStorage.clear();
+      // If email confirmation is enabled, Supabase won't return a session immediately
+      if (!data.session) {
+        set({ isLoading: false, isInitialized: true, error: null });
+        // Show user a message that they need to confirm email
+        if (typeof window !== 'undefined') {
+          alert('Registration successful! Please check your email to confirm your account, then log in.');
+          window.location.href = '/login';
+        }
+        return;
       }
-      set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-        error: null,
-      });
+
+      const user = buildUserFromSession(data.session);
+      const token = data.session.access_token;
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        localStorage.setItem('fxzone_user', JSON.stringify(user));
       }
+      set({ user, token, isAuthenticated: true, isLoading: false, isInitialized: true, error: null });
+      if (typeof window !== 'undefined') window.location.href = '/dashboard';
+    } catch (err: any) {
+      const msg = err?.message || 'Registration failed.';
+      set({ error: msg, isLoading: false, isInitialized: true });
+      const e: any = new Error(msg);
+      e.detail = msg;
+      throw e;
     }
   },
 
   logout: () => {
     supabase.auth.signOut().catch(() => {});
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('fxzone_access_token');
-      localStorage.removeItem('fxzone_refresh_token');
       localStorage.removeItem('fxzone_user');
       localStorage.removeItem('fxzone_saved_posts');
       sessionStorage.clear();
     }
-    set({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
-      isInitialized: true,
-      error: null,
-    });
+    set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true, error: null });
+    if (typeof window !== 'undefined') window.location.href = '/login';
+  },
+
+  deleteAccount: async () => {
+    try {
+      await supabase.auth.signOut().catch(() => {});
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('fxzone_user');
+        localStorage.removeItem('fxzone_saved_posts');
+        sessionStorage.clear();
+      }
+      set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true, error: null });
+      if (typeof window !== 'undefined') window.location.href = '/login';
+    }
   },
 
   updateProfile: async (profileData) => {
     set({ isLoading: true, error: null });
     try {
-      const updatedUser = await api.put('/api/auth/me', profileData);
+      const { data, error } = await supabase.auth.updateUser({
+        data: {
+          username: profileData.username,
+          display_name: profileData.display_name,
+          bio: profileData.bio,
+          avatar_url: profileData.avatar_url,
+        },
+      });
+      if (error) throw error;
+
+      const currentUser = get().user;
+      const updatedUser: User = { ...currentUser!, ...profileData };
       if (typeof window !== 'undefined') {
         localStorage.setItem('fxzone_user', JSON.stringify(updatedUser));
       }
       set({ user: updatedUser, isLoading: false });
     } catch (err: any) {
-      set({
-        error: err.detail || 'Failed to update profile.',
-        isLoading: false,
-      });
+      set({ error: err?.message || 'Failed to update profile.', isLoading: false });
       throw err;
     }
   },
 
   initialize: async () => {
     if (typeof window === 'undefined') return;
-    const token = localStorage.getItem('fxzone_access_token');
-    if (!token) {
-      set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-      });
-      return;
-    }
 
     set({ isLoading: true });
     try {
-      const user = await api.get('/api/auth/me');
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
+        if (typeof window !== 'undefined') localStorage.removeItem('fxzone_user');
+        set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true });
+        return;
+      }
+
+      const user = buildUserFromSession(session);
+      const token = session.access_token;
       localStorage.setItem('fxzone_user', JSON.stringify(user));
-      set({
-        user,
-        token,
-        isAuthenticated: true,
-        isLoading: false,
-        isInitialized: true,
-      });
-    } catch (err) {
-      // Token expired or invalid
-      localStorage.removeItem('fxzone_access_token');
-      localStorage.removeItem('fxzone_refresh_token');
-      localStorage.removeItem('fxzone_user');
-      set({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-      });
+      set({ user, token, isAuthenticated: true, isLoading: false, isInitialized: true });
+    } catch {
+      if (typeof window !== 'undefined') localStorage.removeItem('fxzone_user');
+      set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true });
     }
   },
 }));
