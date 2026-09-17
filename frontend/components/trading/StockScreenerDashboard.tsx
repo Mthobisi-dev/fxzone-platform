@@ -647,24 +647,24 @@ export function StockScreenerDashboard() {
               </button>
             </div>
 
-            {/* Metric Sizing Selectors */}
-            <div className="hidden sm:flex items-center gap-2">
+            {/* Metric Sizing & Color Selectors */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <select
                 value={sizeMetric}
                 onChange={(e) => setSizeMetric(e.target.value as any)}
-                className="bg-zinc-900 border border-zinc-850 text-zinc-300 text-xs px-2.5 py-1 rounded-lg focus:outline-none cursor-pointer"
+                className="bg-zinc-900 border border-zinc-850 text-zinc-300 text-[11px] sm:text-xs px-2 sm:px-2.5 py-1 rounded-lg focus:outline-none cursor-pointer"
               >
                 <option value="mktcap">Size: Market Cap</option>
-                <option value="volume">Size: Volume</option>
+                <option value="volume">Size: 24h Volume</option>
               </select>
 
               <select
                 value={colorMetric}
                 onChange={(e) => setColorMetric(e.target.value as any)}
-                className="bg-zinc-900 border border-zinc-850 text-zinc-300 text-xs px-2.5 py-1 rounded-lg focus:outline-none cursor-pointer"
+                className="bg-zinc-900 border border-zinc-850 text-zinc-300 text-[11px] sm:text-xs px-2 sm:px-2.5 py-1 rounded-lg focus:outline-none cursor-pointer"
               >
                 <option value="1d">Color: 1D % Change</option>
-                <option value="pe">Color: P/E Ratio</option>
+                <option value="pe">Color: Valuation P/E</option>
               </select>
             </div>
           </div>
@@ -728,7 +728,49 @@ export function StockScreenerDashboard() {
                     <div className="grid grid-cols-2 gap-2 flex-1 min-h-[180px]">
                       {sectorStocks.map((stock) => {
                         const isUp = stock.changePct >= 0;
-                        const isLarge = stock.marketCapNum > 1000;
+
+                        // Dynamic Sizing based on sizeMetric ('mktcap' vs 'volume')
+                        const liveData = prices[stock.symbol.toUpperCase()];
+                        const liveVol = liveData?.volume || 0;
+                        const isLarge = sizeMetric === 'volume'
+                          ? (liveVol > 20000000 || stock.symbol === 'BTCUSD' || stock.symbol === 'NVDA' || stock.symbol === 'AAPL' || stock.symbol === 'EURUSD')
+                          : (stock.marketCapNum >= 1000);
+
+                        const badgeLabel = sizeMetric === 'volume'
+                          ? (liveVol > 1000000000 ? `${(liveVol / 1000000000).toFixed(1)}B Vol` : liveVol > 1000000 ? `${(liveVol / 1000000).toFixed(1)}M Vol` : stock.marketCap)
+                          : stock.marketCap;
+
+                        // Dynamic Color Scheme based on colorMetric ('1d' vs 'pe')
+                        let tileBgClass = "";
+                        let tileTextClass = "";
+                        let secondaryText = "";
+
+                        if (colorMetric === 'pe') {
+                          const pe = stock.peRatio || 0;
+                          if (pe > 0 && pe <= 25) {
+                            tileBgClass = "bg-emerald-950/50 border-emerald-600/50 hover:border-emerald-400 hover:shadow-emerald-900/40";
+                            tileTextClass = "text-emerald-400";
+                            secondaryText = `P/E: ${pe}x (Value)`;
+                          } else if (pe > 25 && pe <= 50) {
+                            tileBgClass = "bg-cyan-950/50 border-cyan-600/50 hover:border-cyan-400 hover:shadow-cyan-900/40";
+                            tileTextClass = "text-cyan-400";
+                            secondaryText = `P/E: ${pe}x (Fair)`;
+                          } else if (pe > 50) {
+                            tileBgClass = "bg-amber-950/50 border-amber-600/50 hover:border-amber-400 hover:shadow-amber-900/40";
+                            tileTextClass = "text-amber-400";
+                            secondaryText = `P/E: ${pe}x (Growth)`;
+                          } else {
+                            tileBgClass = "bg-purple-950/50 border-purple-600/50 hover:border-purple-400 hover:shadow-purple-900/40";
+                            tileTextClass = "text-purple-300";
+                            secondaryText = `${isUp ? '+' : ''}${stock.changePct.toFixed(2)}% (Macro)`;
+                          }
+                        } else {
+                          tileBgClass = isUp
+                            ? "bg-emerald-950/40 border-emerald-600/40 hover:border-emerald-400 hover:shadow-emerald-900/40"
+                            : "bg-red-950/40 border-red-600/40 hover:border-red-400 hover:shadow-red-900/40";
+                          tileTextClass = isUp ? "text-emerald-400" : "text-red-400";
+                          secondaryText = `${isUp ? '+' : ''}${stock.changePct.toFixed(2)}%`;
+                        }
 
                         return (
                           <div
@@ -740,19 +782,22 @@ export function StockScreenerDashboard() {
                             className={cn(
                               "rounded-xl p-2.5 flex flex-col justify-between cursor-pointer transition-all duration-200 border relative group overflow-hidden shadow-lg",
                               isLarge ? "col-span-2 min-h-[110px]" : "col-span-1 min-h-[85px]",
-                              isUp
-                                ? "bg-emerald-950/40 border-emerald-600/40 hover:border-emerald-400 hover:shadow-emerald-900/40"
-                                : "bg-red-950/40 border-red-600/40 hover:border-red-400 hover:shadow-red-900/40"
+                              tileBgClass
                             )}
                           >
                             {/* Brand Logo & Symbol Header */}
                             <div className="flex items-start justify-between">
                               {renderBrandLogo(stock.logoType, stock.symbol, stock.logoBg)}
-                              {stock.aiTag && (
-                                <span className="text-[8px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1 py-0.2 rounded font-extrabold uppercase">
-                                  AI
+                              <div className="flex items-center gap-1">
+                                <span className="text-[8px] bg-zinc-900/90 text-zinc-400 border border-zinc-800 px-1 py-0.2 rounded font-bold">
+                                  {badgeLabel}
                                 </span>
-                              )}
+                                {stock.aiTag && (
+                                  <span className="text-[8px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1 py-0.2 rounded font-extrabold uppercase">
+                                    AI
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
                             {/* Stock Name & Ticker */}
@@ -760,8 +805,8 @@ export function StockScreenerDashboard() {
                               <span className="text-xs font-black text-white block tracking-wide leading-tight group-hover:text-blue-300">
                                 {stock.symbol}
                               </span>
-                              <span className={cn("text-[10px] font-extrabold block mt-0.5", isUp ? "text-emerald-400" : "text-red-400")}>
-                                {isUp ? '+' : ''}{stock.changePct.toFixed(2)}%
+                              <span className={cn("text-[10px] font-extrabold block mt-0.5", tileTextClass)}>
+                                {secondaryText}
                               </span>
                             </div>
 
