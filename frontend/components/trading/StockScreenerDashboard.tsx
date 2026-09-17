@@ -1019,10 +1019,9 @@ export function StockScreenerDashboard() {
                 onClick={() => {
                   setSelectedAsset(selectedStock as any);
                   setDetailModalOpen(false);
-                  router.push('/market');
                 }}
               >
-                Trade on Asset Terminal (/market)
+                Select Asset for Trading
               </Button>
             </div>
           </div>

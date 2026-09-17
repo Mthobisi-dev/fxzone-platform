@@ -36,11 +36,6 @@ export function Sidebar() {
       path: '/dashboard',
     },
     {
-      label: 'Markets',
-      icon: <BarChart3 size={18} />,
-      path: '/market',
-    },
-    {
       label: 'Discover',
       icon: <Compass size={18} />,
       path: '/discover',
