@@ -1,7 +1,20 @@
+/**
+ * FxZone Auth Store — Supabase Auth (v2)
+ *
+ * Reliability guarantees:
+ *  - Never logs user out due to a transient network error.
+ *  - Retries getSession() up to 3 times with back-off before giving up.
+ *  - Initialization is idempotent and guarded against concurrent calls.
+ *  - Supabase onAuthStateChange drives the source-of-truth state update.
+ *  - localStorage is used only as a fast hydration cache — never as the
+ *    authoritative session source.
+ */
+
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 
-interface User {
+export interface FxUser {
   id: string;
   email: string;
   username: string;
@@ -12,76 +25,218 @@ interface User {
 }
 
 interface AuthState {
-  user: User | null;
+  user: FxUser | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (email?: string, name?: string, avatar_url?: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   register: (data: any) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
-  updateProfile: (data: Partial<User>) => Promise<void>;
+  updateProfile: (data: Partial<FxUser>) => Promise<void>;
   initialize: () => Promise<void>;
+  _setFromSession: (session: Session | null) => void;
 }
 
-function buildUserFromSession(session: any): User {
-  const sup = session?.user;
-  if (!sup) throw new Error('No user in session');
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function buildUserFromSession(session: Session): FxUser {
+  const sup = session.user;
   const meta = sup.user_metadata || {};
+  const email = sup.email || '';
   return {
     id: sup.id,
-    email: sup.email || '',
-    username: meta.username || meta.name?.replace(/\s+/g, '_').toLowerCase() || sup.email?.split('@')[0] || 'user',
+    email,
+    username:
+      meta.username ||
+      meta.name?.replace(/\s+/g, '_').toLowerCase() ||
+      email.split('@')[0] ||
+      'user',
     display_name: meta.display_name || meta.full_name || meta.name || '',
-    avatar_url: meta.avatar_url || meta.picture || `https://api.dicebear.com/8.x/initials/svg?seed=${sup.email}`,
+    avatar_url:
+      meta.avatar_url ||
+      meta.picture ||
+      `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(email)}`,
     bio: meta.bio || '',
     role: meta.role || 'trader',
   };
 }
 
-// Synchronous initial state hydration
-const getInitialState = () => {
-  if (typeof window === 'undefined') {
-    return { user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: false };
+function cacheUser(user: FxUser | null) {
+  if (typeof window === 'undefined') return;
+  if (user) {
+    localStorage.setItem('fxzone_user', JSON.stringify(user));
+  } else {
+    localStorage.removeItem('fxzone_user');
   }
-  const cachedUserStr = localStorage.getItem('fxzone_user');
-  let user: User | null = null;
-  if (cachedUserStr) {
-    try { user = JSON.parse(cachedUserStr); } catch { user = null; }
+}
+
+function getCachedUser(): FxUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('fxzone_user');
+    return raw ? (JSON.parse(raw) as FxUser) : null;
+  } catch {
+    return null;
   }
+}
+
+/** Retry a promise-returning fn up to `attempts` times with linear back-off. */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 800): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+// ─── Initial state (fast hydration from cache) ───────────────────────────────
+
+function getInitialState() {
+  const cached = getCachedUser();
   return {
-    user,
-    token: null,
-    isAuthenticated: !!user,
-    isLoading: !!user, // still need to verify session
-    isInitialized: !user,
+    user: cached,
+    token: null as string | null,
+    // Optimistically authenticated if we have cached user — initialize() validates
+    isAuthenticated: !!cached,
+    // Show loading spinner while we verify the real session in the background
+    isLoading: !!cached,
+    // If no cache exists, no need to wait — we know user is not logged in
+    isInitialized: !cached,
+    error: null as string | null,
   };
-};
+}
+
+// Guard against initialize() being called concurrently
+let _initPromise: Promise<void> | null = null;
+
+// ─── Store ───────────────────────────────────────────────────────────────────
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   ...getInitialState(),
-  error: null,
 
+  // Called by Supabase onAuthStateChange — the true source of truth
+  _setFromSession: (session: Session | null) => {
+    if (session) {
+      const user = buildUserFromSession(session);
+      cacheUser(user);
+      set({
+        user,
+        token: session.access_token,
+        isAuthenticated: true,
+        isLoading: false,
+        isInitialized: true,
+        error: null,
+      });
+    } else {
+      // Only clear user if we were previously authenticated to avoid flicker
+      // on the initial SSR pass where session is not yet available.
+      if (get().isInitialized) {
+        cacheUser(null);
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          isLoading: false,
+          isInitialized: true,
+          error: null,
+        });
+      }
+    }
+  },
+
+  // ── initialize ─────────────────────────────────────────────────────────────
+  initialize: async () => {
+    if (typeof window === 'undefined') return;
+    // Prevent concurrent initializations
+    if (_initPromise) return _initPromise;
+
+    _initPromise = (async () => {
+      set({ isLoading: true });
+      try {
+        // Retry up to 3 times to handle transient network blips
+        const { data, error } = await withRetry(
+          () => supabase.auth.getSession(),
+          3,
+          600
+        );
+
+        if (error) {
+          // Network/Supabase error — do NOT log user out, keep optimistic state
+          console.warn('[Auth] getSession error (kept existing session):', error.message);
+          set({ isLoading: false, isInitialized: true });
+          return;
+        }
+
+        if (data.session) {
+          const user = buildUserFromSession(data.session);
+          cacheUser(user);
+          set({
+            user,
+            token: data.session.access_token,
+            isAuthenticated: true,
+            isLoading: false,
+            isInitialized: true,
+            error: null,
+          });
+        } else {
+          // Confirmed no active session
+          cacheUser(null);
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+            isLoading: false,
+            isInitialized: true,
+            error: null,
+          });
+        }
+      } catch (err: any) {
+        // Unhandled exception — do NOT kick user out; just mark initialized
+        console.warn('[Auth] initialize() exception (kept existing session):', err?.message);
+        set({ isLoading: false, isInitialized: true });
+      } finally {
+        _initPromise = null;
+      }
+    })();
+
+    return _initPromise;
+  },
+
+  // ── login ──────────────────────────────────────────────────────────────────
   login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      if (!data.session) throw new Error('No session returned from Supabase');
+      if (!data.session) throw new Error('No session returned — check your Supabase auth settings.');
 
       const user = buildUserFromSession(data.session);
-      const token = data.session.access_token;
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('fxzone_user', JSON.stringify(user));
-      }
-      set({ user, token, isAuthenticated: true, isLoading: false, isInitialized: true, error: null });
+      cacheUser(user);
+      set({
+        user,
+        token: data.session.access_token,
+        isAuthenticated: true,
+        isLoading: false,
+        isInitialized: true,
+        error: null,
+      });
       if (typeof window !== 'undefined') window.location.href = '/dashboard';
     } catch (err: any) {
-      const msg = err?.message || 'Invalid email or password.';
+      const msg =
+        err?.message === 'Invalid login credentials'
+          ? 'Incorrect email or password. Please try again.'
+          : err?.message || 'Sign-in failed. Please try again.';
       set({ error: msg, isLoading: false, isInitialized: true });
       const e: any = new Error(msg);
       e.detail = msg;
@@ -89,15 +244,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  loginWithGoogle: async (email?: string, name?: string, avatar_url?: string) => {
+  // ── Google OAuth ───────────────────────────────────────────────────────────
+  loginWithGoogle: async () => {
     set({ isLoading: true, error: null });
     try {
+      const redirectTo =
+        typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : '/dashboard';
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard` },
+        options: { redirectTo },
       });
       if (error) throw error;
-      // OAuth redirects; state will be resolved by initialize() after redirect
+      // Page will navigate away via OAuth redirect; no state cleanup needed
     } catch (err: any) {
       const msg = err?.message || 'Google sign-in failed. Please try email login.';
       set({ error: msg, isLoading: false, isInitialized: true });
@@ -105,6 +263,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  // ── register ───────────────────────────────────────────────────────────────
   register: async (registerData) => {
     set({ isLoading: true, error: null });
     try {
@@ -121,19 +280,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       if (error) throw error;
 
-      // If email confirmation is enabled, Supabase won't return a session immediately
+      // Email confirmation required — no session yet
       if (!data.session) {
         set({ isLoading: false, isInitialized: true, error: null });
-        // Return without redirecting — let the calling page handle confirmation UI
-        return;
+        return; // Let the calling page show the "Check your email" UI
       }
 
       const user = buildUserFromSession(data.session);
-      const token = data.session.access_token;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('fxzone_user', JSON.stringify(user));
-      }
-      set({ user, token, isAuthenticated: true, isLoading: false, isInitialized: true, error: null });
+      cacheUser(user);
+      set({
+        user,
+        token: data.session.access_token,
+        isAuthenticated: true,
+        isLoading: false,
+        isInitialized: true,
+        error: null,
+      });
       if (typeof window !== 'undefined') window.location.href = '/dashboard';
     } catch (err: any) {
       const msg = err?.message || 'Registration failed.';
@@ -144,35 +306,51 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  logout: () => {
-    supabase.auth.signOut().catch(() => {});
+  // ── logout ─────────────────────────────────────────────────────────────────
+  logout: async () => {
+    cacheUser(null);
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('fxzone_user');
+      localStorage.removeItem('fxzone_access_token');
+      localStorage.removeItem('fxzone_refresh_token');
       localStorage.removeItem('fxzone_saved_posts');
       sessionStorage.clear();
     }
-    set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true, error: null });
+    set({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      isLoading: false,
+      isInitialized: true,
+      error: null,
+    });
+    await supabase.auth.signOut().catch(() => {});
     if (typeof window !== 'undefined') window.location.href = '/login';
   },
 
+  // ── deleteAccount ──────────────────────────────────────────────────────────
   deleteAccount: async () => {
-    try {
-      await supabase.auth.signOut().catch(() => {});
-    } finally {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('fxzone_user');
-        localStorage.removeItem('fxzone_saved_posts');
-        sessionStorage.clear();
-      }
-      set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true, error: null });
-      if (typeof window !== 'undefined') window.location.href = '/login';
+    cacheUser(null);
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
     }
+    set({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      isLoading: false,
+      isInitialized: true,
+      error: null,
+    });
+    await supabase.auth.signOut().catch(() => {});
+    if (typeof window !== 'undefined') window.location.href = '/login';
   },
 
+  // ── updateProfile ──────────────────────────────────────────────────────────
   updateProfile: async (profileData) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase.auth.updateUser({
+      const { error } = await supabase.auth.updateUser({
         data: {
           username: profileData.username,
           display_name: profileData.display_name,
@@ -183,36 +361,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error) throw error;
 
       const currentUser = get().user;
-      const updatedUser: User = { ...currentUser!, ...profileData };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('fxzone_user', JSON.stringify(updatedUser));
-      }
+      if (!currentUser) throw new Error('No active user');
+      const updatedUser: FxUser = { ...currentUser, ...profileData };
+      cacheUser(updatedUser);
       set({ user: updatedUser, isLoading: false });
     } catch (err: any) {
       set({ error: err?.message || 'Failed to update profile.', isLoading: false });
       throw err;
-    }
-  },
-
-  initialize: async () => {
-    if (typeof window === 'undefined') return;
-
-    set({ isLoading: true });
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error || !session) {
-        if (typeof window !== 'undefined') localStorage.removeItem('fxzone_user');
-        set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true });
-        return;
-      }
-
-      const user = buildUserFromSession(session);
-      const token = session.access_token;
-      localStorage.setItem('fxzone_user', JSON.stringify(user));
-      set({ user, token, isAuthenticated: true, isLoading: false, isInitialized: true });
-    } catch {
-      if (typeof window !== 'undefined') localStorage.removeItem('fxzone_user');
-      set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true });
     }
   },
 }));

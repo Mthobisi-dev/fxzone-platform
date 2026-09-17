@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 
 export interface NotificationItem {
@@ -26,10 +27,17 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   unreadCount: 0,
 
   fetchNotifications: async () => {
-    if (typeof window !== 'undefined' && !localStorage.getItem('fxzone_access_token')) {
-      set({ notifications: [], unreadCount: 0 });
-      return;
+    // Only fetch if there is an active Supabase session
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        set({ notifications: [], unreadCount: 0 });
+        return;
+      }
+    } catch {
+      return; // Can't determine session — skip silently
     }
+
     try {
       const data = await api.get('/api/notifications');
       if (Array.isArray(data)) {
@@ -37,8 +45,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         set({ notifications: data, unreadCount: unread });
       }
     } catch (err: any) {
-      if (err?.status !== 401 && err?.detail !== 'Not authenticated') {
-        console.error('Failed to fetch notifications:', err?.message || err?.detail || err);
+      // Silently ignore 401/403/network errors — backend may be unavailable
+      const status = err?.status ?? 0;
+      if (status !== 401 && status !== 403 && status !== 0) {
+        console.warn('[Notifications] fetch failed:', err?.message || err?.detail || err);
       }
     }
   },
