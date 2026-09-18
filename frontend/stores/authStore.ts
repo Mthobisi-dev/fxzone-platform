@@ -38,7 +38,7 @@ interface AuthState {
   deleteAccount: () => Promise<void>;
   updateProfile: (data: Partial<FxUser>) => Promise<void>;
   initialize: () => Promise<void>;
-  _setFromSession: (session: Session | null) => void;
+  _setFromSession: (session: Session | null, event?: string) => void;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -141,7 +141,7 @@ let _initPromise: Promise<void> | null = null;
 export const useAuthStore = create<AuthState>((set, get) => ({
   ...getInitialState(),
 
-  _setFromSession: (session: Session | null) => {
+  _setFromSession: (session: Session | null, event?: string) => {
     if (session) {
       const user = buildUserFromSession(session);
       cacheUser(user);
@@ -154,17 +154,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         error: null,
       });
 
-      // Async sync with database profile
-      fetchDbProfile(session.access_token).then((dbProfile) => {
-        if (dbProfile) {
-          const currentUser = get().user;
-          if (currentUser) {
-            const syncedUser = { ...currentUser, ...dbProfile };
-            cacheUser(syncedUser);
-            set({ user: syncedUser });
+      // Only sync with DB profile on sign-in events, NOT on every token refresh.
+      // TOKEN_REFRESHED fires every ~55 min and on every navigation — syncing DB
+      // on each one creates unnecessary /api/auth/me calls.
+      const shouldSyncProfile = !event ||
+        event === 'SIGNED_IN' ||
+        event === 'INITIAL_SESSION' ||
+        event === 'USER_UPDATED';
+
+      if (shouldSyncProfile) {
+        fetchDbProfile(session.access_token).then((dbProfile) => {
+          if (dbProfile) {
+            const currentUser = get().user;
+            if (currentUser) {
+              const syncedUser = { ...currentUser, ...dbProfile };
+              cacheUser(syncedUser);
+              set({ user: syncedUser });
+            }
           }
-        }
-      });
+        });
+      }
     } else {
       if (get().isInitialized) {
         cacheUser(null);

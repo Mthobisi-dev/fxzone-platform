@@ -31,10 +31,11 @@ export function ClientInitializer() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         // Drive auth state from Supabase events, not from ad-hoc initialize() calls
-        useAuthStore.getState()._setFromSession(session);
+        // Pass event so _setFromSession can skip expensive DB sync on TOKEN_REFRESHED
+        useAuthStore.getState()._setFromSession(session, event);
 
-        // After sign-in, load notifications
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        // After sign-in or initial session, load notifications
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
           if (session) {
             // Defer to avoid blocking auth state update
             setTimeout(() => {

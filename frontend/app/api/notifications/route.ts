@@ -18,7 +18,13 @@ export async function GET(request: NextRequest) {
       .limit(50);
 
     if (error) throw error;
-    return NextResponse.json(data || []);
+
+    // Allow client-side caching for 10s to reduce repeated polling impact
+    return NextResponse.json(data || [], {
+      headers: {
+        'Cache-Control': 'private, max-age=10, stale-while-revalidate=20',
+      },
+    });
   } catch (error: any) {
     console.error('Notifications fetch error:', error);
     return NextResponse.json([], { status: 200 });
@@ -51,4 +57,3 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true });
   }
 }
-

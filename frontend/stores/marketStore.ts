@@ -184,15 +184,15 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     // 1. Apply optimistic state
     set({ watchlists: updatedWatchlists });
 
-    // 2. Perform server API call with rollback on failure
+    // 2. Perform server API call; on failure, refetch authoritative server state to avoid stale rollback races
     try {
       await api.post(`/api/market/watchlist/${watchlistId || currentWl.id}/items`, {
         asset_id: foundAsset.id,
         symbol: foundAsset.symbol,
       });
     } catch (err: any) {
-      console.error('Failed to add item to server watchlist. Rolling back optimistic state:', err);
-      set({ watchlists: previousWatchlists });
+      console.error('Failed to add item to server watchlist. Syncing with server:', err);
+      await get().fetchWatchlists(true);
     }
   },
 
@@ -214,12 +214,12 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     // 1. Apply optimistic state
     set({ watchlists: updatedWatchlists });
 
-    // 2. Perform server API call with rollback on failure
+    // 2. Perform server API call; on failure, refetch authoritative server state to avoid stale rollback races
     try {
       await api.delete(`/api/market/watchlist/${watchlistId || currentWl.id}/items/${assetIdOrSymbol}`);
     } catch (err: any) {
-      console.error('Failed to remove item from server watchlist. Rolling back optimistic state:', err);
-      set({ watchlists: previousWatchlists });
+      console.error('Failed to remove item from server watchlist. Syncing with server:', err);
+      await get().fetchWatchlists(true);
     }
   },
 

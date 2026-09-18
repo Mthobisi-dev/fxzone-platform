@@ -27,6 +27,29 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
+/** Single-flight token refresh lock to prevent stampedes when multiple API calls return 401 concurrently */
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (!error && data.session) {
+        return data.session.access_token;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 /**
  * Perform a network request to the backend with Supabase auth injection.
  */
@@ -73,26 +96,21 @@ export async function apiRequest(
     throw error;
   }
 
-  // On 401 — ask Supabase to refresh the session and retry once
+  // On 401 — ask Supabase to refresh the session via shared lock and retry once
   if (response.status === 401 && typeof window !== 'undefined') {
-    try {
-      const { data, error: refreshError } = await supabase.auth.refreshSession();
-      if (!refreshError && data.session) {
-        const newToken = data.session.access_token;
-        headers.set('Authorization', `Bearer ${newToken}`);
-        const retryRes = await fetch(url, { ...options, cache: 'no-store', headers });
-        if (retryRes.status === 204) return null;
-        if (!retryRes.ok) {
-          const body = await retryRes.json().catch(() => null);
-          const msg = body?.detail || body?.message || `HTTP ${retryRes.status}`;
-          const err = new Error(msg);
-          Object.assign(err, body || {}, { status: retryRes.status, detail: msg });
-          throw err;
-        }
-        return retryRes.json().catch(() => null);
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      headers.set('Authorization', `Bearer ${newToken}`);
+      const retryRes = await fetch(url, { ...options, cache: 'no-store', headers });
+      if (retryRes.status === 204) return null;
+      if (!retryRes.ok) {
+        const body = await retryRes.json().catch(() => null);
+        const msg = body?.detail || body?.message || `HTTP ${retryRes.status}`;
+        const err = new Error(msg);
+        Object.assign(err, body || {}, { status: retryRes.status, detail: msg });
+        throw err;
       }
-    } catch {
-      // Refresh failed — fall through to throw the original 401 error
+      return retryRes.json().catch(() => null);
     }
   }
 
