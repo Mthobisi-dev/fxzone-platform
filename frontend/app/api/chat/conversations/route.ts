@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 
 // GET /api/chat/conversations — list conversations for current user
 export async function GET(request: NextRequest) {
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
 
     const db = getSupabaseAdmin(request);
 
-    // Get conversation IDs user is a member of
+    // Get all membership data in one query with conversation details
     const { data: memberships, error: memberError } = await db
       .from('conversation_members')
       .select('conversation_id, last_read_at, joined_at')
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     const convIds = memberships.map((m: any) => m.conversation_id);
 
-    // Fetch conversation details
+    // Batch: fetch all conversations in one query
     const { data: conversations, error: convError } = await db
       .from('conversations')
       .select(`
@@ -35,42 +35,41 @@ export async function GET(request: NextRequest) {
 
     if (convError) throw convError;
 
-    // Fetch members for each conversation
-    const enriched = await Promise.all(
-      (conversations || []).map(async (conv: any) => {
-        const { data: members } = await db
-          .from('conversation_members')
-          .select(`
-            user_id,
-            users:user_id (id, username, display_name, avatar_url)
-          `)
-          .eq('conversation_id', conv.id);
+    // Batch: fetch all members for all conversations in ONE query (not N queries)
+    const { data: allMembers } = await db
+      .from('conversation_members')
+      .select(`
+        conversation_id,
+        users:user_id (id, username, display_name, avatar_url)
+      `)
+      .in('conversation_id', convIds);
 
-        const memberData = (members || []).map((m: any) => m.users).filter(Boolean);
+    // Build a map of conversationId → members[]
+    const membersByConvId: Record<string, any[]> = {};
+    (allMembers || []).forEach((m: any) => {
+      if (!membersByConvId[m.conversation_id]) {
+        membersByConvId[m.conversation_id] = [];
+      }
+      if (m.users) {
+        membersByConvId[m.conversation_id].push(m.users);
+      }
+    });
 
-        const membership = memberships.find((m: any) => m.conversation_id === conv.id);
-        let unread_count = 0;
-        if (membership?.last_read_at) {
-          const { count } = await db
-            .from('messages')
-            .select('id', { count: 'exact', head: true })
-            .eq('conversation_id', conv.id)
-            .neq('sender_id', user.id)
-            .gt('created_at', membership.last_read_at);
-          unread_count = count || 0;
-        }
-
-        return {
-          id: conv.id,
-          name: conv.name,
-          is_group: conv.is_group,
-          created_at: conv.created_at,
-          updated_at: conv.updated_at,
-          members: memberData,
-          unread_count,
-        };
-      })
-    );
+    // Enrich conversations without per-item DB calls
+    const enriched = (conversations || []).map((conv: any) => {
+      const membership = memberships.find((m: any) => m.conversation_id === conv.id);
+      return {
+        id: conv.id,
+        name: conv.name,
+        is_group: conv.is_group,
+        created_at: conv.created_at,
+        updated_at: conv.updated_at,
+        members: membersByConvId[conv.id] || [],
+        // Unread count is computed client-side from Realtime state; skip expensive per-conv COUNT query
+        unread_count: 0,
+        last_read_at: membership?.last_read_at || null,
+      };
+    });
 
     return NextResponse.json(enriched);
   } catch (error: any) {
@@ -92,6 +91,9 @@ export async function POST(request: NextRequest) {
     if (!participant_ids || participant_ids.length === 0) {
       return NextResponse.json({ detail: 'participant_ids required' }, { status: 400 });
     }
+
+    // Ensure creator's profile exists for FK references
+    await ensureUserProfile(db, user);
 
     const allMemberIds: string[] = [user.id, ...participant_ids.filter((id: string) => id !== user.id)];
 
@@ -117,7 +119,7 @@ export async function POST(request: NextRequest) {
             .select('*')
             .eq('id', shared[0].conversation_id)
             .eq('is_group', false)
-            .single();
+            .maybeSingle();
           if (existing) {
             return NextResponse.json({ ...existing, members: allMemberIds });
           }

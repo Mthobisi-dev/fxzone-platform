@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 
 // GET /api/chat/conversations/[id]/messages
 export async function GET(
@@ -97,6 +97,9 @@ export async function POST(
     if (!content?.trim()) {
       return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
     }
+
+    // Ensure sender profile row exists before INSERT (FK: messages.sender_id → users.id)
+    await ensureUserProfile(db, user);
 
     const { data, error } = await db
       .from('messages')
