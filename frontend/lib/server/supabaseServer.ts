@@ -53,14 +53,34 @@ export interface UserFromRequestResult {
 }
 
 /**
- * Ensures a public.users profile row exists for a given auth user.
- * Only called when the profile fetch returns null — amortizes the cost
- * across first use rather than running on every request.
+ * Provisions a public.users profile row for a Supabase Auth user.
+ *
+ * Uses the service-role admin client to bypass RLS entirely — this is
+ * critical because anon-key clients may be blocked by INSERT policies.
+ *
+ * Returns true if the profile row is confirmed to exist after the call,
+ * false if provisioning failed AND the row is missing.
  */
-export async function ensureUserProfile(client: SupabaseClient, user: any): Promise<void> {
-  if (!user || !user.id) return;
+export async function ensureUserProfile(
+  _client: SupabaseClient, // kept for API compat; we always use admin internally
+  user: any
+): Promise<boolean> {
+  if (!user || !user.id) return false;
+
+  // Always use the admin client to bypass RLS for profile writes
+  const adminDb = getSupabaseAdmin();
 
   try {
+    // 1. Check existence first (cheap primary-key lookup)
+    const { data: existing } = await adminDb
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (existing) return true; // Already exists — fast path
+
+    // 2. Row is missing — build and upsert the profile
     const meta = user.user_metadata || {};
     const baseUsername =
       meta.username ||
@@ -68,6 +88,7 @@ export async function ensureUserProfile(client: SupabaseClient, user: any): Prom
       user.email?.split('@')[0] ||
       'trader';
 
+    // Append short ID suffix to guarantee uniqueness across providers
     const uniqueUsername = `${baseUsername}_${user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 6)}`;
     const displayName = meta.display_name || meta.full_name || meta.name || baseUsername;
     const role = meta.role || 'trader';
@@ -78,6 +99,7 @@ export async function ensureUserProfile(client: SupabaseClient, user: any): Prom
       id: user.id,
       email: user.email || `${user.id}@fxzone.local`,
       username: uniqueUsername,
+      // Required by schema NOT NULL constraint; Supabase manages actual auth
       password_hash: 'SUPABASE_AUTH_MANAGED',
       display_name: displayName,
       avatar_url: avatarUrl,
@@ -87,18 +109,36 @@ export async function ensureUserProfile(client: SupabaseClient, user: any): Prom
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await client.from('users').upsert(payload, { onConflict: 'id' });
+    const { error: upsertErr } = await adminDb
+      .from('users')
+      .upsert(payload, { onConflict: 'id', ignoreDuplicates: false });
 
-    if (error) {
-      // If RLS policy blocks INSERT, attempt UPDATE in case profile row exists
-      await client.from('users').update({
+    if (upsertErr) {
+      console.error('[ensureUserProfile] upsert failed:', upsertErr.message);
+      // Attempt plain update in case a partial row already exists
+      await adminDb.from('users').update({
         display_name: displayName,
         avatar_url: avatarUrl,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       }).eq('id', user.id);
     }
-  } catch (_) {
-    // Silently ignore optional profile initialization exceptions
+
+    // 3. Verify the row actually landed (confirms FK safety)
+    const { data: confirmed } = await adminDb
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!confirmed) {
+      console.error('[ensureUserProfile] row missing after upsert for user', user.id);
+      return false;
+    }
+
+    return true;
+  } catch (err: any) {
+    console.error('[ensureUserProfile] unexpected error:', err?.message || err);
+    return false;
   }
 }
 
@@ -134,8 +174,7 @@ export async function getUserFromRequest(request: Request): Promise<UserFromRequ
       return { user: null, role: null, error: error?.message || 'Invalid authentication token' };
     }
 
-    // Step 2: Fetch profile row for role — skip if service role not set (will use metadata fallback)
-    // This is a single, cheap SELECT on the primary key.
+    // Step 2: Fetch profile row for role — single, cheap SELECT on primary key
     const { data: profile } = await client
       .from('users')
       .select('id, role')
@@ -149,11 +188,11 @@ export async function getUserFromRequest(request: Request): Promise<UserFromRequ
       role = profile.role || 'trader';
     } else {
       // Profile does NOT exist — provision it asynchronously (non-blocking)
-      // This only runs on first login. The user still proceeds immediately
-      // with metadata role while the INSERT completes in the background.
+      // User proceeds immediately with metadata role while INSERT completes in background.
       role = user.user_metadata?.role || 'trader';
       ensureUserProfile(client, user).catch(() => {
-        // Background provisioning — silently ignore failures
+        // Background provisioning — silently ignore failures here;
+        // write routes call ensureUserProfile explicitly and check the return value.
       });
     }
 
