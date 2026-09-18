@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
+
 
 // GET /api/social/feed — paginated social posts with author info
 export async function GET(request: NextRequest) {
@@ -82,17 +83,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { content, image_url, is_story } = body;
 
-    if (!content?.trim()) {
-      return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
+    let finalContent = (content || '').trim();
+    if (!finalContent) {
+      if (image_url || is_story) {
+        finalContent = '📊 Shared media attachment';
+      } else {
+        return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
+      }
     }
 
     const db = getSupabaseAdmin(request);
+    await ensureUserProfile(db, user);
 
     const { data, error } = await db
       .from('posts')
       .insert({
         user_id: user.id,
-        content: content.trim(),
+        content: finalContent,
         image_url: image_url || null,
         is_story: !!is_story,
       })

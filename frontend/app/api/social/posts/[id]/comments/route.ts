@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
+
 
 // GET /api/social/posts/[id]/comments
 export async function GET(
@@ -62,6 +63,7 @@ export async function POST(
     }
 
     const db = getSupabaseAdmin(request);
+    await ensureUserProfile(db, user);
 
     const { data, error } = await db
       .from('comments')
