@@ -93,10 +93,17 @@ export const useSocialStore = create<SocialState>((set, get) => ({
         createdAt: p.created_at || p.createdAt || new Date().toISOString(),
       })) : [];
       
-      set((state) => ({
-        posts: isAppend ? [...state.posts, ...mapped] : mapped,
-        isLoading: false,
-      }));
+      set((state) => {
+        const combined = isAppend ? [...state.posts, ...mapped] : mapped;
+        const postMap = new Map<string, Post>();
+        combined.forEach((p) => {
+          if (p && p.id) postMap.set(String(p.id), p);
+        });
+        return {
+          posts: Array.from(postMap.values()),
+          isLoading: false,
+        };
+      });
     } catch (err: any) {
       set({
         error: err.detail || 'Failed to load social feed.',

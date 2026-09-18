@@ -214,7 +214,15 @@ async def create_story(
 
 
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.mov', '.webm', '.pdf'}
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB max size
+
+MAGIC_BYTES = {
+    '.png': b'\x89PNG',
+    '.jpg': b'\xff\xd8\xff',
+    '.jpeg': b'\xff\xd8\xff',
+    '.gif': b'GIF8',
+    '.pdf': b'%PDF',
+}
 
 
 @router.post("/posts/upload")
@@ -222,7 +230,7 @@ async def upload_post_media(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ):
-    """Upload a media file (image, video, document) for a social post."""
+    """Upload a media file with strict size counting and magic-byte signature validation."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided.")
 
@@ -230,23 +238,50 @@ async def upload_post_media(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"File type '{ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            detail=f"File extension '{ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
         )
+
+    # Read first 16 bytes to validate header magic signature
+    header_bytes = await file.read(16)
+    await file.seek(0)
+
+    if ext in MAGIC_BYTES:
+        expected = MAGIC_BYTES[ext]
+        if not header_bytes.startswith(expected):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file content signature for extension {ext}."
+            )
 
     # Generate unique filename
     unique_name = f"{uuid_mod.uuid4().hex}{ext}"
+    os.makedirs("uploads", exist_ok=True)
     upload_path = os.path.join("uploads", unique_name)
 
-    # Stream write to disk
+    # Stream write to disk with strict byte-counter
+    total_bytes = 0
     try:
         async with aiofiles.open(upload_path, "wb") as out_file:
             while chunk := await file.read(1024 * 64):  # 64KB chunks
+                total_bytes += len(chunk)
+                if total_bytes > MAX_FILE_SIZE:
+                    break
                 await out_file.write(chunk)
     except Exception as e:
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
+    if total_bytes > MAX_FILE_SIZE:
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size exceeds maximum allowed limit of {MAX_FILE_SIZE // (1024 * 1024)}MB."
+        )
+
     file_url = f"/uploads/{unique_name}"
-    return {"url": file_url, "filename": file.filename, "size": os.path.getsize(upload_path)}
+    return {"url": file_url, "filename": file.filename, "size": total_bytes}
 
 
 @router.get("/users")
@@ -268,6 +303,9 @@ async def purge_all_posts(
     db: AsyncSession = Depends(get_db),
 ):
     """Purge all posts from the social feed (Author/Admin or Start Fresh)."""
+    user_role = str(getattr(current_user, "role", "trader")).lower()
+    if user_role != "admin":
+        raise HTTPException(status_code=403, detail="Admin authorization required.")
     service = SocialService(db)
     count = await service.purge_all_posts()
     return {"status": "success", "message": f"Purged {count} posts successfully."}
@@ -281,12 +319,8 @@ async def delete_post(
 ):
     """Delete a post or remove a reshare/bookmark. Post author, resharer, or Admin can delete."""
     service = SocialService(db)
-    is_admin = (
-        current_user.username == 'admin' 
-        or current_user.role == 'admin' 
-        or (hasattr(current_user.role, 'value') and current_user.role.value == 'admin')
-        or current_user.email == 'mthobisimzimela031@gmail.com'
-    )
+    user_role = str(getattr(current_user, "role", "trader")).lower()
+    is_admin = user_role == 'admin'
     deleted = await service.delete_post(post_id=post_id, user_id=current_user.id, is_admin=is_admin)
     if not deleted:
         raise HTTPException(

@@ -67,13 +67,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
         params: { limit, offset },
       });
       
-      set((state) => ({
-        messages: {
-          ...state.messages,
-          [conversationId]: offset === 0 ? data : [...data, ...(state.messages[conversationId] || [])],
-        },
-        isLoading: false,
-      }));
+      const newItems = Array.isArray(data) ? data : [];
+      set((state) => {
+        const existing = state.messages[conversationId] || [];
+        const combined = offset === 0 ? newItems : [...newItems, ...existing];
+        
+        // Deduplicate by message ID and sort chronologically
+        const uniqueMap = new Map<string, Message>();
+        combined.forEach((m) => {
+          if (m && m.id) uniqueMap.set(String(m.id), m);
+        });
+        
+        const sorted = Array.from(uniqueMap.values()).sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        return {
+          messages: {
+            ...state.messages,
+            [conversationId]: sorted,
+          },
+          isLoading: false,
+        };
+      });
     } catch (err: any) {
       set({
         error: err.detail || 'Failed to retrieve messages.',
@@ -114,19 +130,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   receiveMessage: (message) => {
+    if (!message || !message.conversation_id) return;
     const convId = message.conversation_id;
     
-    // Append message to message list
+    // Append message with deduplication and chronological sorting
     set((state) => {
       const list = state.messages[convId] || [];
-      // Prevent duplicate messages
-      if (list.some((m) => m.id === message.id)) {
+      if (list.some((m) => String(m.id) === String(message.id))) {
         return state;
       }
+      
+      const updatedList = [...list, message].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
       return {
         messages: {
           ...state.messages,
-          [convId]: [...list, message],
+          [convId]: updatedList,
         },
       };
     });

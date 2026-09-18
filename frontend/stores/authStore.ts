@@ -307,14 +307,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   // ── logout ─────────────────────────────────────────────────────────────────
+  // ── logout ─────────────────────────────────────────────────────────────────
   logout: async () => {
     cacheUser(null);
     if (typeof window !== 'undefined') {
+      localStorage.removeItem('fxzone_user');
       localStorage.removeItem('fxzone_access_token');
       localStorage.removeItem('fxzone_refresh_token');
       localStorage.removeItem('fxzone_saved_posts');
+      localStorage.removeItem('fxzone_user_watchlist_items');
       sessionStorage.clear();
     }
+
+    // Reset all domain stores to prevent cross-user data leakage
+    try {
+      const { useMarketStore } = await import('@/stores/marketStore');
+      useMarketStore.getState().clearWatchlists();
+    } catch {}
+
+    try {
+      const { useChatStore } = await import('@/stores/chatStore');
+      useChatStore.setState({ conversations: [], activeConversationId: null, messages: {}, typingUsers: {} });
+    } catch {}
+
+    try {
+      const { useSocialStore } = await import('@/stores/socialStore');
+      useSocialStore.setState({ posts: [], stories: [], isLoading: false, error: null });
+    } catch {}
+
+    try {
+      const { useNotificationStore } = await import('@/stores/notificationStore');
+      useNotificationStore.setState({ notifications: [], unreadCount: 0 });
+    } catch {}
+
     set({
       user: null,
       token: null,
@@ -323,17 +348,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isInitialized: true,
       error: null,
     });
+
     await supabase.auth.signOut().catch(() => {});
     if (typeof window !== 'undefined') window.location.href = '/login';
   },
 
   // ── deleteAccount ──────────────────────────────────────────────────────────
   deleteAccount: async () => {
+    try {
+      const { api } = await import('@/lib/api');
+      await api.delete('/api/auth/me').catch(() => {});
+    } catch (e) {
+      console.warn('Backend account deletion API warning:', e);
+    }
+
     cacheUser(null);
     if (typeof window !== 'undefined') {
       localStorage.clear();
       sessionStorage.clear();
     }
+
+    // Reset domain stores
+    try {
+      const { useMarketStore } = await import('@/stores/marketStore');
+      useMarketStore.getState().clearWatchlists();
+    } catch {}
+
+    try {
+      const { useChatStore } = await import('@/stores/chatStore');
+      useChatStore.setState({ conversations: [], activeConversationId: null, messages: {}, typingUsers: {} });
+    } catch {}
+
+    try {
+      const { useSocialStore } = await import('@/stores/socialStore');
+      useSocialStore.setState({ posts: [], stories: [], isLoading: false, error: null });
+    } catch {}
+
     set({
       user: null,
       token: null,
@@ -342,6 +392,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isInitialized: true,
       error: null,
     });
+
     await supabase.auth.signOut().catch(() => {});
     if (typeof window !== 'undefined') window.location.href = '/login';
   },

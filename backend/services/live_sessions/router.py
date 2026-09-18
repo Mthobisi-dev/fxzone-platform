@@ -193,17 +193,11 @@ async def leave_session(
 
 
 def check_is_admin(user: User) -> bool:
-    """Helper to check if a user has platform administrator privileges."""
+    """Check if a user has platform administrator privileges based on authoritative RBAC role."""
     if not user:
         return False
-    role_val = user.role.value if hasattr(user.role, 'value') else getattr(user, 'role', None)
-    if role_val == 'admin':
-        return True
-    if getattr(user, 'username', '') in ['admin', 'fxzone_admin', 'mthobisi']:
-        return True
-    if getattr(user, 'email', '') in ['admin@fxzone.io', 'mthobisimzimela031@gmail.com']:
-        return True
-    return False
+    role_val = user.role.value if hasattr(user.role, 'value') else getattr(user, 'role', '')
+    return str(role_val).lower() == 'admin'
 
 
 @router.post("/{session_id}/end", response_model=LiveSessionResponse)

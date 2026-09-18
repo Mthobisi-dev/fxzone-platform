@@ -3,21 +3,37 @@
  * Institutional-grade peer-to-peer screen sharing and real-time audio/video streaming.
  */
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
+function buildRtcConfig(): RTCConfiguration {
+  const iceServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    { urls: 'stun:stun.services.mozilla.com' },
-  ],
-  iceCandidatePoolSize: 10,
-  bundlePolicy: 'max-bundle',
-  rtcpMuxPolicy: 'require',
-};
+  ];
+
+  // Configurable TURN servers for production fallback behind restrictive NATs
+  const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+  const turnUser = process.env.NEXT_PUBLIC_TURN_USERNAME;
+  const turnCred = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
+
+  if (turnUrl) {
+    const turnServer: RTCIceServer = { urls: turnUrl };
+    if (turnUser) turnServer.username = turnUser;
+    if (turnCred) turnServer.credential = turnCred;
+    iceServers.push(turnServer);
+  }
+
+  return {
+    iceServers,
+    iceCandidatePoolSize: 10,
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
+  };
+}
+
+const RTC_CONFIG: RTCConfiguration = buildRtcConfig();
 
 export interface WebRTCOptions {
   sessionId?: string | number;

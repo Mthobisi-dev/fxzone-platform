@@ -58,14 +58,24 @@ class ConnectionManager:
         logger.info(f"WebSocket disconnected: channel={channel}, user={user_id}")
 
     async def broadcast(self, channel: str, message: Any):
-        """Send a message to all connections in a channel."""
+        """Send a message to all connections in a channel, publishing to Redis for cross-instance sync if available."""
+        data = json.dumps(message, default=json_serial) if not isinstance(message, str) else message
+
+        # 1. Publish to Redis for multi-instance backend coordination if available
+        try:
+            from shared.database import get_redis
+            redis_client = get_redis()
+            if redis_client and hasattr(redis_client, "publish"):
+                await redis_client.publish(f"ws_channel:{channel}", data)
+        except Exception as err:
+            logger.debug(f"Redis pub/sub notice: {err}")
+
+        # 2. Local process websocket delivery
         if channel not in self._channels:
             return
 
-        data = json.dumps(message, default=json_serial) if not isinstance(message, str) else message
         disconnected = set()
-
-        for ws in self._channels[channel]:
+        for ws in list(self._channels[channel]):
             try:
                 await ws.send_text(data)
             except Exception:

@@ -446,8 +446,12 @@ else:
         try:
             import ssl
             ssl_ctx = ssl.create_default_context()
-            ssl_ctx.check_hostname = False
-            ssl_ctx.verify_mode = ssl.CERT_NONE
+            if settings.APP_ENV.lower() in ("production", "prod"):
+                ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+                ssl_ctx.check_hostname = True
+            else:
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = ssl.CERT_NONE
             connect_args["ssl"] = ssl_ctx
         except Exception:
             pass
@@ -720,6 +724,7 @@ async def init_all_databases():
         await seed_assets_if_empty()
 
     # 2. Initialize Redis / Mock Redis fallback
+    is_prod = settings.APP_ENV.lower() in ("production", "prod")
     if _HAS_AIOREDIS:
         try:
             client = aioredis.from_url(
@@ -731,10 +736,15 @@ async def init_all_databases():
             _redis_client = client
             logger.info("Connected to Redis successfully.")
         except Exception as e:
-            logger.warning(f"Redis is offline or failed to connect ({e}). Initializing Mock Redis...")
+            if is_prod:
+                logger.error(f"CRITICAL: Redis connection failed in production ({e}). Refusing fallback to MockRedis.")
+                raise RuntimeError(f"Cannot connect to production Redis: {e}") from e
+            logger.warning(f"Redis is offline or failed to connect ({e}). Initializing Mock Redis for development...")
             _redis_client = MockRedis()
     else:
-        logger.warning("aioredis package not available. Initializing Mock Redis...")
+        if is_prod:
+            raise RuntimeError("CRITICAL: aioredis package not available in production environment.")
+        logger.warning("aioredis package not available. Initializing Mock Redis for development...")
         _redis_client = MockRedis()
 
     # 3. Initialize MongoDB / Mock MongoDB fallback
@@ -746,11 +756,16 @@ async def init_all_databases():
             _mongo_db = client.fxzone
             logger.info("Connected to MongoDB successfully.")
         except Exception as e:
-            logger.warning(f"MongoDB is offline or failed to connect ({e}). Initializing Mock MongoDB...")
+            if is_prod:
+                logger.error(f"CRITICAL: MongoDB connection failed in production ({e}). Refusing fallback to MockMongoDB.")
+                raise RuntimeError(f"Cannot connect to production MongoDB: {e}") from e
+            logger.warning(f"MongoDB is offline or failed to connect ({e}). Initializing Mock MongoDB for development...")
             _mongo_client = MockMongoClient(settings.MONGODB_URL)
             _mongo_db = _mongo_client.fxzone
     else:
-        logger.warning("motor package not available. Initializing Mock MongoDB...")
+        if is_prod:
+            raise RuntimeError("CRITICAL: motor package not available in production environment.")
+        logger.warning("motor package not available. Initializing Mock MongoDB for development...")
         _mongo_client = MockMongoClient(settings.MONGODB_URL)
         _mongo_db = _mongo_client.fxzone
 

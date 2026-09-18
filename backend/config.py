@@ -75,6 +75,15 @@ class Settings(BaseSettings):
             or ("supabase" in self.DATABASE_URL.lower())
         )
 
+    def validate_production_security(self) -> None:
+        """Validate critical security settings in production environment."""
+        if self.APP_ENV.lower() in ("production", "prod"):
+            if "dev-secret-key" in self.SECRET_KEY or self.SECRET_KEY == "change-me":
+                raise ValueError(
+                    "CRITICAL SECURITY ERROR: Default development SECRET_KEY is not allowed in production. "
+                    "Set a secure SECRET_KEY environment variable."
+                )
+
     class Config:
         env_file = "../.env"
         env_file_encoding = "utf-8"
@@ -82,3 +91,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+settings.validate_production_security()
+
