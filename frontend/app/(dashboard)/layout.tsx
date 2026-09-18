@@ -18,6 +18,11 @@ export default function DashboardLayout({
   const { isLoading, isAuthenticated } = useAuth(true);
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!isLoading) return;
@@ -33,7 +38,7 @@ export default function DashboardLayout({
     }
   }, [timedOut, isAuthenticated]);
 
-  const showLoadingOverlay = isLoading && !timedOut;
+  const showLoadingOverlay = mounted && isLoading && !timedOut;
 
   return (
     <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden text-zinc-200 relative selection:bg-blue-600 selection:text-white">

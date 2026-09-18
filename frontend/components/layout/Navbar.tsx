@@ -29,6 +29,11 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
   const { user, logout } = useAuth();
   const { theme } = useTheme();
   const [isThemeOpen, setIsThemeOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const userMenuItems = [
     {
@@ -146,7 +151,7 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
           <NotificationDropdown />
 
           {/* User Profile avatar dropdown */}
-          {user && (
+          {mounted && user && (
             <Dropdown
               trigger={
                 <div className="flex items-center gap-2 pl-1 cursor-pointer">

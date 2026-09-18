@@ -1,37 +1,77 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { toggleFollowSocialUser, findSocialUser } from '@/lib/socialData';
+import { supabaseAdmin } from '@/lib/supabase';
 
+
+
+async function getUser(request: NextRequest) {
+  const token = request.headers.get('authorization')?.replace('Bearer ', '');
+  if (!token) return null;
+  try {
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+    return user;
+  } catch { return null; }
+}
+
+// POST /api/social/users/[id]/follow — toggle follow/unfollow
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } | Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const params = await Promise.resolve(context.params);
-    const userId = params.id;
+    const user = await getUser(request);
+    if (!user) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
 
-    if (!userId) {
-      return NextResponse.json({ detail: 'User ID parameter missing' }, { status: 400 });
+    const { id: targetUserId } = await context.params;
+
+    if (targetUserId === user.id) {
+      return NextResponse.json({ detail: 'Cannot follow yourself' }, { status: 400 });
     }
 
-    const updatedUser = toggleFollowSocialUser(userId);
-    if (!updatedUser) {
-      return NextResponse.json({ detail: 'User not found' }, { status: 404 });
+    // Check existing follow
+    const { data: existing } = await supabaseAdmin
+      .from('follows')
+      .select('id')
+      .eq('follower_id', user.id)
+      .eq('following_id', targetUserId)
+      .single();
+
+    let is_following: boolean;
+
+    if (existing) {
+      await supabaseAdmin.from('follows').delete().eq('id', existing.id);
+      is_following = false;
+    } else {
+      await supabaseAdmin.from('follows').insert({
+        follower_id: user.id,
+        following_id: targetUserId,
+      });
+      is_following = true;
     }
 
-    return NextResponse.json({
-      success: true,
-      is_following: updatedUser.is_following,
-      isFollowing: updatedUser.is_following,
-      followers_count: updatedUser.followers_count,
-      followersCount: updatedUser.followers_count,
-      following_count: updatedUser.following_count,
-      followingCount: updatedUser.following_count,
-    });
+    // Get updated counts
+    const { count: followerCount } = await supabaseAdmin
+      .from('follows')
+      .select('id', { count: 'exact', head: true })
+      .eq('following_id', targetUserId);
+
+    const { count: followingCount } = await supabaseAdmin
+      .from('follows')
+      .select('id', { count: 'exact', head: true })
+      .eq('follower_id', user.id);
+
+    await supabaseAdmin
+      .from('users')
+      .update({ followers_count: followerCount || 0 })
+      .eq('id', targetUserId);
+
+    await supabaseAdmin
+      .from('users')
+      .update({ following_count: followingCount || 0 })
+      .eq('id', user.id);
+
+    return NextResponse.json({ is_following, followers_count: followerCount || 0 });
   } catch (error: any) {
-    console.error('Error toggling follow:', error);
-    return NextResponse.json(
-      { error: 'Failed to toggle follow status', detail: error?.message },
-      { status: 500 }
-    );
+    console.error('Follow error:', error);
+    return NextResponse.json({ error: 'Follow action failed', detail: error?.message }, { status: 500 });
   }
 }

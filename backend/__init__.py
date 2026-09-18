@@ -1,1 +1,0 @@
-"""FxZone Backend application."""

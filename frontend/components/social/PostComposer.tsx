@@ -43,19 +43,7 @@ interface MediaFile {
 
 export function PostComposer({ onPostCreated }: PostComposerProps) {
   const { user } = useAuth();
-  if (
-    user?.email === 'mthobisimzimela031@gmail.com' ||
-    user?.username === 'admin' ||
-    user?.role === 'admin'
-  ) {
-    return (
-      <Card className="p-4 border border-zinc-900 bg-zinc-950/40 text-center">
-        <p className="text-xs text-zinc-500 italic">
-          FxZone Admin accounts are restricted from publishing posts to the social feed.
-        </p>
-      </Card>
-    );
-  }
+  const [mounted, setMounted] = useState(false);
 
   const [content, setContent] = useState('');
   const [caption, setCaption] = useState('');
@@ -123,6 +111,26 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       setIsExpanded(true);
     }
   }, []);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isAdmin =
+    mounted &&
+    (user?.email === 'mthobisimzimela031@gmail.com' ||
+      user?.username === 'admin' ||
+      user?.role === 'admin');
+
+  if (isAdmin) {
+    return (
+      <Card className="p-4 border border-zinc-900 bg-zinc-950/40 text-center">
+        <p className="text-xs text-zinc-500 italic">
+          FxZone Admin accounts are restricted from publishing posts to the social feed.
+        </p>
+      </Card>
+    );
+  }
 
   const removeMedia = (index: number) => {
     setMediaFiles((prev) => {
@@ -301,8 +309,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         {/* User avatar */}
         <div className="shrink-0 mt-1">
           <Avatar
-            src={user?.avatar_url}
-            alt={user?.display_name || 'Avatar'}
+            src={mounted && user ? user.avatar_url : undefined}
+            alt={mounted && user ? (user.display_name || user.username) : 'Avatar'}
             size="sm"
           />
         </div>

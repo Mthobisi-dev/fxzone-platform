@@ -14,11 +14,18 @@ import { useAuth } from '@/hooks/useAuth';
 
 export default function SocialFeedPage() {
   const { user } = useAuth();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const isAdmin =
     user?.email === 'mthobisimzimela031@gmail.com' ||
     user?.username === 'admin' ||
     user?.role === 'admin' ||
     (user?.role as any)?.value === 'admin';
+  const showAdminControls = mounted && isAdmin;
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -178,7 +185,7 @@ export default function SocialFeedPage() {
             Operator Streams
           </span>
           <div className="flex items-center gap-2">
-            {isAdmin && (
+            {showAdminControls && (
               <button
                 onClick={handleStartFresh}
                 className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 rounded transition-colors"

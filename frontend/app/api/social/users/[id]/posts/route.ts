@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
 
+// GET /api/social/users/[id]/posts — fetch real posts authored by target user
 export async function GET(
   request: NextRequest,
   context: { params: { id: string } | Promise<{ id: string }> }
@@ -8,47 +10,42 @@ export async function GET(
     const params = await Promise.resolve(context.params);
     const userId = params.id;
 
-    // Return sample technical posts for trader
-    const posts = [
-      {
-        id: `post-${userId}-1`,
-        user_id: userId,
-        user: {
-          id: userId,
-          username: userId.includes('@') ? userId.split('@')[0] : userId,
-          display_name: userId,
-          avatar_url: `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(userId)}`,
-          role: 'trader',
-        },
-        content: `Analyzing ICT Order Block setup on ${userId.includes('Crypto') ? 'BTCUSD' : 'EURUSD'}. High liquidity zone identified near recent swing high. Risk-to-Reward ratio 1:3.2. 📈🎯`,
-        media_type: 'none',
-        asset_tags: userId.includes('Crypto') ? ['BTCUSD', 'ETHUSD'] : ['EURUSD', 'GBPUSD'],
-        likes_count: 24,
-        comments_count: 5,
-        reposts_count: 2,
-        created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-      },
-      {
-        id: `post-${userId}-2`,
-        user_id: userId,
-        user: {
-          id: userId,
-          username: userId.includes('@') ? userId.split('@')[0] : userId,
-          display_name: userId,
-          avatar_url: `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(userId)}`,
-          role: 'trader',
-        },
-        content: `Weekly macro breakdown: Watching central bank rate decisions and inflation prints for volatility expansion. Maintain strict risk management. 🛡️`,
-        media_type: 'none',
-        asset_tags: ['GOLD', 'US30'],
-        likes_count: 19,
-        comments_count: 3,
-        reposts_count: 1,
-        created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-      },
-    ];
+    if (!userId) {
+      return NextResponse.json([]);
+    }
 
-    return NextResponse.json(posts);
+    const { data: posts, error } = await supabaseAdmin
+      .from('posts')
+      .select(`
+        id, content, image_url, likes_count, comments_count, reposts_count,
+        is_story, is_pinned, created_at,
+        users:user_id (id, username, display_name, avatar_url, role)
+      `)
+      .eq('user_id', userId)
+      .eq('is_story', false)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const formatted = (posts || []).map((p: any) => ({
+      id: p.id,
+      user_id: p.users?.id || userId,
+      user: {
+        id: p.users?.id || userId,
+        username: p.users?.username || 'trader',
+        display_name: p.users?.display_name || p.users?.username || 'Trader',
+        avatar_url: p.users?.avatar_url || null,
+        role: p.users?.role || 'trader',
+      },
+      content: p.content,
+      image_url: p.image_url,
+      likes_count: p.likes_count || 0,
+      comments_count: p.comments_count || 0,
+      reposts_count: p.reposts_count || 0,
+      created_at: p.created_at,
+    }));
+
+    return NextResponse.json(formatted);
   } catch (error: any) {
     console.error('Error fetching user posts:', error);
     return NextResponse.json([], { status: 200 });

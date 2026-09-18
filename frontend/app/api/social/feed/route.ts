@@ -1,46 +1,117 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
 
-export async function GET() {
-  const timestamp = new Date().toISOString();
 
-  const posts = [
-    {
-      id: 'post-1',
-      user_id: 'user-allex',
+
+// GET /api/social/feed — paginated social posts with author info
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const offset = parseInt(searchParams.get('offset') || '0', 10);
+
+    const { data, error } = await supabaseAdmin
+      .from('posts')
+      .select(`
+        id,
+        content,
+        image_url,
+        likes_count,
+        comments_count,
+        reposts_count,
+        is_story,
+        is_pinned,
+        created_at,
+        users:user_id (
+          id,
+          username,
+          display_name,
+          avatar_url,
+          role
+        )
+      `)
+      .eq('is_story', false)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+
+    // Normalize the response shape expected by frontend
+    const posts = (data || []).map((p: any) => ({
+      id: p.id,
+      user_id: p.users?.id,
       user: {
-        id: 'user-allex',
-        username: 'AlexTrader',
-        full_name: 'Alex Rivera',
-        avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
-        badge: 'PRO Trader',
+        id: p.users?.id,
+        username: p.users?.username,
+        full_name: p.users?.display_name,
+        display_name: p.users?.display_name,
+        avatar_url: p.users?.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${p.users?.username}`,
+        role: p.users?.role,
       },
-      content: 'NVIDIA (NVDA) breaking out above $135 resistance with high volume backing. Google AI sentiment aligns bullish. Target $145 short term. 🚀📈',
-      media_type: 'none',
-      symbol: 'NVDA',
-      likes_count: 42,
-      comments_count: 8,
-      reposts_count: 5,
-      created_at: timestamp,
-    },
-    {
-      id: 'post-2',
-      user_id: 'user-sarah',
-      user: {
-        id: 'user-sarah',
-        username: 'SarahFX',
-        full_name: 'Sarah Chen',
-        avatar_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=250&q=80',
-        badge: 'Forex Analyst',
-      },
-      content: 'EUR/USD holding steady near key monetary support level. Watching ECB central bank press conference for interest rate direction.',
-      media_type: 'none',
-      symbol: 'EURUSD',
-      likes_count: 28,
-      comments_count: 3,
-      reposts_count: 2,
-      created_at: timestamp,
-    },
-  ];
+      content: p.content,
+      image_url: p.image_url,
+      media_type: p.image_url ? 'image' : 'none',
+      likes_count: p.likes_count || 0,
+      comments_count: p.comments_count || 0,
+      reposts_count: p.reposts_count || 0,
+      is_story: p.is_story,
+      is_pinned: p.is_pinned,
+      created_at: p.created_at,
+    }));
 
-  return NextResponse.json(posts);
+    return NextResponse.json(posts, {
+      headers: { 'Cache-Control': 'no-cache, no-store' },
+    });
+  } catch (error: any) {
+    console.error('Social feed error:', error);
+    return NextResponse.json(
+      { error: 'Failed to load feed', detail: error?.message },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/social/feed — create a new post
+export async function POST(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
+    }
+
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ detail: 'Invalid session' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { content, image_url, is_story } = body;
+
+    if (!content?.trim()) {
+      return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('posts')
+      .insert({
+        user_id: user.id,
+        content: content.trim(),
+        image_url: image_url || null,
+        is_story: !!is_story,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json(data, { status: 201 });
+  } catch (error: any) {
+    console.error('Create post error:', error);
+    return NextResponse.json(
+      { error: 'Failed to create post', detail: error?.message },
+      { status: 500 }
+    );
+  }
 }

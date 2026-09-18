@@ -1,56 +1,103 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateSocialUserProfile, findSocialUser } from '@/lib/socialData';
+import { supabaseAdmin } from '@/lib/supabase';
 
+
+
+// GET /api/auth/me — returns user profile from public.users via the session token
 export async function GET(request: NextRequest) {
   try {
-    const defaultUser = findSocialUser('user-allex') || {
-      id: 'me',
-      username: 'trader',
-      display_name: 'FxZone Trader',
-      bio: 'Market Analyst & Technical Trader',
-      avatar_url: null,
-      role: 'trader',
-    };
-    return NextResponse.json(defaultUser);
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
+    }
+
+    // Verify session with admin client
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) {
+      return NextResponse.json({ detail: 'Invalid session' }, { status: 401 });
+    }
+
+    // Fetch profile from public.users
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      // Profile row may not exist yet (new user) — return from auth metadata
+      const meta = user.user_metadata || {};
+      return NextResponse.json({
+        id: user.id,
+        email: user.email,
+        username: meta.username || user.email?.split('@')[0] || 'user',
+        display_name: meta.display_name || meta.full_name || meta.name || '',
+        avatar_url: meta.avatar_url || meta.picture || null,
+        bio: meta.bio || '',
+        role: meta.role || 'trader',
+        followers_count: 0,
+        following_count: 0,
+      });
+    }
+
+    return NextResponse.json(profile);
   } catch (error: any) {
     return NextResponse.json(
-      { error: 'Failed to fetch auth me', detail: error?.message },
+      { error: 'Failed to fetch profile', detail: error?.message },
       { status: 500 }
     );
   }
 }
 
+// PUT /api/auth/me — update user profile in public.users
 export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json();
-    if (!body) {
-      return NextResponse.json({ detail: 'Request body missing' }, { status: 400 });
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
     }
 
-    const { username, display_name, bio, avatar_url, id } = body;
-    const targetIdentifier = id || username || 'me';
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !user) {
+      return NextResponse.json({ detail: 'Invalid session' }, { status: 401 });
+    }
 
-    const updatedUser = updateSocialUserProfile(targetIdentifier, {
-      username: username || undefined,
-      display_name: display_name || undefined,
-      bio: bio || undefined,
-      avatar_url: avatar_url || undefined,
+    const body = await request.json();
+    const { username, display_name, bio, avatar_url } = body;
+
+    const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (username !== undefined) updatePayload.username = username;
+    if (display_name !== undefined) updatePayload.display_name = display_name;
+    if (bio !== undefined) updatePayload.bio = bio;
+    if (avatar_url !== undefined) updatePayload.avatar_url = avatar_url;
+
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('users')
+      .update(updatePayload)
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 400 });
+    }
+
+    // Also update Supabase auth metadata so buildUserFromSession stays in sync
+    await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      user_metadata: {
+        username: updated.username,
+        display_name: updated.display_name,
+        bio: updated.bio,
+        avatar_url: updated.avatar_url,
+      },
     });
 
-    return NextResponse.json({
-      id: updatedUser.id,
-      username: updatedUser.username,
-      display_name: updatedUser.display_name,
-      displayName: updatedUser.display_name,
-      bio: updatedUser.bio,
-      avatar_url: updatedUser.avatar_url,
-      avatarUrl: updatedUser.avatar_url,
-      role: updatedUser.role,
-      followers_count: updatedUser.followers_count,
-      following_count: updatedUser.following_count,
-    });
+    return NextResponse.json(updated);
   } catch (error: any) {
-    console.error('Error updating profile in /api/auth/me:', error);
     return NextResponse.json(
       { error: 'Failed to update profile', detail: error?.message },
       { status: 500 }

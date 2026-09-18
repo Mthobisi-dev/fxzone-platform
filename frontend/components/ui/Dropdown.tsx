@@ -32,7 +32,7 @@ export function Dropdown({ trigger, items, align = 'right', className }: Dropdow
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 

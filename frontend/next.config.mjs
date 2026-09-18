@@ -1,6 +1,4 @@
-const DEFAULT_BACKEND = 'https://fxzone-backend.onrender.com';
-const BACKEND_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || DEFAULT_BACKEND;
-
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   images: {
@@ -26,22 +24,6 @@ const nextConfig = {
         hostname: '**',
       },
     ],
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${BACKEND_URL}/api/:path*`,
-      },
-      {
-        source: '/ws/:path*',
-        destination: `${BACKEND_URL}/ws/:path*`,
-      },
-      {
-        source: '/uploads/:path*',
-        destination: `${BACKEND_URL}/uploads/:path*`,
-      },
-    ];
   },
 };
 

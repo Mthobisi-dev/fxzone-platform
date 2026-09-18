@@ -28,6 +28,11 @@ export function Sidebar() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const menuItems = [
     {
@@ -103,7 +108,7 @@ export function Sidebar() {
         {/* Bottom Actions */}
         <div className="flex flex-col gap-4 p-3 border-t border-zinc-850/60 bg-zinc-950/30">
           {/* User Card */}
-          {user && !isCollapsed && (
+          {mounted && user && !isCollapsed && (
             <Link href={`/profile/${user.id}`} className="flex items-center gap-2.5 py-1 px-1 rounded-lg hover:bg-zinc-900/50 transition-colors">
               <Avatar name={user.display_name || user.username} src={user.avatar_url} size="sm" />
               <div className="flex flex-col text-left min-w-0">
@@ -117,7 +122,7 @@ export function Sidebar() {
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-1">
-            {user && (
+            {mounted && user && (
               <Link
                 href={`/profile/${user.id}`}
                 className={cn(
@@ -214,7 +219,7 @@ export function Sidebar() {
             </Link>
           );
         })}
-        {user && (
+        {mounted && user && (
           <Link
             href={`/profile/${user.id}`}
             className={cn(
