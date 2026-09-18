@@ -52,7 +52,7 @@ export default function DiscoverPage() {
     try {
       const params = new URLSearchParams();
       if (query) params.set('q', query);
-      params.set('limit', '30');
+      params.set('limit', '100');
       const response = await api.get(`/api/social/users?${params.toString()}`);
       if (Array.isArray(response)) {
         setUsers(response.filter((u: DiscoverUser) => u.id !== user?.id));

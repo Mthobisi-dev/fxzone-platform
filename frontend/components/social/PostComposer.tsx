@@ -221,8 +221,9 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       const primaryUrl = uploadedUrls[0] || null;
 
       let finalContent = content.trim();
-      // If extra attachments, append clean links
-      if (uploadedUrls.length > 1) {
+      if (!finalContent && (primaryUrl || mediaFiles.length > 0)) {
+        finalContent = '📊 Shared media attachment';
+      } else if (uploadedUrls.length > 1) {
         const extraUrls = uploadedUrls.slice(1);
         finalContent += '\n\n' + extraUrls.map((u) => `📎 ${u}`).join('\n');
       }

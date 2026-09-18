@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-
-
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 // GET /api/social/feed — paginated social posts with author info
 export async function GET(request: NextRequest) {
@@ -10,7 +8,9 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    const { data, error } = await supabaseAdmin
+    const db = getSupabaseAdmin(request);
+
+    const { data, error } = await db
       .from('posts')
       .select(`
         id,
@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    // Normalize the response shape expected by frontend
     const posts = (data || []).map((p: any) => ({
       id: p.id,
       user_id: p.users?.id,
@@ -45,7 +44,7 @@ export async function GET(request: NextRequest) {
         username: p.users?.username,
         full_name: p.users?.display_name,
         display_name: p.users?.display_name,
-        avatar_url: p.users?.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${p.users?.username}`,
+        avatar_url: p.users?.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${p.users?.username || 'user'}`,
         role: p.users?.role,
       },
       content: p.content,
@@ -74,16 +73,10 @@ export async function GET(request: NextRequest) {
 // POST /api/social/feed — create a new post
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.replace('Bearer ', '');
+    const { user, error: authError } = await getUserFromRequest(request);
 
-    if (!token) {
-      return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
-    }
-
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
-      return NextResponse.json({ detail: 'Invalid session' }, { status: 401 });
+      return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -93,7 +86,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin
+    const db = getSupabaseAdmin(request);
+
+    const { data, error } = await db
       .from('posts')
       .insert({
         user_id: user.id,

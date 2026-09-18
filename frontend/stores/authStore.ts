@@ -100,6 +100,26 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 800): 
   throw lastErr;
 }
 
+/** Fetch authoritative DB profile role */
+async function fetchDbProfile(token: string): Promise<Partial<FxUser> | null> {
+  try {
+    const res = await fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      username: data.username,
+      display_name: data.display_name,
+      bio: data.bio,
+      avatar_url: data.avatar_url,
+      role: data.role,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Initial state (fast hydration from cache) ───────────────────────────────
 
 function getInitialState() {
@@ -107,17 +127,13 @@ function getInitialState() {
   return {
     user: cached,
     token: null as string | null,
-    // Optimistically authenticated if we have cached user — initialize() validates
     isAuthenticated: !!cached,
-    // Show loading spinner while we verify the real session in the background
     isLoading: !!cached,
-    // If no cache exists, no need to wait — we know user is not logged in
     isInitialized: !cached,
     error: null as string | null,
   };
 }
 
-// Guard against initialize() being called concurrently
 let _initPromise: Promise<void> | null = null;
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -125,7 +141,6 @@ let _initPromise: Promise<void> | null = null;
 export const useAuthStore = create<AuthState>((set, get) => ({
   ...getInitialState(),
 
-  // Called by Supabase onAuthStateChange — the true source of truth
   _setFromSession: (session: Session | null) => {
     if (session) {
       const user = buildUserFromSession(session);
@@ -138,9 +153,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isInitialized: true,
         error: null,
       });
+
+      // Async sync with database profile
+      fetchDbProfile(session.access_token).then((dbProfile) => {
+        if (dbProfile) {
+          const currentUser = get().user;
+          if (currentUser) {
+            const syncedUser = { ...currentUser, ...dbProfile };
+            cacheUser(syncedUser);
+            set({ user: syncedUser });
+          }
+        }
+      });
     } else {
-      // Only clear user if we were previously authenticated to avoid flicker
-      // on the initial SSR pass where session is not yet available.
       if (get().isInitialized) {
         cacheUser(null);
         set({
@@ -155,16 +180,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // ── initialize ─────────────────────────────────────────────────────────────
   initialize: async () => {
     if (typeof window === 'undefined') return;
-    // Prevent concurrent initializations
     if (_initPromise) return _initPromise;
 
     _initPromise = (async () => {
       set({ isLoading: true });
       try {
-        // Retry up to 3 times to handle transient network blips
         const { data, error } = await withRetry(
           () => supabase.auth.getSession(),
           3,
@@ -172,14 +194,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         );
 
         if (error) {
-          // Network/Supabase error — do NOT log user out, keep optimistic state
           console.warn('[Auth] getSession error (kept existing session):', error.message);
           set({ isLoading: false, isInitialized: true });
           return;
         }
 
         if (data.session) {
-          const user = buildUserFromSession(data.session);
+          let user = buildUserFromSession(data.session);
+          const dbProfile = await fetchDbProfile(data.session.access_token);
+          if (dbProfile) {
+            user = { ...user, ...dbProfile };
+          }
           cacheUser(user);
           set({
             user,
@@ -190,7 +215,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             error: null,
           });
         } else {
-          // Confirmed no active session
           cacheUser(null);
           set({
             user: null,
@@ -202,7 +226,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           });
         }
       } catch (err: any) {
-        // Unhandled exception — do NOT kick user out; just mark initialized
         console.warn('[Auth] initialize() exception (kept existing session):', err?.message);
         set({ isLoading: false, isInitialized: true });
       } finally {
@@ -213,15 +236,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return _initPromise;
   },
 
-  // ── login ──────────────────────────────────────────────────────────────────
   login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      if (!data.session) throw new Error('No session returned — check your Supabase auth settings.');
+      if (!data.session) throw new Error('No session returned.');
 
-      const user = buildUserFromSession(data.session);
+      let user = buildUserFromSession(data.session);
+      const dbProfile = await fetchDbProfile(data.session.access_token);
+      if (dbProfile) {
+        user = { ...user, ...dbProfile };
+      }
       cacheUser(user);
       set({
         user,
@@ -244,7 +270,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // ── Google OAuth ───────────────────────────────────────────────────────────
   loginWithGoogle: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -255,7 +280,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         options: { redirectTo },
       });
       if (error) throw error;
-      // Page will navigate away via OAuth redirect; no state cleanup needed
     } catch (err: any) {
       const msg = err?.message || 'Google sign-in failed. Please try email login.';
       set({ error: msg, isLoading: false, isInitialized: true });
@@ -263,7 +287,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // ── register ───────────────────────────────────────────────────────────────
   register: async (registerData) => {
     set({ isLoading: true, error: null });
     try {
@@ -280,13 +303,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       if (error) throw error;
 
-      // Email confirmation required — no session yet
       if (!data.session) {
         set({ isLoading: false, isInitialized: true, error: null });
-        return; // Let the calling page show the "Check your email" UI
+        return;
       }
 
-      const user = buildUserFromSession(data.session);
+      let user = buildUserFromSession(data.session);
+      const dbProfile = await fetchDbProfile(data.session.access_token);
+      if (dbProfile) {
+        user = { ...user, ...dbProfile };
+      }
       cacheUser(user);
       set({
         user,
@@ -306,8 +332,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // ── logout ─────────────────────────────────────────────────────────────────
-  // ── logout ─────────────────────────────────────────────────────────────────
   logout: async () => {
     cacheUser(null);
     if (typeof window !== 'undefined') {
@@ -319,7 +343,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       sessionStorage.clear();
     }
 
-    // Reset all domain stores to prevent cross-user data leakage
     try {
       const { useMarketStore } = await import('@/stores/marketStore');
       useMarketStore.getState().clearWatchlists();
@@ -353,7 +376,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (typeof window !== 'undefined') window.location.href = '/login';
   },
 
-  // ── deleteAccount ──────────────────────────────────────────────────────────
   deleteAccount: async () => {
     try {
       const { api } = await import('@/lib/api');
@@ -368,7 +390,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       sessionStorage.clear();
     }
 
-    // Reset domain stores
     try {
       const { useMarketStore } = await import('@/stores/marketStore');
       useMarketStore.getState().clearWatchlists();
@@ -397,7 +418,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (typeof window !== 'undefined') window.location.href = '/login';
   },
 
-  // ── updateProfile ──────────────────────────────────────────────────────────
   updateProfile: async (profileData) => {
     set({ isLoading: true, error: null });
     try {

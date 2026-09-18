@@ -1,12 +1,13 @@
-import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { NextRequest, NextResponse } from 'next/server';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
-// GET /api/social/featured-experts — fetch actual top active users from database
-export async function GET() {
+// GET /api/social/featured-experts — fetch top active users from database
+export async function GET(request: NextRequest) {
   try {
-    const { data: users, error } = await supabaseAdmin
+    const db = getSupabaseAdmin(request);
+    const { data: users, error } = await db
       .from('users')
-      .select('id, username, display_name, avatar_url, role, win_rate, total_profit_pct')
+      .select('id, username, display_name, avatar_url, role')
       .order('created_at', { ascending: false })
       .limit(5);
 
@@ -18,8 +19,8 @@ export async function GET() {
       display_name: u.display_name || u.username,
       avatar_url: u.avatar_url || null,
       role: u.role || 'Trader',
-      win_rate: u.win_rate || '0%',
-      total_profit_pct: u.total_profit_pct || '0.0%',
+      win_rate: '0%',
+      total_profit_pct: '0.0%',
     }));
 
     return NextResponse.json(experts);

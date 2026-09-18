@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-
-
-
-async function getUser(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  try {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    return user;
-  } catch { return null; }
-}
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 // GET /api/chat/conversations/[id]/messages
 export async function GET(
@@ -18,17 +7,18 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUser(request);
-    if (!user) return NextResponse.json([], { status: 200 });
+    const { user, error: authErr } = await getUserFromRequest(request);
+    if (authErr || !user) return NextResponse.json([], { status: 200 });
 
     const { id } = await context.params;
+    const db = getSupabaseAdmin(request);
 
-    const { data: membership } = await supabaseAdmin
+    const { data: membership } = await db
       .from('conversation_members')
       .select('id')
       .eq('conversation_id', id)
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (!membership) {
       return NextResponse.json({ detail: 'Not a member of this conversation' }, { status: 403 });
@@ -38,7 +28,7 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('messages')
       .select(`
         id, conversation_id, sender_id, content, message_type, created_at,
@@ -58,14 +48,14 @@ export async function GET(
         id: m.users?.id,
         username: m.users?.username,
         display_name: m.users?.display_name,
-        avatar_url: m.users?.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${m.users?.username}`,
+        avatar_url: m.users?.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${m.users?.username || 'user'}`,
       },
       content: m.content,
       message_type: m.message_type || 'text',
       created_at: m.created_at,
     }));
 
-    await supabaseAdmin
+    await db
       .from('conversation_members')
       .update({ last_read_at: new Date().toISOString() })
       .eq('conversation_id', id)
@@ -84,17 +74,18 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUser(request);
-    if (!user) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
+    const { user, error: authErr } = await getUserFromRequest(request);
+    if (authErr || !user) return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
 
     const { id } = await context.params;
+    const db = getSupabaseAdmin(request);
 
-    const { data: membership } = await supabaseAdmin
+    const { data: membership } = await db
       .from('conversation_members')
       .select('id')
       .eq('conversation_id', id)
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (!membership) {
       return NextResponse.json({ detail: 'Not a member of this conversation' }, { status: 403 });
@@ -107,7 +98,7 @@ export async function POST(
       return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('messages')
       .insert({
         conversation_id: id,
@@ -120,16 +111,16 @@ export async function POST(
 
     if (error) throw error;
 
-    await supabaseAdmin
+    await db
       .from('conversations')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', id);
 
-    const { data: sender } = await supabaseAdmin
+    const { data: sender } = await db
       .from('users')
       .select('id, username, display_name, avatar_url')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     return NextResponse.json({
       ...data,

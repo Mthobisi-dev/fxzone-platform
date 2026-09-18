@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-
-
-
-async function getUser(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  try {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    return user;
-  } catch { return null; }
-}
+import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 
 // GET /api/social/posts — fetch paginated posts (alias for /api/social/feed)
 export async function GET(request: NextRequest) {
@@ -20,7 +9,9 @@ export async function GET(request: NextRequest) {
   const userId = searchParams.get('user_id');
 
   try {
-    let query = supabaseAdmin
+    const db = getSupabaseAdmin(request);
+
+    let query = db
       .from('posts')
       .select(`
         id, content, image_url, likes_count, comments_count, reposts_count,
@@ -46,7 +37,7 @@ export async function GET(request: NextRequest) {
         username: p.users?.username,
         full_name: p.users?.display_name,
         display_name: p.users?.display_name,
-        avatar_url: p.users?.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${p.users?.username}`,
+        avatar_url: p.users?.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${p.users?.username || 'user'}`,
         role: p.users?.role,
       },
       content: p.content,
@@ -67,21 +58,31 @@ export async function GET(request: NextRequest) {
 // POST /api/social/posts — create a new post
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUser(request);
-    if (!user) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
-
-    const body = await request.json();
-    const { content, image_url, is_story, asset_tags } = body;
-
-    if (!content?.trim()) {
-      return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
+    const { user, error: authErr } = await getUserFromRequest(request);
+    if (authErr || !user) {
+      return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
     }
 
-    const { data, error } = await supabaseAdmin
+    const body = await request.json();
+    const { content, image_url, is_story } = body;
+
+    let finalContent = (content || '').trim();
+    if (!finalContent) {
+      if (image_url || is_story) {
+        finalContent = '📊 Shared media attachment';
+      } else {
+        return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
+      }
+    }
+
+    const db = getSupabaseAdmin(request);
+    await ensureUserProfile(db, user);
+
+    let insertRes = await db
       .from('posts')
       .insert({
         user_id: user.id,
-        content: content.trim(),
+        content: finalContent,
         image_url: image_url || null,
         is_story: !!is_story,
         expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
@@ -89,14 +90,32 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    // If FK constraint violation occurred, force user upsert and retry once
+    if (insertRes.error && (insertRes.error.code === '23503' || insertRes.error.message?.includes('posts_user_id_fkey'))) {
+      console.warn('[Posts API] FK constraint error detected on user_id, retrying with force profile upsert...');
+      await ensureUserProfile(db, user);
+      insertRes = await db
+        .from('posts')
+        .insert({
+          user_id: user.id,
+          content: finalContent,
+          image_url: image_url || null,
+          is_story: !!is_story,
+          expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+        })
+        .select()
+        .single();
+    }
+
+    if (insertRes.error) throw insertRes.error;
+    const data = insertRes.data;
 
     // Fetch author profile
-    const { data: author } = await supabaseAdmin
+    const { data: author } = await db
       .from('users')
       .select('id, username, display_name, avatar_url, role')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     return NextResponse.json({
       ...data,

@@ -1,38 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 import { SUPPORTED_ASSETS } from '@/lib/server/marketService';
-
-
-
-async function getUser(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  const token = authHeader?.replace('Bearer ', '');
-  if (!token) return null;
-  try {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    return user;
-  } catch {
-    return null;
-  }
-}
 
 // GET /api/market/watchlist — fetch user's watchlists with assets
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUser(request);
+    const { user, error: authError } = await getUserFromRequest(request);
 
-    if (!user) {
-      // Return default watchlist with popular assets for unauthenticated users
-      const defaults = ['NVDA', 'BTCUSD', 'EURUSD', 'XAUUSD'];
+    if (authError || !user) {
+      // Return default guest watchlist for unauthenticated/hydrating requests without 401 error
       return NextResponse.json([{
         id: 'watchlist-default',
         name: 'My Watchlist',
-        items: SUPPORTED_ASSETS.filter(a => defaults.includes(a.symbol)),
-      }]);
+        items: [],
+      }], { status: 200 });
     }
 
+    const db = getSupabaseAdmin(request);
+
     // Get user's watchlists
-    const { data: watchlists, error } = await supabaseAdmin
+    const { data: watchlists, error } = await db
       .from('watchlists')
       .select(`
         id,
@@ -54,18 +41,33 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id)
       .order('created_at', { ascending: true });
 
-    if (error) throw error;
+    if (error && error.code !== 'PGRST116') {
+      console.warn('Watchlist DB query notice:', error.message);
+    }
 
     if (!watchlists || watchlists.length === 0) {
-      // Create default watchlist for new user
-      const { data: newWl } = await supabaseAdmin
-        .from('watchlists')
-        .insert({ user_id: user.id, name: 'My Watchlist' })
-        .select()
-        .single();
+      // Try creating default watchlist for new user
+      try {
+        const { data: newWl } = await db
+          .from('watchlists')
+          .insert({ user_id: user.id, name: 'My Watchlist' })
+          .select()
+          .maybeSingle();
 
+        if (newWl) {
+          return NextResponse.json([{
+            id: newWl.id,
+            name: 'My Watchlist',
+            items: [],
+          }]);
+        }
+      } catch (e) {
+        console.warn('Could not auto-create watchlist row:', e);
+      }
+
+      // Return synthetic default watchlist structure for client UI
       return NextResponse.json([{
-        id: newWl?.id || 'watchlist-default',
+        id: `watchlist-${user.id.substring(0, 8)}`,
         name: 'My Watchlist',
         items: [],
       }]);
@@ -79,7 +81,6 @@ export async function GET(request: NextRequest) {
         .map((item: any) => {
           const asset = item.assets;
           if (!asset) {
-            // Fallback: look up from SUPPORTED_ASSETS by id
             const fallback = SUPPORTED_ASSETS.find(a => a.id === item.asset_id);
             return fallback || null;
           }
@@ -98,28 +99,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(formatted);
   } catch (error: any) {
     console.error('Watchlist GET error:', error);
-    // Fallback to defaults on error
     return NextResponse.json([{
       id: 'watchlist-default',
       name: 'My Watchlist',
-      items: SUPPORTED_ASSETS.slice(0, 4),
-    }]);
+      items: [],
+    }], { status: 200 });
   }
 }
 
 // POST /api/market/watchlist — create a new watchlist
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUser(request);
-    const body = await request.json();
-
-    if (!user) {
-      return NextResponse.json({ id: 'watchlist-default', name: body.name || 'My Watchlist', items: [] });
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) {
+      return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
     }
 
+    const body = await request.json();
     const { name } = body;
+    const db = getSupabaseAdmin(request);
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('watchlists')
       .insert({ user_id: user.id, name: name || 'My Watchlist' })
       .select()

@@ -1,25 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-
-
-
-async function getUser(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  const token = authHeader?.replace('Bearer ', '');
-  if (!token) return null;
-  const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-  return user;
-}
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
 
 // GET /api/notifications — fetch notifications for authenticated user
 export async function GET(request: NextRequest) {
   try {
-    const user = await getUser(request);
+    const { user } = await getUserFromRequest(request);
     if (!user) {
       return NextResponse.json([], { status: 200 });
     }
 
-    const { data, error } = await supabaseAdmin
+    const client = getSupabaseAdmin(request);
+    const { data, error } = await client
       .from('notifications')
       .select('*')
       .eq('user_id', user.id)
@@ -37,13 +28,14 @@ export async function GET(request: NextRequest) {
 // PUT /api/notifications — mark notifications as read
 export async function PUT(request: NextRequest) {
   try {
-    const user = await getUser(request);
+    const { user } = await getUserFromRequest(request);
     if (!user) return NextResponse.json({ success: true });
 
+    const client = getSupabaseAdmin(request);
     const body = await request.json().catch(() => ({}));
     const { ids } = body;
 
-    let query = supabaseAdmin
+    let query = client
       .from('notifications')
       .update({ is_read: true })
       .eq('user_id', user.id);
@@ -59,3 +51,4 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true });
   }
 }
+

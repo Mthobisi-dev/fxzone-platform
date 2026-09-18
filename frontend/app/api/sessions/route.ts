@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-
-
-
-async function getUser(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  try {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    return user;
-  } catch { return null; }
-}
+import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 // GET /api/sessions — list all live sessions with host info
 export async function GET() {
@@ -19,7 +8,7 @@ export async function GET() {
       .from('live_sessions')
       .select(`
         id, title, description, status, session_type,
-        viewer_count, max_participants, requires_approval,
+        viewer_count, max_participants,
         started_at, ended_at, created_at, host_id,
         users:host_id (id, username, display_name, avatar_url)
       `)
@@ -45,8 +34,8 @@ export async function GET() {
       session_type: s.session_type,
       participantsCount: s.viewer_count || 0,
       viewer_count: s.viewer_count || 0,
-      requires_approval: s.requires_approval,
-      requiresApproval: s.requires_approval,
+      requires_approval: s.requires_approval ?? false,
+      requiresApproval: s.requires_approval ?? false,
       started_at: s.started_at,
       startedAt: s.started_at,
       created_at: s.created_at,
@@ -55,40 +44,45 @@ export async function GET() {
     return NextResponse.json(sessions);
   } catch (error: any) {
     console.error('Sessions list error:', error);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ error: 'Failed to fetch sessions', detail: error?.message }, { status: 500 });
   }
 }
 
 // POST /api/sessions — create a new live session
 export async function POST(request: NextRequest) {
   try {
-    const user = await getUser(request);
-    if (!user) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
+    const { user, error: authErr } = await getUserFromRequest(request);
+    if (authErr || !user) {
+      return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
+    }
 
     const body = await request.json();
-    const { title, description, requires_approval, session_type } = body;
+    const { title, description, session_type, max_participants } = body;
 
     if (!title?.trim()) {
       return NextResponse.json({ detail: 'Title is required' }, { status: 400 });
     }
 
+    const insertPayload: Record<string, any> = {
+      host_id: user.id,
+      title: title.trim(),
+      description: (description || '').trim(),
+      session_type: session_type || 'public',
+      max_participants: typeof max_participants === 'number' ? max_participants : null,
+      status: 'live',
+      viewer_count: 1,
+      started_at: new Date().toISOString(),
+    };
+
     const { data, error } = await supabaseAdmin
       .from('live_sessions')
-      .insert({
-        host_id: user.id,
-        title: title.trim(),
-        description: (description || '').trim(),
-        requires_approval: !!requires_approval,
-        session_type: session_type || 'public',
-        status: 'live',
-        started_at: new Date().toISOString(),
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
     if (error) throw error;
 
-    // Auto-add host as participant (ignore errors)
+    // Auto-add host as participant
     try {
       await supabaseAdmin.from('session_participants').insert({
         session_id: data.id,
@@ -107,14 +101,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE /api/sessions — bulk clear ended sessions
+// DELETE /api/sessions — bulk clear ended sessions (Admin only)
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await getUser(request);
-    if (!user) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
+    const { user, role, error: authErr } = await getUserFromRequest(request);
+    if (authErr || !user) {
+      return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
+    }
 
-    await supabaseAdmin.from('live_sessions').delete().eq('status', 'ended');
-    return NextResponse.json({ success: true });
+    if (role !== 'admin') {
+      return NextResponse.json({ detail: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
+    const { error } = await supabaseAdmin.from('live_sessions').delete().eq('status', 'ended');
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, message: 'Ended sessions cleared' });
   } catch (error: any) {
     return NextResponse.json(
       { error: 'Failed to clear history', detail: error?.message },

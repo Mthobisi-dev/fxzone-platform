@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-
-
-
-async function getUser(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  try {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    return user;
-  } catch { return null; }
-}
+import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 // GET /api/sessions/[id]
 export async function GET(
@@ -24,7 +13,7 @@ export async function GET(
       .from('live_sessions')
       .select(`
         id, title, description, status, session_type,
-        viewer_count, max_participants, requires_approval, host_id,
+        viewer_count, max_participants, host_id,
         started_at, ended_at, created_at,
         users:host_id (id, username, display_name, avatar_url)
       `)
@@ -52,7 +41,7 @@ export async function GET(
       status: data.status,
       session_type: data.session_type,
       viewer_count: data.viewer_count,
-      requires_approval: data.requires_approval,
+      requires_approval: (data as any).requires_approval ?? false,
       started_at: data.started_at,
       ended_at: data.ended_at,
       created_at: data.created_at,
@@ -71,8 +60,8 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUser(request);
-    if (!user) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
+    const { user, role, error: authErr } = await getUserFromRequest(request);
+    if (authErr || !user) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
 
     const { id } = await context.params;
 
@@ -82,7 +71,7 @@ export async function DELETE(
       .eq('id', id)
       .single();
 
-    if (!session || session.host_id !== user.id) {
+    if (!session || (session.host_id !== user.id && role !== 'admin')) {
       return NextResponse.json({ detail: 'Unauthorized' }, { status: 403 });
     }
 

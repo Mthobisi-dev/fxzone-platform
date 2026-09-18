@@ -5,7 +5,7 @@
  * 1. CoinGecko API for Crypto
  * 2. Yahoo Finance REST API for Stocks, Forex & Commodities
  * 
- * Features automatic 20-second caching & robust fallback metrics.
+ * Features automatic 15-second caching & robust fallback metrics.
  */
 
 export interface MarketAsset {
@@ -22,13 +22,19 @@ export interface PriceData {
   price: number;
   change: number;
   change_pct: number;
+  /** Indicative bid price (calculated spread based on market mid-price) */
   bid: number;
+  /** Indicative ask price (calculated spread based on market mid-price) */
   ask: number;
   high: number;
   low: number;
   volume: number;
   open: number;
   timestamp: string;
+  /** Flag indicating whether quote spread is calculated/indicative */
+  is_indicative?: boolean;
+  /** Primary data provider name */
+  data_source?: 'coingecko' | 'yahoo_finance' | 'indicative_fallback';
 }
 
 export const SUPPORTED_ASSETS: MarketAsset[] = [
@@ -119,7 +125,7 @@ const YAHOO_MAP: Record<string, string> = {
   XAGUSD: 'SI=F',
 };
 
-// Internal in-memory price cache
+// Internal in-memory price cache for Next.js Server process
 let priceCache: Record<string, PriceData> = {};
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 15000; // 15 seconds
@@ -175,6 +181,8 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
             open: Number((price - (price * changePct / 100)).toFixed(dec)),
             volume: Math.round(vol),
             timestamp,
+            is_indicative: true,
+            data_source: 'coingecko',
           };
         }
       });
@@ -199,7 +207,6 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
       const yData = await yRes.json();
       const quoteList = yData?.quoteResponse?.result || [];
 
-      // Map Yahoo result back to internal symbol
       const yahooSymbolToInternal: Record<string, string> = {};
       Object.entries(YAHOO_MAP).forEach(([intSym, ySym]) => {
         yahooSymbolToInternal[ySym.toUpperCase()] = intSym;
@@ -231,6 +238,8 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
             open: Number(open.toFixed(dec)),
             volume: Math.round(volume),
             timestamp,
+            is_indicative: true,
+            data_source: 'yahoo_finance',
           };
         }
       });
@@ -241,7 +250,6 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
 
   // 3. Fallback defaults for any symbol missing from live API responses
   const fallbacks: Record<string, Partial<PriceData>> = {
-    // Crypto
     BTCUSD: { price: 96450.00, change_pct: 1.92, volume: 28450000000 },
     ETHUSD: { price: 2740.80, change_pct: 1.56, volume: 14500000000 },
     SOLUSD: { price: 188.50, change_pct: 3.17, volume: 4200000000 },
@@ -252,7 +260,6 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
     UNIUSD: { price: 8.2000, change_pct: 2.10, volume: 320000000 },
     DOGEUSD: { price: 0.2450, change_pct: 6.40, volume: 2100000000 },
     AVAXUSD: { price: 34.1000, change_pct: 3.80, volume: 540000000 },
-    // Stocks
     NVDA: { price: 138.80, change_pct: 3.04, volume: 72000000 },
     AAPL: { price: 228.40, change_pct: 0.55, volume: 48000000 },
     MSFT: { price: 418.50, change_pct: 0.50, volume: 22000000 },
@@ -269,7 +276,6 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
     WMT: { price: 74.20, change_pct: 0.60, volume: 19000000 },
     CAT: { price: 348.50, change_pct: 1.80, volume: 6200000 },
     GE: { price: 174.20, change_pct: 0.90, volume: 7800000 },
-    // Forex
     EURUSD: { price: 1.04850, change_pct: -0.17, volume: 185000000 },
     GBPUSD: { price: 1.25800, change_pct: 0.18, volume: 142000000 },
     USDJPY: { price: 153.850, change_pct: 0.27, volume: 165000000 },
@@ -278,7 +284,6 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
     NZDUSD: { price: 0.57200, change_pct: -0.14, volume: 62000000 },
     USDCHF: { price: 0.90200, change_pct: 0.07, volume: 75000000 },
     EURGBP: { price: 0.83350, change_pct: -0.17, volume: 82000000 },
-    // Commodities
     XAUUSD: { price: 2892.40, change_pct: 0.65, volume: 42000000 },
     XAGUSD: { price: 32.85, change_pct: 1.39, volume: 18000000 },
   };
@@ -302,6 +307,8 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
         open: Number((price - (price * changePct / 100)).toFixed(dec)),
         volume: fb.volume || 1000000,
         timestamp,
+        is_indicative: true,
+        data_source: 'indicative_fallback',
       };
     }
   });
