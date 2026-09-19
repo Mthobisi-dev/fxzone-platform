@@ -12,19 +12,19 @@ const ColorBends = dynamic(
 
 export function ColorBendsBackground() {
   return (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#05070d] transition-opacity duration-500">
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#05070d] opacity-75 transition-opacity duration-500">
       <ColorBends
-        colors={["#2563eb", "#4f46e5", "#7c3aed", "#06b6d4", "#3b82f6"]}
+        colors={["#1d4ed8", "#4338ca", "#6d28d9", "#0e7490", "#2563eb"]}
         rotation={90}
-        speed={0.15}
-        scale={1.2}
-        frequency={1.2}
-        warpStrength={1.2}
-        mouseInfluence={0.8}
+        speed={0.12}
+        scale={1.3}
+        frequency={1.0}
+        warpStrength={1.0}
+        mouseInfluence={0.5}
         noise={0.03}
-        parallax={0.4}
+        parallax={0.3}
         iterations={2}
-        intensity={1.4}
+        intensity={1.0}
         bandWidth={6}
         transparent={true}
       />

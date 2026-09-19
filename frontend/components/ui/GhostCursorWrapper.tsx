@@ -11,14 +11,14 @@ export function GhostCursorWrapper() {
   return (
     <GhostCursor
       color="#60a5fa"
-      brightness={1.6}
-      bloomStrength={0.35}
-      bloomRadius={1.2}
-      trailLength={45}
-      inertia={0.6}
-      grainIntensity={0.03}
+      brightness={0.85}
+      bloomStrength={0.15}
+      bloomRadius={0.6}
+      trailLength={25}
+      inertia={0.4}
+      grainIntensity={0.02}
       mixBlendMode="screen"
-      zIndex={40}
+      zIndex={1}
     />
   );
 }
