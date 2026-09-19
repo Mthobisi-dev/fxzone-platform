@@ -302,7 +302,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           data: {
             username: registerData.username,
             display_name: registerData.display_name || registerData.username,
-            role: registerData.role || 'trader',
+            role: 'trader',
           },
         },
       });

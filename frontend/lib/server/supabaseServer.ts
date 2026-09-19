@@ -93,11 +93,10 @@ export async function ensureUserProfile(
       id: user.id,
       email: user.email || `${user.id}@fxzone.local`,
       username: uniqueUsername,
-      password_hash: 'SUPABASE_AUTH_MANAGED',
       display_name: displayName,
       avatar_url: avatarUrl,
       bio,
-      role,
+      role: 'trader',
       created_at: user.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

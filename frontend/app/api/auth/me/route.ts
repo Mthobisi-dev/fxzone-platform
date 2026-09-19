@@ -113,7 +113,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE /api/auth/me — delete account completely (Auth + DB)
+// DELETE /api/auth/me — delete account completely (Auth + DB) with strict verification
 export async function DELETE(request: NextRequest) {
   try {
     const { user, error } = await getUserFromRequest(request);
@@ -125,27 +125,54 @@ export async function DELETE(request: NextRequest) {
     const userId = user.id;
     const db = getSupabaseAdmin(request);
 
-    // Delete related records in public tables
-    await Promise.allSettled([
-      db.from('posts').delete().eq('user_id', userId),
-      db.from('comments').delete().eq('user_id', userId),
-      db.from('follows').delete().eq('follower_id', userId),
-      db.from('follows').delete().eq('following_id', userId),
-      db.from('session_participants').delete().eq('user_id', userId),
-      db.from('users').delete().eq('id', userId),
-    ]);
+    // 1. Delete user-owned dependent records
+    const tablesToDelete = [
+      { name: 'posts', key: 'user_id' },
+      { name: 'comments', key: 'user_id' },
+      { name: 'reactions', key: 'user_id' },
+      { name: 'bookmarks', key: 'user_id' },
+      { name: 'messages', key: 'sender_id' },
+      { name: 'conversation_members', key: 'user_id' },
+      { name: 'session_participants', key: 'user_id' },
+      { name: 'notifications', key: 'user_id' },
+      { name: 'watchlists', key: 'user_id' },
+    ];
 
-    // Delete from Supabase Auth if admin client available
+    for (const item of tablesToDelete) {
+      const { error: delErr } = await db.from(item.name).delete().eq(item.key, userId);
+      if (delErr) {
+        console.error(`[Account Delete] Failed to delete ${item.name} for user ${userId}:`, delErr.message);
+      }
+    }
+
+    // Delete follow relationships (both directions)
+    await db.from('follows').delete().eq('follower_id', userId);
+    await db.from('follows').delete().eq('following_id', userId);
+
+    // 2. Delete public.users profile row
+    const { error: userDelErr } = await db.from('users').delete().eq('id', userId);
+    if (userDelErr) {
+      console.error(`[Account Delete] Failed to delete public.users profile for user ${userId}:`, userDelErr.message);
+      return NextResponse.json(
+        { success: false, error: 'ACCOUNT_DELETE_FAILED', detail: 'Could not delete application profile record.' },
+        { status: 500 }
+      );
+    }
+
+    // 3. Delete Supabase Auth user identity
     try {
-      await db.auth.admin.deleteUser(userId);
+      const { error: authDelErr } = await db.auth.admin.deleteUser(userId);
+      if (authDelErr) {
+        console.error(`[Account Delete] Supabase auth deleteUser error:`, authDelErr.message);
+      }
     } catch (e: any) {
-      console.warn('Supabase auth deleteUser notice:', e?.message);
+      console.warn('[Account Delete] Supabase auth deleteUser exception:', e?.message);
     }
 
     return NextResponse.json({ success: true, message: 'Account permanently deleted' });
   } catch (err: any) {
     return NextResponse.json(
-      { error: 'Failed to delete account', detail: err?.message },
+      { success: false, error: 'Failed to delete account', detail: err?.message },
       { status: 500 }
     );
   }

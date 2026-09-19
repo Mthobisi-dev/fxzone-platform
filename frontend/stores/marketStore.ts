@@ -157,9 +157,9 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   addToWatchlist: async (watchlistId, assetIdOrSymbol) => {
     const state = get();
     const previousWatchlists = state.watchlists;
-    const currentWl = previousWatchlists.length > 0
-      ? previousWatchlists[0]
-      : { id: 'watchlist-default', name: 'My Watchlist', items: [] };
+    const targetWl = previousWatchlists.find((w) => w.id === watchlistId) ||
+      previousWatchlists[0] ||
+      { id: 'watchlist-default', name: 'My Watchlist', items: [] };
 
     // Resolve asset
     const foundAsset = state.assets.find(
@@ -172,13 +172,13 @@ export const useMarketStore = create<MarketState>((set, get) => ({
       is_active: true,
     };
 
-    if (currentWl.items.some((i) => i.symbol.toUpperCase() === foundAsset.symbol.toUpperCase())) {
+    if (targetWl.items.some((i) => i.symbol.toUpperCase() === foundAsset.symbol.toUpperCase())) {
       return;
     }
 
-    const updatedItems = [...currentWl.items, foundAsset];
-    const updatedWatchlists = previousWatchlists.map((wl, idx) =>
-      idx === 0 ? { ...wl, items: updatedItems } : wl
+    const updatedItems = [...targetWl.items, foundAsset];
+    const updatedWatchlists = previousWatchlists.map((wl) =>
+      wl.id === targetWl.id ? { ...wl, items: updatedItems } : wl
     );
 
     // 1. Apply optimistic state
@@ -186,7 +186,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
 
     // 2. Perform server API call; on failure, refetch authoritative server state to avoid stale rollback races
     try {
-      await api.post(`/api/market/watchlist/${watchlistId || currentWl.id}/items`, {
+      await api.post(`/api/market/watchlist/${watchlistId || targetWl.id}/items`, {
         asset_id: foundAsset.id,
         symbol: foundAsset.symbol,
       });
@@ -199,16 +199,16 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   removeFromWatchlist: async (watchlistId, assetIdOrSymbol) => {
     const state = get();
     const previousWatchlists = state.watchlists;
-    const currentWl = previousWatchlists.length > 0
-      ? previousWatchlists[0]
-      : { id: 'watchlist-default', name: 'My Watchlist', items: [] };
+    const targetWl = previousWatchlists.find((w) => w.id === watchlistId) ||
+      previousWatchlists[0] ||
+      { id: 'watchlist-default', name: 'My Watchlist', items: [] };
 
-    const updatedItems = currentWl.items.filter(
+    const updatedItems = targetWl.items.filter(
       (i) => i.id !== assetIdOrSymbol && i.symbol.toUpperCase() !== String(assetIdOrSymbol).toUpperCase()
     );
 
-    const updatedWatchlists = previousWatchlists.map((wl, idx) =>
-      idx === 0 ? { ...wl, items: updatedItems } : wl
+    const updatedWatchlists = previousWatchlists.map((wl) =>
+      wl.id === targetWl.id ? { ...wl, items: updatedItems } : wl
     );
 
     // 1. Apply optimistic state
@@ -216,7 +216,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
 
     // 2. Perform server API call; on failure, refetch authoritative server state to avoid stale rollback races
     try {
-      await api.delete(`/api/market/watchlist/${watchlistId || currentWl.id}/items/${assetIdOrSymbol}`);
+      await api.delete(`/api/market/watchlist/${watchlistId || targetWl.id}/items/${assetIdOrSymbol}`);
     } catch (err: any) {
       console.error('Failed to remove item from server watchlist. Syncing with server:', err);
       await get().fetchWatchlists(true);
