@@ -1,6 +1,7 @@
 import './globals.css';
 import { ClientInitializer } from '@/components/layout/ClientInitializer';
 import { ColorBendsBackground } from '@/components/ui/ColorBendsBackground';
+import { GhostCursorWrapper } from '@/components/ui/GhostCursorWrapper';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -22,8 +23,9 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className="antialiased min-h-screen bg-zinc-950 relative overflow-x-hidden text-zinc-100">
-        {/* Dynamic Shader Background */}
+        {/* Dynamic Shader & Motion Cursor Effects */}
         <ColorBendsBackground />
+        <GhostCursorWrapper />
 
         {/* Foreground Content */}
         <div className="relative z-10 min-h-screen">
