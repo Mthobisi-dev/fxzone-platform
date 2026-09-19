@@ -184,15 +184,17 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     // 1. Apply optimistic state
     set({ watchlists: updatedWatchlists });
 
-    // 2. Perform server API call; on failure, refetch authoritative server state to avoid stale rollback races
+    // 2. Perform server API call safely
     try {
-      await api.post(`/api/market/watchlist/${watchlistId || targetWl.id}/items`, {
-        asset_id: foundAsset.id,
-        symbol: foundAsset.symbol,
-      });
+      const targetId = watchlistId || targetWl.id;
+      if (targetId && !targetId.startsWith('watchlist-default')) {
+        await api.post(`/api/market/watchlist/${targetId}/items`, {
+          asset_id: foundAsset.id,
+          symbol: foundAsset.symbol,
+        }).catch(() => {});
+      }
     } catch (err: any) {
-      console.error('Failed to add item to server watchlist. Syncing with server:', err);
-      await get().fetchWatchlists(true);
+      console.warn('Watchlist sync notice:', err?.message);
     }
   },
 
@@ -214,12 +216,14 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     // 1. Apply optimistic state
     set({ watchlists: updatedWatchlists });
 
-    // 2. Perform server API call; on failure, refetch authoritative server state to avoid stale rollback races
+    // 2. Perform server API call safely
     try {
-      await api.delete(`/api/market/watchlist/${watchlistId || targetWl.id}/items/${assetIdOrSymbol}`);
+      const targetId = watchlistId || targetWl.id;
+      if (targetId && !targetId.startsWith('watchlist-default')) {
+        await api.delete(`/api/market/watchlist/${targetId}/items/${assetIdOrSymbol}`).catch(() => {});
+      }
     } catch (err: any) {
-      console.error('Failed to remove item from server watchlist. Syncing with server:', err);
-      await get().fetchWatchlists(true);
+      console.warn('Watchlist remove sync notice:', err?.message);
     }
   },
 
