@@ -135,6 +135,9 @@ export function StockScreenerDashboard() {
   const [viewMode, setViewMode] = useState<'heatmap' | 'grid' | 'table'>('heatmap');
   const [sizeMetric, setSizeMetric] = useState<'mktcap' | 'volume'>('mktcap');
   const [colorMetric, setColorMetric] = useState<'1d' | 'pe'>('1d');
+  const [showBrandLogos, setShowBrandLogos] = useState<boolean>(true);
+  const [colorScheme, setColorScheme] = useState<'standard' | 'high_contrast'>('standard');
+  const [resetToast, setResetToast] = useState<string | null>(null);
   const [selectedStock, setSelectedStock] = useState<HeatmapStock | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
@@ -143,6 +146,18 @@ export function StockScreenerDashboard() {
   const [customFilterOpen, setCustomFilterOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Hydrate settings from localStorage
+  useEffect(() => {
+    try {
+      const savedView = localStorage.getItem('fxzone_screener_view_mode');
+      if (savedView) setViewMode(savedView as any);
+      const savedLogos = localStorage.getItem('fxzone_screener_brand_logos');
+      if (savedLogos !== null) setShowBrandLogos(savedLogos === 'true');
+      const savedScheme = localStorage.getItem('fxzone_screener_color_scheme');
+      if (savedScheme) setColorScheme(savedScheme as any);
+    } catch {}
+  }, []);
 
   // Load real API assets and live prices
   useEffect(() => {
@@ -297,9 +312,10 @@ export function StockScreenerDashboard() {
 
   const sectorNames = Object.keys(sectorsMap);
 
-  // Reset all filters action
+  // Reset all filters and dashboard layout action
   const handleResetFilters = () => {
     setActiveMarketTab('all');
+    setSelectedCountry('US');
     setAiFilterActive(false);
     setWatchlistOnly(false);
     setPriceRange('all');
@@ -308,6 +324,31 @@ export function StockScreenerDashboard() {
     setSelectedSectorFilter('all');
     setAnalystFilter(false);
     setSearchQuery('');
+    setViewMode('heatmap');
+    setSizeMetric('mktcap');
+    setColorMetric('1d');
+    setShowBrandLogos(true);
+    setColorScheme('standard');
+
+    try {
+      localStorage.removeItem('fxzone_screener_view_mode');
+      localStorage.removeItem('fxzone_screener_brand_logos');
+      localStorage.removeItem('fxzone_screener_color_scheme');
+    } catch {}
+
+    setResetToast('Dashboard layout & filters reset to defaults');
+    setTimeout(() => setResetToast(null), 3500);
+  };
+
+  const handleSaveSettings = () => {
+    try {
+      localStorage.setItem('fxzone_screener_view_mode', viewMode);
+      localStorage.setItem('fxzone_screener_brand_logos', String(showBrandLogos));
+      localStorage.setItem('fxzone_screener_color_scheme', colorScheme);
+    } catch {}
+    setSettingsOpen(false);
+    setResetToast('Dashboard preferences saved successfully');
+    setTimeout(() => setResetToast(null), 3000);
   };
 
   // Fetch live Gemini AI technical analysis
@@ -395,6 +436,12 @@ export function StockScreenerDashboard() {
         isFullscreen && "fixed inset-0 z-50 p-4 bg-[#05070c] overflow-y-auto rounded-none"
       )}
     >
+      {resetToast && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-2xl border border-blue-400/40 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <Check size={14} strokeWidth={3} />
+          <span>{resetToast}</span>
+        </div>
+      )}
       <div className="w-full bg-[#070a11] border border-zinc-800/80 rounded-2xl flex flex-col overflow-hidden text-zinc-200">
         {/* ─── TOP SCREENER CATEGORY TABS (STOCKS / CRYPTO / FOREX / ALL) ─── */}
         <div className="bg-[#080c16] px-2.5 sm:px-4 py-2 border-b border-zinc-850 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none">
@@ -982,22 +1029,79 @@ export function StockScreenerDashboard() {
         <Modal
           isOpen={settingsOpen}
           onClose={() => setSettingsOpen(false)}
-          title="Heatmap & Screener Settings"
+          title="Dashboard & Screener Settings"
         >
-          <div className="space-y-3 text-xs">
-            <div className="flex justify-between items-center p-2 bg-zinc-900 rounded-lg">
-              <span>Color Scheme</span>
-              <span className="font-bold text-emerald-400">Green / Red Standard</span>
-            </div>
-            <div className="flex justify-between items-center p-2 bg-zinc-900 rounded-lg">
-              <span>Display Brand Logos</span>
-              <span className="font-bold text-blue-400">Enabled</span>
+          <div className="space-y-4 text-xs">
+            {/* View Mode */}
+            <div>
+              <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-1">
+                Default Layout View
+              </label>
+              <select
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value as any)}
+                className="w-full h-8 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-xs text-white focus:outline-none"
+              >
+                <option value="heatmap">Heatmap Treemap Grid</option>
+                <option value="grid">Performance Asset Cards</option>
+                <option value="table">Institutional Data Table</option>
+              </select>
             </div>
 
-            <div className="flex justify-end pt-2">
-              <Button size="sm" className="bg-blue-600 text-white" onClick={() => setSettingsOpen(false)}>
-                Save Preferences
-              </Button>
+            {/* Color Scheme */}
+            <div>
+              <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-1">
+                Color Palette Scheme
+              </label>
+              <select
+                value={colorScheme}
+                onChange={(e) => setColorScheme(e.target.value as any)}
+                className="w-full h-8 bg-zinc-950 border border-zinc-800 rounded-lg px-3 text-xs text-white focus:outline-none"
+              >
+                <option value="standard">Standard Financial (Emerald / Crimson)</option>
+                <option value="high_contrast">High Contrast Neon (Cyan / Magenta)</option>
+              </select>
+            </div>
+
+            {/* Brand Logos Toggle */}
+            <div className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-850 rounded-xl">
+              <div>
+                <span className="font-bold text-white block text-xs">Display Brand Logos</span>
+                <span className="text-[10px] text-zinc-400">Show company and asset brand icons on screener tiles</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBrandLogos(!showBrandLogos)}
+                className={cn(
+                  "w-10 h-5 rounded-full p-0.5 transition-colors duration-200 flex items-center",
+                  showBrandLogos ? "bg-blue-600 justify-end" : "bg-zinc-800 justify-start"
+                )}
+              >
+                <div className="w-4 h-4 rounded-full bg-white shadow" />
+              </button>
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-zinc-850 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  handleResetFilters();
+                  setSettingsOpen(false);
+                }}
+                className="text-xs text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 hover:underline"
+              >
+                <RotateCcw size={13} />
+                <span>Reset to Defaults</span>
+              </button>
+
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setSettingsOpen(false)}>
+                  Cancel
+                </Button>
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-500 font-bold text-xs" onClick={handleSaveSettings}>
+                  Save Preferences
+                </Button>
+              </div>
             </div>
           </div>
         </Modal>

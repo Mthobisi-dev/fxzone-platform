@@ -88,16 +88,6 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
           </div>
         </div>
 
-        {/* Center: Search Box */}
-        <div className="hidden md:flex items-center w-72 lg:w-80 relative">
-          <Search size={14} className="text-zinc-500 absolute left-3.5" />
-          <input
-            type="text"
-            placeholder="Search assets, traders, articles..."
-            className="w-full bg-zinc-900/60 border border-zinc-850 hover:border-zinc-800 text-xs rounded-lg pl-10 pr-4 py-1.5 text-zinc-350 focus:outline-none focus:border-zinc-700/60 focus:ring-1 focus:ring-blue-500/10 placeholder-zinc-500 transition-all"
-          />
-        </div>
-
         {/* Right Side: Navigation Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* AI Toggle Button */}

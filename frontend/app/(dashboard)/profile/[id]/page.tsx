@@ -21,6 +21,10 @@ import {
   Trash2,
   AlertTriangle,
   Building2,
+  ShieldCheck,
+  TrendingUp,
+  BarChart2,
+  Globe,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { BrokerSelector } from '@/components/profile/BrokerSelector';
@@ -416,7 +420,7 @@ export default function ProfilePage() {
         {/* Profile Avatar and Metadata */}
         <div className="p-6 relative flex flex-col sm:flex-row justify-between items-start sm:items-end -mt-10 gap-4">
           <div className="flex gap-4 items-end">
-            <div className="p-1 bg-zinc-950 rounded-full border-2 border-zinc-800 shrink-0">
+            <div className="p-1 bg-zinc-950 rounded-full border-2 border-blue-500/40 shrink-0 shadow-xl shadow-blue-900/20">
               <Avatar
                 src={profile?.avatarUrl || profile?.avatar_url}
                 alt={profile?.username}
@@ -426,18 +430,18 @@ export default function ProfilePage() {
             
             <div className="mb-2 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="text-sm font-bold text-white leading-none truncate">
+                <h3 className="text-base font-extrabold text-white leading-none truncate">
                   {profile?.displayName || profile?.display_name || profile?.username}
                 </h3>
-                {(profile?.role === 'verified_educator' || profile?.role === 'analyst') && (
-                  <CheckCircle2 size={12} className="text-blue-500 fill-blue-500/10" />
-                )}
+                <span className="text-[9px] font-extrabold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <ShieldCheck size={10} /> Verified Trader
+                </span>
               </div>
-              <span className="text-[10px] text-zinc-500 block mt-0.5">@{profile?.username}</span>
-              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                <span className="text-[10px] font-semibold text-amber-300 flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
-                  <Building2 size={11} className="text-amber-400" />
-                  Broker: {profile?.preferred_broker || profile?.preferredBroker || 'Exness'}
+              <span className="text-xs text-zinc-400 block mt-1 font-mono">@{profile?.username}</span>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <span className="text-[10px] font-bold text-amber-300 flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-lg shadow-sm">
+                  <Building2 size={12} className="text-amber-400" />
+                  Preferred Broker: <strong className="text-white">{profile?.preferred_broker || profile?.preferredBroker || 'Exness'}</strong>
                 </span>
               </div>
             </div>
@@ -449,7 +453,7 @@ export default function ProfilePage() {
                 onClick={openEditModal}
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs font-semibold flex items-center gap-1.5 border-zinc-850 hover:border-zinc-700 bg-zinc-900"
+                className="h-9 text-xs font-bold flex items-center gap-1.5 border-zinc-800 hover:border-zinc-700 bg-zinc-900/80 text-white"
               >
                 <Edit3 size={13} />
                 <span>Edit Profile</span>
@@ -461,7 +465,7 @@ export default function ProfilePage() {
                   disabled={startingChat}
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs font-semibold flex items-center gap-1.5 border-zinc-850 hover:border-zinc-700 bg-zinc-900"
+                  className="h-9 text-xs font-bold flex items-center gap-1.5 border-zinc-800 hover:border-zinc-700 bg-zinc-900/80 text-white"
                 >
                   <MessageSquare size={13} className="text-blue-400" />
                   <span>{startingChat ? 'Connecting...' : 'Direct Chat'}</span>
@@ -471,10 +475,10 @@ export default function ProfilePage() {
                   onClick={handleFollowToggle}
                   disabled={followLoading}
                   size="sm"
-                  className={`h-8 text-xs font-bold px-4 flex items-center gap-1.5 ${
+                  className={`h-9 text-xs font-bold px-4 flex items-center gap-1.5 ${
                     profile?.isFollowing
                       ? 'bg-zinc-800 hover:bg-red-600/20 hover:text-red-400 hover:border-red-500/30 text-zinc-300'
-                      : 'bg-blue-600 hover:bg-blue-500 text-white'
+                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/30'
                   }`}
                 >
                   {followLoading ? (
@@ -499,25 +503,31 @@ export default function ProfilePage() {
         {/* Bio & Stats Bar */}
         <div className="px-6 pb-6 pt-0 border-t border-zinc-900 mt-2">
           {profile?.bio && (
-            <p className="text-xs text-zinc-300 leading-relaxed my-3">{profile.bio}</p>
+            <p className="text-xs text-zinc-300 leading-relaxed my-3 font-medium">{profile.bio}</p>
           )}
 
-          <div className="flex gap-6 mt-4 pt-3 border-t border-zinc-900/60 text-xs">
-            <div>
-              <span className="font-bold text-white block">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-zinc-900/80">
+            <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Followers</span>
+              <span className="text-sm font-extrabold text-white block">
                 {profile?.followersCount ?? profile?.followers_count ?? 0}
               </span>
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Followers</span>
             </div>
-            <div>
-              <span className="font-bold text-white block">
+            <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Following</span>
+              <span className="text-sm font-extrabold text-white block">
                 {profile?.followingCount ?? profile?.following_count ?? 0}
               </span>
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Following</span>
             </div>
-            <div>
-              <span className="font-bold text-white block">{posts.length}</span>
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Posts</span>
+            <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Technical Posts</span>
+              <span className="text-sm font-extrabold text-white block">{posts.length}</span>
+            </div>
+            <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Execution Broker</span>
+              <span className="text-xs font-bold text-amber-300 block truncate">
+                {profile?.preferred_broker || profile?.preferredBroker || 'Exness'}
+              </span>
             </div>
           </div>
         </div>
