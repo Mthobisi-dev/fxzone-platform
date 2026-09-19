@@ -22,7 +22,7 @@ export async function GET(
       // Query users table by UUID
       const { data: byId } = await supabaseAdmin
         .from('users')
-        .select('id, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at')
+        .select('id, username, display_name, avatar_url, bio, role, preferred_broker, followers_count, following_count, created_at')
         .eq('id', userId)
         .maybeSingle();
       data = byId;
@@ -47,8 +47,9 @@ export async function GET(
                 display_name: displayName,
                 avatar_url: meta.avatar_url || null,
                 role: meta.role || 'trader',
+                preferred_broker: meta.preferred_broker || 'Exness',
               })
-              .select('id, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at')
+              .select('id, username, display_name, avatar_url, bio, role, preferred_broker, followers_count, following_count, created_at')
               .maybeSingle();
 
             data = created || {
@@ -58,6 +59,7 @@ export async function GET(
               avatar_url: meta.avatar_url || null,
               bio: meta.bio || '',
               role: meta.role || 'trader',
+              preferred_broker: meta.preferred_broker || 'Exness',
               followers_count: 0,
               following_count: 0,
               created_at: u.created_at,
@@ -71,7 +73,7 @@ export async function GET(
       // Query users table by username
       const { data: byUsername } = await supabaseAdmin
         .from('users')
-        .select('id, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at')
+        .select('id, username, display_name, avatar_url, bio, role, preferred_broker, followers_count, following_count, created_at')
         .eq('username', userId)
         .maybeSingle();
       data = byUsername;
@@ -86,6 +88,7 @@ export async function GET(
         avatar_url: `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(userId)}`,
         bio: 'FxZone Market Trader',
         role: 'trader',
+        preferred_broker: 'Exness',
         followers_count: 0,
         following_count: 0,
         created_at: new Date().toISOString(),
@@ -96,6 +99,8 @@ export async function GET(
       ...data,
       displayName: data.display_name || data.username,
       avatarUrl: data.avatar_url,
+      preferredBroker: data.preferred_broker || 'Exness',
+      preferred_broker: data.preferred_broker || 'Exness',
       followersCount: data.followers_count || 0,
       followingCount: data.following_count || 0,
     });

@@ -80,33 +80,67 @@ export async function PUT(request: NextRequest) {
     if (avatar_url !== undefined) updatePayload.avatar_url = avatar_url;
     if (preferred_broker !== undefined) updatePayload.preferred_broker = preferred_broker;
 
-    const { data: updated, error: updateError } = await db
-      .from('users')
-      .update(updatePayload)
-      .eq('id', user.id)
-      .select()
-      .maybeSingle();
+    let updated: any = null;
+    let updateError: any = null;
+
+    try {
+      const res = await db
+        .from('users')
+        .update(updatePayload)
+        .eq('id', user.id)
+        .select()
+        .maybeSingle();
+      updated = res.data;
+      updateError = res.error;
+    } catch (e: any) {
+      updateError = e;
+    }
+
+    // If database update failed because preferred_broker column does not exist yet on public.users table, fallback to updating without it
+    if (updateError && preferred_broker !== undefined) {
+      console.warn('[PUT /api/auth/me] DB update with preferred_broker failed, retrying without column in table update:', updateError.message || updateError);
+      const fallbackPayload = { ...updatePayload };
+      delete fallbackPayload.preferred_broker;
+
+      const retryRes = await db
+        .from('users')
+        .update(fallbackPayload)
+        .eq('id', user.id)
+        .select()
+        .maybeSingle();
+
+      if (!retryRes.error) {
+        updated = { ...(retryRes.data || { id: user.id, ...fallbackPayload }), preferred_broker };
+        updateError = null;
+      }
+    }
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+      console.error('[PUT /api/auth/me] Update failed:', updateError);
+      return NextResponse.json({ detail: updateError.message || 'Failed to update profile' }, { status: 400 });
     }
 
-    // Also update Supabase auth metadata so buildUserFromSession stays in sync
-    if (updated) {
-      try {
-        await db.auth.admin.updateUserById(user.id, {
-          user_metadata: {
-            username: updated.username,
-            display_name: updated.display_name,
-            bio: updated.bio,
-            avatar_url: updated.avatar_url,
-            preferred_broker: updated.preferred_broker,
-          },
-        });
-      } catch (_) {}
+    // Always update Supabase Auth user metadata so buildUserFromSession stays in sync
+    try {
+      await db.auth.admin.updateUserById(user.id, {
+        user_metadata: {
+          username: updated?.username || username || user.user_metadata?.username,
+          display_name: updated?.display_name || display_name || user.user_metadata?.display_name,
+          bio: updated?.bio || bio || user.user_metadata?.bio,
+          avatar_url: updated?.avatar_url || avatar_url || user.user_metadata?.avatar_url,
+          preferred_broker: preferred_broker || updated?.preferred_broker || user.user_metadata?.preferred_broker || 'Exness',
+        },
+      });
+    } catch (e: any) {
+      console.warn('[PUT /api/auth/me] Auth user_metadata update warning:', e?.message);
     }
 
-    return NextResponse.json(updated || { id: user.id, ...updatePayload });
+    const responseData = updated || { id: user.id, ...updatePayload };
+    if (!responseData.preferred_broker && preferred_broker) {
+      responseData.preferred_broker = preferred_broker;
+    }
+
+    return NextResponse.json(responseData);
   } catch (err: any) {
     return NextResponse.json(
       { error: 'Failed to update profile', detail: err?.message },
