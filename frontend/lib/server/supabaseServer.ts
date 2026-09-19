@@ -1,16 +1,12 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://placeholder-project.supabase.co';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
 let adminClientInstance: SupabaseClient | null = null;
 
 export function getSupabaseAdmin(request?: Request): SupabaseClient {
-  if (!supabaseUrl) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL is not defined in environment variables.');
-  }
-
   // Use service role key if configured (bypasses RLS for server administration)
   if (supabaseServiceKey) {
     if (!adminClientInstance) {
@@ -28,7 +24,7 @@ export function getSupabaseAdmin(request?: Request): SupabaseClient {
     headers['Authorization'] = authHeader;
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey || 'placeholder-key', {
+  return createClient(supabaseUrl, supabaseAnonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { headers },
   });
@@ -55,8 +51,8 @@ export interface UserFromRequestResult {
 /**
  * Provisions a public.users profile row for a Supabase Auth user.
  *
- * Uses the service-role admin client to bypass RLS entirely — this is
- * critical because anon-key clients may be blocked by INSERT policies.
+ * Uses the service-role admin client (or authenticated anon client) to ensure
+ * the profile row exists.
  *
  * Returns true if the profile row is confirmed to exist after the call,
  * false if provisioning failed AND the row is missing.
@@ -67,7 +63,6 @@ export async function ensureUserProfile(
 ): Promise<boolean> {
   if (!user || !user.id) return false;
 
-  // Always use the admin client to bypass RLS for profile writes
   const adminDb = getSupabaseAdmin();
 
   try {
@@ -80,7 +75,7 @@ export async function ensureUserProfile(
 
     if (existing) return true; // Already exists — fast path
 
-    // 2. Row is missing — build and upsert the profile
+    // 2. Row is missing — build profile payload
     const meta = user.user_metadata || {};
     const baseUsername =
       meta.username ||
@@ -88,7 +83,6 @@ export async function ensureUserProfile(
       user.email?.split('@')[0] ||
       'trader';
 
-    // Append short ID suffix to guarantee uniqueness across providers
     const uniqueUsername = `${baseUsername}_${user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 6)}`;
     const displayName = meta.display_name || meta.full_name || meta.name || baseUsername;
     const role = meta.role || 'trader';
@@ -99,7 +93,6 @@ export async function ensureUserProfile(
       id: user.id,
       email: user.email || `${user.id}@fxzone.local`,
       username: uniqueUsername,
-      // Required by schema NOT NULL constraint; Supabase manages actual auth
       password_hash: 'SUPABASE_AUTH_MANAGED',
       display_name: displayName,
       avatar_url: avatarUrl,
@@ -109,21 +102,28 @@ export async function ensureUserProfile(
       updated_at: new Date().toISOString(),
     };
 
+    // 3. Attempt UPSERT first
     const { error: upsertErr } = await adminDb
       .from('users')
       .upsert(payload, { onConflict: 'id', ignoreDuplicates: false });
 
     if (upsertErr) {
-      console.error('[ensureUserProfile] upsert failed:', upsertErr.message);
-      // Attempt plain update in case a partial row already exists
-      await adminDb.from('users').update({
-        display_name: displayName,
-        avatar_url: avatarUrl,
-        updated_at: new Date().toISOString(),
-      }).eq('id', user.id);
+      // If UPSERT is blocked by RLS, attempt plain INSERT
+      const { error: insertErr } = await adminDb
+        .from('users')
+        .insert(payload);
+
+      if (insertErr) {
+        // Attempt UPDATE in case row partially exists
+        await adminDb.from('users').update({
+          display_name: displayName,
+          avatar_url: avatarUrl,
+          updated_at: new Date().toISOString(),
+        }).eq('id', user.id);
+      }
     }
 
-    // 3. Verify the row actually landed (confirms FK safety)
+    // 4. Verify the row actually landed (confirms FK safety)
     const { data: confirmed } = await adminDb
       .from('users')
       .select('id')
@@ -131,27 +131,17 @@ export async function ensureUserProfile(
       .maybeSingle();
 
     if (!confirmed) {
-      console.error('[ensureUserProfile] row missing after upsert for user', user.id);
       return false;
     }
 
     return true;
   } catch (err: any) {
-    console.error('[ensureUserProfile] unexpected error:', err?.message || err);
     return false;
   }
 }
 
 /**
  * Authenticates a request and returns the user + role in minimal DB round-trips.
- *
- * Optimization: instead of 3 sequential calls (getUser → ensureProfile SELECT →
- * role SELECT), we now:
- *   1. Validate the JWT via getUser() — single network call
- *   2. Fetch the user profile (id + role) in ONE query
- *   3. Only provision the profile row if it is missing (first login only)
- *
- * This reduces typical per-request latency from ~3–4s down to ~0.5–1s.
  */
 export async function getUserFromRequest(request: Request): Promise<UserFromRequestResult> {
   const authHeader = request.headers.get('authorization');
@@ -188,12 +178,8 @@ export async function getUserFromRequest(request: Request): Promise<UserFromRequ
       role = profile.role || 'trader';
     } else {
       // Profile does NOT exist — provision it asynchronously (non-blocking)
-      // User proceeds immediately with metadata role while INSERT completes in background.
       role = user.user_metadata?.role || 'trader';
-      ensureUserProfile(client, user).catch(() => {
-        // Background provisioning — silently ignore failures here;
-        // write routes call ensureUserProfile explicitly and check the return value.
-      });
+      ensureUserProfile(client, user).catch(() => {});
     }
 
     return { user, role, error: null };
