@@ -1,13 +1,3 @@
-/**
- * useAuth — thin hook over useAuthStore.
- *
- * Route protection: pass requireAuth=true to auto-redirect to /login
- * when the session check has completed and no session is found.
- *
- * Reliability: loading=true until Supabase confirms session status, so
- * protected pages never flash-redirect before auth resolves.
- */
-
 import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -28,17 +18,16 @@ export function useAuth(requireAuth = false, redirectPath = '/login') {
     initialize,
   } = useAuthStore();
 
-  // Only call initialize() if onAuthStateChange hasn't fired yet
-  // (i.e., if we are still in the pre-initialized state with no cached user)
+  // Call initialize() immediately if state is not initialized yet
   const didCallInit = useRef(false);
   useEffect(() => {
-    if (!isInitialized && !isLoading && !didCallInit.current) {
+    if (!isInitialized && !didCallInit.current) {
       didCallInit.current = true;
       initialize();
     }
-  }, [isInitialized, isLoading, initialize]);
+  }, [isInitialized, initialize]);
 
-  // Route protection: only redirect AFTER initialization is complete
+  // Route protection: only redirect AFTER initialization has completed
   const redirecting = useRef(false);
   useEffect(() => {
     if (
@@ -59,7 +48,6 @@ export function useAuth(requireAuth = false, redirectPath = '/login') {
     user,
     token,
     isAuthenticated,
-    // Keep the spinner up until Supabase has confirmed session status
     isLoading: !isInitialized || isLoading,
     error,
     login,

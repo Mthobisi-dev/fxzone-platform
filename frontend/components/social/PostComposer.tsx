@@ -479,33 +479,33 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                 </form>
               </div>
 
-              {/* Toolbar Actions */}
-              <div className="flex justify-between items-center select-none pt-1">
-                <div className="flex items-center gap-1">
+              {/* Toolbar Actions — Responsive Mobile Flex Container */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 select-none pt-2 border-t border-zinc-850/60 mt-2">
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 sm:pb-0 pr-1">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1 text-[10px]"
+                    className="p-2 sm:p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0"
                     title="Upload Photo / Chart"
                   >
-                    <Image size={14} className="text-blue-400" />
-                    <span className="hidden sm:inline">Image</span>
+                    <Image size={15} className="text-blue-400" />
+                    <span>Image</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1 text-[10px]"
+                    className="p-2 sm:p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0"
                     title="Upload Video"
                   >
-                    <Film size={14} className="text-emerald-400" />
-                    <span className="hidden sm:inline">Video</span>
+                    <Film size={15} className="text-emerald-400" />
+                    <span>Video</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                    className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] ${
+                    className={`p-2 sm:p-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0 ${
                       isRecording
                         ? 'bg-red-500/20 text-red-400 font-bold'
                         : 'hover:bg-zinc-850 text-zinc-400 hover:text-white'
@@ -513,36 +513,36 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                     title={isRecording ? 'Stop Voice Recording' : 'Record Voice Memo'}
                   >
                     {isRecording ? (
-                      <MicOff size={14} className="text-red-400" />
+                      <MicOff size={15} className="text-red-400" />
                     ) : (
-                      <Mic size={14} className="text-purple-400" />
+                      <Mic size={15} className="text-purple-400" />
                     )}
-                    <span className="hidden sm:inline">
-                      {isRecording ? 'Recording...' : 'Voice Memo'}
+                    <span>
+                      {isRecording ? 'Recording...' : 'Voice'}
                     </span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1 text-[10px]"
+                    className="p-2 sm:p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0"
                     title="Attach File / Document"
                   >
-                    <Paperclip size={14} className="text-orange-400" />
-                    <span className="hidden sm:inline">File</span>
+                    <Paperclip size={15} className="text-orange-400" />
+                    <span>File</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setShowOptionsModal((prev) => !prev)}
-                    className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] ${
+                    className={`p-2 sm:p-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0 ${
                       showOptionsModal || (!showCommentsCount || !showLikesCount || !allowReshare || !allowSave || !allowShare)
                         ? 'bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30'
                         : 'hover:bg-zinc-850 text-zinc-400 hover:text-white'
                     }`}
                     title="Configure Post Privacy & Interaction Controls"
                   >
-                    <SlidersHorizontal size={13} className="text-purple-400" />
+                    <SlidersHorizontal size={14} className="text-purple-400" />
                     <span>Options</span>
                   </button>
                 </div>
@@ -652,7 +652,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                   </div>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2 justify-end w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-850/50">
                   <Button
                     onClick={() => {
                       setIsExpanded(false);
@@ -667,7 +667,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                     }}
                     variant="ghost"
                     size="sm"
-                    className="h-7 text-[10px]"
+                    className="h-8 sm:h-7 px-3 text-[11px] sm:text-[10px] flex-1 sm:flex-initial"
                     disabled={loading}
                   >
                     Cancel
@@ -675,15 +675,15 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                   <Button
                     onClick={handlePost}
                     size="sm"
-                    className="h-7 px-3 text-[10px] flex items-center gap-1 bg-blue-600 hover:bg-blue-500 font-bold"
+                    className="h-8 sm:h-7 px-4 sm:px-3 text-[11px] sm:text-[10px] flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 font-bold flex-1 sm:flex-initial"
                     disabled={
                       (!content.trim() && mediaFiles.length === 0) || loading
                     }
                   >
                     {loading ? (
-                      <Loader2 size={10} className="animate-spin" />
+                      <Loader2 size={12} className="animate-spin" />
                     ) : (
-                      <Send size={10} />
+                      <Send size={12} />
                     )}
                     <span>{loading ? 'Posting...' : 'Publish Post'}</span>
                   </Button>

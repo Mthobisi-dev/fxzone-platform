@@ -128,8 +128,8 @@ function getInitialState() {
     user: cached,
     token: null as string | null,
     isAuthenticated: !!cached,
-    isLoading: !!cached,
-    isInitialized: !cached,
+    isLoading: false,
+    isInitialized: false,
     error: null as string | null,
   };
 }
@@ -155,8 +155,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
 
       // Only sync with DB profile on sign-in events, NOT on every token refresh.
-      // TOKEN_REFRESHED fires every ~55 min and on every navigation — syncing DB
-      // on each one creates unnecessary /api/auth/me calls.
       const shouldSyncProfile = !event ||
         event === 'SIGNED_IN' ||
         event === 'INITIAL_SESSION' ||
@@ -175,17 +173,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         });
       }
     } else {
-      if (get().isInitialized) {
-        cacheUser(null);
-        set({
-          user: null,
-          token: null,
-          isAuthenticated: false,
-          isLoading: false,
-          isInitialized: true,
-          error: null,
-        });
-      }
+      cacheUser(null);
+      set({
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isInitialized: true,
+        error: null,
+      });
     }
   },
 
