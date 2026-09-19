@@ -21,6 +21,7 @@ export interface FxUser {
   display_name?: string;
   avatar_url?: string;
   bio?: string;
+  preferred_broker?: string;
   role: string;
 }
 
@@ -61,6 +62,7 @@ function buildUserFromSession(session: Session): FxUser {
       meta.picture ||
       `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(email)}`,
     bio: meta.bio || '',
+    preferred_broker: meta.preferred_broker || 'Exness',
     role: meta.role || 'trader',
   };
 }
@@ -113,6 +115,7 @@ async function fetchDbProfile(token: string): Promise<Partial<FxUser> | null> {
       display_name: data.display_name,
       bio: data.bio,
       avatar_url: data.avatar_url,
+      preferred_broker: data.preferred_broker || 'Exness',
       role: data.role,
     };
   } catch {
@@ -432,6 +435,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           display_name: profileData.display_name,
           bio: profileData.bio,
           avatar_url: profileData.avatar_url,
+          preferred_broker: profileData.preferred_broker,
         },
       });
       if (error) throw error;

@@ -69,7 +69,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { username, display_name, bio, avatar_url } = body;
+    const { username, display_name, bio, avatar_url, preferred_broker } = body;
 
     const db = getSupabaseAdmin(request);
 
@@ -78,6 +78,7 @@ export async function PUT(request: NextRequest) {
     if (display_name !== undefined) updatePayload.display_name = display_name;
     if (bio !== undefined) updatePayload.bio = bio;
     if (avatar_url !== undefined) updatePayload.avatar_url = avatar_url;
+    if (preferred_broker !== undefined) updatePayload.preferred_broker = preferred_broker;
 
     const { data: updated, error: updateError } = await db
       .from('users')
@@ -99,6 +100,7 @@ export async function PUT(request: NextRequest) {
             display_name: updated.display_name,
             bio: updated.bio,
             avatar_url: updated.avatar_url,
+            preferred_broker: updated.preferred_broker,
           },
         });
       } catch (_) {}

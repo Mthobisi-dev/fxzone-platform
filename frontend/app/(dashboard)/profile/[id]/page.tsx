@@ -20,8 +20,10 @@ import {
   Bookmark,
   Trash2,
   AlertTriangle,
+  Building2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { BrokerSelector } from '@/components/profile/BrokerSelector';
 
 export default function ProfilePage() {
   const params = useParams();
@@ -135,6 +137,7 @@ export default function ProfilePage() {
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
+  const [editPreferredBroker, setEditPreferredBroker] = useState('Exness');
   const [saving, setSaving] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [saveError, setSaveError] = useState('');
@@ -271,6 +274,12 @@ export default function ProfilePage() {
     setEditDisplayName(profile?.displayName || profile?.display_name || '');
     setEditBio(profile?.bio || '');
     setEditAvatarUrl(profile?.avatarUrl || profile?.avatar_url || '');
+    setEditPreferredBroker(
+      profile?.preferred_broker ||
+      profile?.preferredBroker ||
+      currentUser?.preferred_broker ||
+      'Exness'
+    );
     setSaveError('');
     setAvatarFile(null);
     setEditModalOpen(true);
@@ -295,6 +304,7 @@ export default function ProfilePage() {
         display_name: editDisplayName.trim() || undefined,
         bio: editBio.trim() || undefined,
         avatar_url: finalAvatarUrl || undefined,
+        preferred_broker: editPreferredBroker || 'Exness',
       });
 
       if (updateProfile) {
@@ -303,6 +313,7 @@ export default function ProfilePage() {
           display_name: res.display_name || editDisplayName.trim(),
           bio: res.bio || editBio.trim(),
           avatar_url: res.avatar_url || finalAvatarUrl,
+          preferred_broker: res.preferred_broker || editPreferredBroker,
         }).catch(() => {});
       }
 
@@ -312,6 +323,8 @@ export default function ProfilePage() {
         displayName: res.display_name || editDisplayName,
         bio: res.bio || editBio,
         avatarUrl: res.avatar_url || finalAvatarUrl,
+        preferred_broker: res.preferred_broker || editPreferredBroker,
+        preferredBroker: res.preferred_broker || editPreferredBroker,
       }));
 
       setEditModalOpen(false);
@@ -421,6 +434,12 @@ export default function ProfilePage() {
                 )}
               </div>
               <span className="text-[10px] text-zinc-500 block mt-0.5">@{profile?.username}</span>
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span className="text-[10px] font-semibold text-amber-300 flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
+                  <Building2 size={11} className="text-amber-400" />
+                  Broker: {profile?.preferred_broker || profile?.preferredBroker || 'Exness'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -587,6 +606,15 @@ export default function ProfilePage() {
             </div>
             <div>
               <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+                Preferred Broker
+              </h4>
+              <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                <Building2 size={13} className="text-amber-400" />
+                {profile?.preferred_broker || profile?.preferredBroker || 'Exness'}
+              </span>
+            </div>
+            <div>
+              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
                 About
               </h4>
               <p className="text-xs text-zinc-300 leading-relaxed">{profile?.bio || 'No bio set.'}</p>
@@ -671,6 +699,12 @@ export default function ProfilePage() {
                 className="w-full h-8 bg-zinc-950 border border-zinc-850 rounded px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
               />
             </div>
+
+            {/* Broker Selector */}
+            <BrokerSelector
+              selectedBroker={editPreferredBroker}
+              onSelectBroker={setEditPreferredBroker}
+            />
 
             {/* Bio */}
             <div>
