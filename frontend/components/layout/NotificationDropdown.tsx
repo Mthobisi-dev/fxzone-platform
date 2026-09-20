@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNotificationStore, NotificationItem } from '@/stores/notificationStore';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { useAuthStore } from '@/stores/authStore';
 import { Bell, Check, Trash, AlertCircle, Info, TrendingUp, MessageSquare, Heart, UserPlus, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { timeAgo } from '@/lib/utils';
@@ -13,8 +14,10 @@ export function NotificationDropdown() {
   const { notifications, unreadCount, markAsRead, markAllRead, addNotification, fetchNotifications } = useNotificationStore();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Subscribe to real-time notification WS stream
-  useWebSocket('/ws/notifications', {
+  // Subscribe to THIS user's notification channel (a shared channel would broadcast everyone's
+  // notifications to every client). The backend publishes to `notifications_<userId>`.
+  const userId = useAuthStore((s) => s.user?.id);
+  useWebSocket(userId ? `/ws/notifications/${userId}` : '', {
     notification: (data: any) => {
       if (data && data.notification) {
         addNotification(data.notification);
