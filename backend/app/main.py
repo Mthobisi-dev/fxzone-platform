@@ -50,8 +50,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         http = httpx.AsyncClient(limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
                                  follow_redirects=False)
         db, cache = Database(), Cache(settings)
-        await db.connect(settings)
-        await cache.connect()
+        try:
+            await db.connect(settings)
+            await cache.connect()
+        except BaseException:
+            # Lifespan has not entered its normal teardown yet. Close resources
+            # acquired before a database or Redis startup failure is re-raised.
+            await cache.close()
+            await db.close()
+            await http.aclose()
+            raise
         realtime = RealtimePublisher(settings, http)
         market_svc = MarketService(settings, http, cache)
 
@@ -111,4 +119,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     return app
 
 
-app = create_app if False else None  # `uvicorn app.main:create_app --factory`
+# Export a concrete ASGI application as well as the factory. This keeps the service
+# compatible with conventional process commands used by platforms and local tooling:
+# `uvicorn app.main:app`. The lifespan still owns all network connections, so merely
+# importing this module does not connect to Postgres, Redis, or external services.
+app = create_app()

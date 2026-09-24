@@ -102,11 +102,7 @@ export function CommentThread({
     }
   };
 
-  const isAdmin =
-    user?.email === 'mthobisimzimela031@gmail.com' ||
-    user?.username === 'admin' ||
-    user?.role === 'admin' ||
-    (user?.role as any)?.value === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   return (
     <div className="space-y-3 pt-3 mt-3 border-t border-zinc-850/70 select-none">

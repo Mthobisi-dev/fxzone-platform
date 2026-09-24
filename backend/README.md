@@ -24,10 +24,19 @@ deploy-time decision and trivially reversible.
    Run **one Redis** (Upstash/Render/Fly) – required in production when you run more than one worker/instance.
 3. **Point the frontend at it**: set `BACKEND_URL=https://<your-api-host>` in the frontend's environment and redeploy.
    `next.config.mjs` then proxies `/api/*` (no CORS setup needed). Alternatively call the API cross-origin and set
-   `CORS_ORIGINS`.
+   `CORS_ORIGINS`. Start the service with `uvicorn app.main:app`; the Docker image uses the same
+   conventional ASGI target, so platforms do not need a factory-specific command.
 4. **Optional, after step 3 is live**: `007_optional_lock_down_pii.sql` stops anyone holding the public anon key from
    reading every user's email via Supabase's REST API (`/rest/v1/users?select=email`). Not applied automatically because
    the legacy Next routes need the service-role key for it not to break them.
+
+### Render deployment
+
+The repository root includes `render.yaml`, which creates the `fxzone-api` Docker web service from `backend/` and
+checks `/health/ready` before routing traffic. When importing the Blueprint, provide `DATABASE_URL`, `REDIS_URL`,
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the production frontend URL in `CORS_ORIGINS`. After Render reports
+the service healthy, set the resulting `https://<service>.onrender.com` URL as `BACKEND_URL` in the frontend host and
+redeploy the frontend.
 
 Local development: `docker compose -f backend/docker-compose.yml up --build`, then
 `python scripts/dev_token.py alice` mints a Bearer token for the stubbed auth schema.

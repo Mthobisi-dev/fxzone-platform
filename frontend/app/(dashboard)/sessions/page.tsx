@@ -56,16 +56,7 @@ export default function SessionsPage() {
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const isAdmin = !!(
-    user &&
-    ((user as any).role === 'admin' ||
-      (user as any).role?.value === 'admin' ||
-      (user as any).username === 'admin' ||
-      (user as any).username === 'fxzone_admin' ||
-      (user as any).username === 'mthobisi' ||
-      (user as any).email === 'admin@fxzone.io' ||
-      (user as any).email === 'mthobisimzimela031@gmail.com')
-  );
+  const isAdmin = user?.role === 'admin';
 
   const fetchSessions = async () => {
     setLoading(true);

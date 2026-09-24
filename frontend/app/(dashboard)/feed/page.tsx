@@ -20,11 +20,7 @@ export default function SocialFeedPage() {
     setMounted(true);
   }, []);
 
-  const isAdmin =
-    user?.email === 'mthobisimzimela031@gmail.com' ||
-    user?.username === 'admin' ||
-    user?.role === 'admin' ||
-    (user?.role as any)?.value === 'admin';
+  const isAdmin = user?.role === 'admin';
   const showAdminControls = mounted && isAdmin;
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);

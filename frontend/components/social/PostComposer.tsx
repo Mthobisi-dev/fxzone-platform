@@ -116,11 +116,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     setMounted(true);
   }, []);
 
-  const isAdmin =
-    mounted &&
-    (user?.email === 'mthobisimzimela031@gmail.com' ||
-      user?.username === 'admin' ||
-      user?.role === 'admin');
+  const isAdmin = mounted && user?.role === 'admin';
 
   if (isAdmin) {
     return (

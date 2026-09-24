@@ -13,7 +13,7 @@ export async function GET(
       .from('live_sessions')
       .select(`
         id, title, description, status, session_type,
-        viewer_count, max_participants, host_id,
+        viewer_count, max_participants, requires_approval, host_id,
         started_at, ended_at, created_at,
         users:host_id (id, username, display_name, avatar_url)
       `)

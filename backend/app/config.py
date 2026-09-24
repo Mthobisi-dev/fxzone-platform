@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -86,6 +87,8 @@ class Settings(BaseSettings):
     def _validate(self) -> "Settings":
         if self.supabase_url:
             self.supabase_url = self.supabase_url.rstrip("/")
+        if self.database_ssl == "verify-full" and self.database_ssl_root_cert and not Path(self.database_ssl_root_cert).is_file():
+            raise ValueError("DATABASE_SSL_ROOT_CERT does not point to a readable certificate file")
         if self.is_production:
             problems: list[str] = []
             if not (self.supabase_jwt_secret or self.supabase_url):

@@ -129,11 +129,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
 
   const isOwner = String(user?.id) === String(userId) || String(user?.id) === String(postUser.id);
-  const isAdmin =
-    user?.email === 'mthobisimzimela031@gmail.com' ||
-    user?.username === 'admin' ||
-    user?.role === 'admin' ||
-    (user?.role as any)?.value === 'admin';
+  const isAdmin = user?.role === 'admin';
   const canDelete = isOwner || isAdmin;
 
   // Pin / Unpin Post

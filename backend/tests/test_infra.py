@@ -1,8 +1,10 @@
 import asyncio
+import httpx
 import pytest
 from pydantic import ValidationError
 
 from app.cache import Cache, SingleFlight
+from app.main import app as asgi_app, create_app
 from tests.conftest import make_settings, token_for
 import uuid
 
@@ -14,6 +16,16 @@ async def test_health_and_readiness(client):
     body = r.json()
     assert body["checks"]["database"] is True and body["checks"]["redis"] == "disabled"
     assert body["features"]["realtime_broadcast"] is True and body["features"]["gemini"] is False
+
+
+async def test_readiness_fails_when_configured_redis_is_unavailable(app, client, monkeypatch):
+    async def unavailable_redis():
+        return False
+
+    monkeypatch.setattr(app.state.cache, "ping", unavailable_redis)
+    response = await client.get("/health/ready")
+    assert response.status_code == 503
+    assert response.json()["status"] == "degraded"
 
 
 async def test_request_id_and_security_headers(client):
@@ -71,6 +83,47 @@ def test_production_config_refuses_unsafe_setup():
     assert ok.is_production
     with pytest.raises(ValidationError):
         make_settings(environment="production", database_ssl="require", redis_url="redis://x", storage_backend="supabase", cors_origins="*")
+
+
+def test_asgi_app_is_exported_for_standard_uvicorn_commands():
+    assert asgi_app is not None
+
+
+def test_config_rejects_a_missing_database_ca_file():
+    with pytest.raises(ValidationError, match="DATABASE_SSL_ROOT_CERT"):
+        make_settings(database_ssl="verify-full", database_ssl_root_cert="/definitely-not-a-certificate.pem")
+
+
+async def test_lifespan_releases_resources_after_startup_failure(monkeypatch):
+    closed = {"database": False, "cache": False, "http": False}
+
+    async def db_connect(self, settings):
+        return None
+
+    async def cache_connect(self):
+        raise RuntimeError("Redis unavailable")
+
+    async def db_close(self):
+        closed["database"] = True
+
+    async def cache_close(self):
+        closed["cache"] = True
+
+    async def http_close(self):
+        closed["http"] = True
+
+    monkeypatch.setattr("app.main.Database.connect", db_connect)
+    monkeypatch.setattr("app.main.Cache.connect", cache_connect)
+    monkeypatch.setattr("app.main.Database.close", db_close)
+    monkeypatch.setattr("app.main.Cache.close", cache_close)
+    monkeypatch.setattr(httpx.AsyncClient, "aclose", http_close)
+    application = create_app(make_settings(asset_sync_on_startup=False))
+
+    with pytest.raises(RuntimeError, match="Redis unavailable"):
+        async with application.router.lifespan_context(application):
+            pass
+
+    assert closed == {"database": True, "cache": True, "http": True}
 
 
 async def test_redis_backend_primitives():

@@ -8,7 +8,7 @@ export async function GET() {
       .from('live_sessions')
       .select(`
         id, title, description, status, session_type,
-        viewer_count, max_participants,
+        viewer_count, max_participants, requires_approval,
         started_at, ended_at, created_at, host_id,
         users:host_id (id, username, display_name, avatar_url)
       `)
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, description, session_type, max_participants } = body;
+    const { title, description, session_type, max_participants, requires_approval } = body;
 
     if (!title?.trim()) {
       return NextResponse.json({ detail: 'Title is required' }, { status: 400 });
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
       description: (description || '').trim(),
       session_type: session_type || 'public',
       max_participants: typeof max_participants === 'number' ? max_participants : null,
+      requires_approval: typeof requires_approval === 'boolean' ? requires_approval : true,
       status: 'live',
       viewer_count: 1,
       started_at: new Date().toISOString(),

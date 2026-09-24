@@ -25,4 +25,5 @@ async def readiness(request: Request):
                      "storage": st.settings.storage_backend, "market_symbols_cached": len(quotes),
                      "state_backend": st.cache.backend},
     }
-    return JSONResponse(body, status_code=200 if db_ok else 503)
+    ready = db_ok and redis_ok is not False
+    return JSONResponse(body, status_code=200 if ready else 503)

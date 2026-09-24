@@ -75,11 +75,7 @@ export async function DELETE(
 
     // 2. Authorize deletion (Post author or Platform admin)
     const isOwner = post.user_id === user.id;
-    const isAdmin =
-      role === 'admin' ||
-      user.email === 'mthobisimzimela031@gmail.com' ||
-      user.email === 'admin@fxzone.com' ||
-      user.user_metadata?.role === 'admin';
+    const isAdmin = role === 'admin';
 
     if (!isOwner && !isAdmin) {
       return NextResponse.json(

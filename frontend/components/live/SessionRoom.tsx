@@ -64,13 +64,7 @@ export function SessionRoom({
   const participantFetchRef = useRef<any>(null);
 
   // Admin override detection
-  const isAdmin = !!(
-    user &&
-    (user.role === 'admin' ||
-      (user.role as any)?.value === 'admin' ||
-      user.username === 'admin' ||
-      user.email === 'admin@fxzone.io')
-  );
+  const isAdmin = user?.role === 'admin';
 
   // ─── WebSocket ────────────────────────────────────────────────────────────────
   // IMPORTANT: rtc_signal handler reads from rtcClientRef (not stale state).
