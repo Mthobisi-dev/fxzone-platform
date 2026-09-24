@@ -149,10 +149,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // getUserFromRequest already verifies that the signed-in user has a
+    // provisioned active profile; avoid a second provisioning round trip.
     const db = getSupabaseAdmin(request);
-    if (!await ensureUserProfile(db, user)) {
-      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
-    }
     const basePost = {
       user_id: user.id,
       content: finalContent,

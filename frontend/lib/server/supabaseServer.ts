@@ -184,17 +184,25 @@ export async function getUserFromRequest(request: Request): Promise<UserFromRequ
     // an Auth-server round trip on every protected API request.
     const { data: claimsData, error: claimsError } = await client.auth.getClaims(token);
     const claims = claimsData?.claims as Record<string, unknown> | undefined;
-    const userId = typeof claims?.sub === 'string' ? claims.sub : null;
-    if (claimsError || !claims || !userId) {
-      return { user: null, role: null, error: claimsError?.message || 'Invalid or expired authentication token' };
-    }
-
-    const user = {
+    let userId = typeof claims?.sub === 'string' ? claims.sub : null;
+    let user: any = userId && claims ? {
       id: userId,
       email: typeof claims.email === 'string' ? claims.email : undefined,
       user_metadata: (claims.user_metadata && typeof claims.user_metadata === 'object') ? claims.user_metadata : {},
       created_at: typeof claims.iat === 'number' ? new Date(claims.iat * 1000).toISOString() : undefined,
-    };
+    } : null;
+
+    // Older Supabase signing configurations can reject the cached-JWKS path.
+    // Verify with the Auth service before rejecting an active signed-in user.
+    if (claimsError || !user) {
+      const { data: userData, error: userError } = await client.auth.getUser(token);
+      if (userError || !userData.user) {
+        return { user: null, role: null, error: userError?.message || claimsError?.message || 'Invalid or expired authentication token' };
+      }
+      user = userData.user;
+      userId = user.id;
+    }
+    if (!userId) return { user: null, role: null, error: 'Invalid or expired authentication token' };
 
     let profile = await getVerifiedProfile(client, userId);
     if (!profile) {

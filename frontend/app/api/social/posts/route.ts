@@ -94,10 +94,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // getUserFromRequest already verifies that the signed-in user has a
+    // provisioned active profile; avoid a second provisioning round trip.
     const db = getSupabaseAdmin(request);
-    if (!await ensureUserProfile(db, user)) {
-      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
-    }
 
     const basePost = {
       user_id: user.id,
@@ -119,7 +118,7 @@ export async function POST(request: NextRequest) {
       db.from('posts').insert(payload).select().single();
 
     let insertRes = await createPost(enhancedPost);
-    if (insertRes.error && (insertRes.error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(insertRes.error.message || ''))) {
+    if (insertRes.error && (insertRes.error.code === '42703' || insertRes.error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(insertRes.error.message || ''))) {
       insertRes = await createPost(basePost);
     }
 
