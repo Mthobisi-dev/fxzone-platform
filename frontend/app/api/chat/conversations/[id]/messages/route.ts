@@ -15,7 +15,7 @@ export async function GET(
 
     const { data: membership } = await db
       .from('conversation_members')
-      .select('id')
+      .select('id, last_read_at')
       .eq('conversation_id', id)
       .eq('user_id', user.id)
       .maybeSingle();
@@ -55,11 +55,14 @@ export async function GET(
       created_at: m.created_at,
     }));
 
-    await db
-      .from('conversation_members')
-      .update({ last_read_at: new Date().toISOString() })
-      .eq('conversation_id', id)
-      .eq('user_id', user.id);
+    const newestMessageAt = data?.[0]?.created_at;
+    if (newestMessageAt && (!membership.last_read_at || newestMessageAt > membership.last_read_at)) {
+      void db
+        .from('conversation_members')
+        .update({ last_read_at: newestMessageAt })
+        .eq('conversation_id', id)
+        .eq('user_id', user.id);
+    }
 
     return NextResponse.json(messages);
   } catch (error: any) {

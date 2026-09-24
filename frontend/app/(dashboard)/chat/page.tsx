@@ -185,11 +185,12 @@ export default function ChatPage() {
     fetchEligibleUsers();
   }, [user]);
 
-  // Periodic sidebar sync: refresh conversation list every 4 seconds to catch new groups & messages
+  // Poll only while the tab is visible. Optimistic UI keeps local actions
+  // immediate, while this avoids background database load for inactive tabs.
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchConversations();
-    }, 4000);
+      if (document.visibilityState === 'visible') fetchConversations();
+    }, 15_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -234,12 +235,13 @@ export default function ChatPage() {
     }
   }, [activeConvId]);
 
-  // Active chat message polling: sync messages every 2.5 seconds to guarantee message delivery
+  // Active chat polling is a fallback for message delivery. Avoid requests while
+  // hidden and keep the cadence moderate to prevent read/write contention.
   useEffect(() => {
     if (!activeConvId) return;
     const interval = setInterval(() => {
-      fetchMessages(activeConvId);
-    }, 2500);
+      if (document.visibilityState === 'visible') fetchMessages(activeConvId);
+    }, 5_000);
     return () => clearInterval(interval);
   }, [activeConvId]);
 

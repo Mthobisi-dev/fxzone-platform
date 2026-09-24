@@ -83,6 +83,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
     try {
       const data = await api.get('/api/market/assets', {
         params: type ? { asset_type: type } : {},
+        public: true,
       });
       if (Array.isArray(data)) {
         set({ assets: data, isLoading: false });
@@ -99,7 +100,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
 
   fetchPrices: async () => {
     try {
-      const data = await api.get('/api/market/prices');
+      const data = await api.get('/api/market/prices', { public: true });
       if (Array.isArray(data)) {
         const pricesMap: Record<string, PriceData> = {};
         data.forEach((p: any) => {

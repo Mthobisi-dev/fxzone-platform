@@ -16,6 +16,8 @@ const REQUEST_TIMEOUT_MS = 12_000;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number>;
+  /** Use only for endpoints whose response is public for every visitor. */
+  public?: boolean;
 }
 
 /** Get the current Supabase access token without side-effects. */
@@ -32,13 +34,13 @@ let refreshPromise: Promise<string | null> | null = null;
 
 async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
   if (options.signal) {
-    return fetch(url, { ...options, cache: 'no-store' });
+    return fetch(url, { ...options, cache: options.cache ?? 'no-store' });
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(url, { ...options, cache: 'no-store', signal: controller.signal });
+    return await fetch(url, { ...options, cache: options.cache ?? 'no-store', signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
@@ -73,7 +75,7 @@ export async function apiRequest(
   options: RequestOptions = {}
 ): Promise<any> {
   let url = `${BASE_URL}${endpoint}`;
-  const { params: _params, ...requestOptions } = options;
+  const { params: _params, public: publicRequest = false, ...requestOptions } = options;
 
   // Append query params if present
   if (options.params) {
@@ -90,21 +92,29 @@ export async function apiRequest(
   const headers = new Headers(options.headers || {});
 
   // Inject the live Supabase token
-  const accessToken = await getAccessToken();
-  if (accessToken && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
+  if (!publicRequest) {
+    const accessToken = await getAccessToken();
+    if (accessToken && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
   }
 
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
-  headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-  headers.set('Pragma', 'no-cache');
+  if (!publicRequest) {
+    headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    headers.set('Pragma', 'no-cache');
+  }
 
   let response: Response;
   try {
-    response = await fetchWithTimeout(url, { ...requestOptions, headers });
+    response = await fetchWithTimeout(url, {
+      ...requestOptions,
+      cache: publicRequest ? requestOptions.cache ?? 'default' : 'no-store',
+      headers,
+    });
   } catch (netErr: any) {
     const timedOut = netErr?.name === 'AbortError';
     const error = new Error(timedOut ? 'The request timed out. Please try again.' : 'Network error: Unable to connect to the server.');
@@ -120,7 +130,7 @@ export async function apiRequest(
       headers.set('Authorization', `Bearer ${newToken}`);
       let retryRes: Response;
       try {
-        retryRes = await fetchWithTimeout(url, { ...requestOptions, headers });
+        retryRes = await fetchWithTimeout(url, { ...requestOptions, cache: 'no-store', headers });
       } catch (netErr: any) {
         const error = new Error(netErr?.name === 'AbortError' ? 'The request timed out. Please try again.' : 'Network error: Unable to connect to the server.');
         Object.assign(error, { status: 0, detail: netErr?.message || error.message });

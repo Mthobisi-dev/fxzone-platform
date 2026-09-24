@@ -33,9 +33,9 @@ export default function SocialFeedPage() {
   const fetchSidebarData = async () => {
     try {
       const [trendRes, expertRes, quotesRes] = await Promise.allSettled([
-        api.get('/api/social/trending-symbols'),
-        api.get('/api/social/featured-experts'),
-        api.get('/api/market/quotes'),
+        api.get('/api/social/trending-symbols', { public: true }),
+        api.get('/api/social/featured-experts', { public: true }),
+        api.get('/api/market/quotes', { public: true }),
       ]);
 
       const quotesMap = new Map<string, any>();

@@ -151,12 +151,14 @@ export default function ProfilePage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const response = await api.get(`/api/social/users/${targetId}`);
+      const [response, userPosts] = await Promise.all([
+        api.get(`/api/social/users/${targetId}`),
+        api.get(`/api/social/users/${targetId}/posts`),
+      ]);
       if (response && response.id) {
         setProfile(response);
       }
-      
-      const userPosts = await api.get(`/api/social/users/${targetId}/posts`);
+
       if (Array.isArray(userPosts)) {
         const mapped = userPosts.map((p: any) => ({
           id: String(p.id),
