@@ -106,6 +106,8 @@ npm install
 cp .env.example .env.local
 
 # Fill in your Supabase credentials in .env.local
+# Keep BACKEND_URL=http://localhost:8000 to use the FastAPI backend. Leave it
+# blank only when you intentionally want to use the legacy Next.js API routes.
 ```
 
 ### 3. Start Development Server

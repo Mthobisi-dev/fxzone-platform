@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -41,7 +43,14 @@ def make_settings(**over) -> Settings:
 
 @pytest.fixture(scope="session")
 def database():
-    subprocess.run([str(HERE / "sql" / "apply.sh"), PG_BASE, DB_NAME], check=True, capture_output=True)
+    if not shutil.which("psql"):
+        pytest.skip("Postgres integration tests require psql and a running PostgreSQL server; use backend/docker-compose.yml")
+    subprocess.run(
+        [sys.executable, str(HERE / "sql" / "apply.py"), PG_BASE, DB_NAME],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 class Net:

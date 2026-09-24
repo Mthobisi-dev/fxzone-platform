@@ -131,9 +131,13 @@ data vendor by replacing `services/market/providers.py` (two coroutines).
 pip install -r requirements-dev.txt
 pytest          # rebuilds `fxzone_test` from supabase_schema.sql + all migrations (needs psql + Postgres; Redis for 2 tests)
 ```
-`TEST_PG_BASE` overrides the Postgres location. The suite (174 tests) runs against real Postgres and Redis with the
+`TEST_PG_BASE` overrides the Postgres location. The suite runs against real Postgres and Redis with the
 network mocked, and covers auth/JWT attacks, permissions, races (likes, follows, DM creation, session capacity), the
 migration's triggers, uploads, market/AI/news logic and realtime payload shapes.
+
+The test database setup is cross-platform. On Windows, start the local stack with Docker Desktop and run the command
+from a shell with `psql` available; without those dependencies pytest reports the suite as skipped instead of producing
+misleading application failures.
 
 ## Verification status – read this
 
