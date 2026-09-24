@@ -51,6 +51,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -172,15 +173,15 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     }
   };
 
-  const uploadFile = async (media: MediaFile): Promise<string | null> => {
+  const uploadFile = async (media: MediaFile): Promise<{ url: string | null; error: string | null }> => {
     const formData = new FormData();
     formData.append('file', media.file);
     try {
       const res = await api.post('/api/social/posts/upload', formData);
-      return res.url;
-    } catch (err) {
+      return { url: typeof res?.url === 'string' ? res.url : null, error: null };
+    } catch (err: unknown) {
       console.error('File upload failed:', err);
-      return null;
+      return { url: null, error: err instanceof Error ? err.message : 'The attachment could not be uploaded.' };
     }
   };
 
@@ -188,17 +189,22 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     if ((!content.trim() && mediaFiles.length === 0) || loading) return;
     setLoading(true);
     setSubmitError(null);
+    setSubmitNotice(null);
 
     try {
       // Upload all attached media files
       const uploadedUrls: string[] = [];
+      const uploadErrors: string[] = [];
       for (const media of mediaFiles) {
-        const url = await uploadFile(media);
-        if (url) uploadedUrls.push(url);
+        const result = await uploadFile(media);
+        if (result.url) uploadedUrls.push(result.url);
+        if (result.error) uploadErrors.push(result.error);
       }
 
       if (mediaFiles.length > 0 && uploadedUrls.length === 0) {
-        throw new Error('Your attachment could not be uploaded. Please try again.');
+        if (!content.trim()) {
+          throw new Error(uploadErrors[0] || 'Your attachment could not be uploaded. Please try again.');
+        }
       }
 
       // Primary attachment is first uploaded media
@@ -234,6 +240,10 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       setMediaFiles([]);
       setShowOptionsModal(false);
       setIsExpanded(false);
+
+      if (uploadErrors.length > 0) {
+        setSubmitNotice('Your text post was published, but one or more attachments could not be uploaded.');
+      }
 
       onPostCreated?.();
     } catch (err) {
@@ -315,6 +325,12 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             rows={isExpanded ? (mediaFiles.length > 0 ? 3 : 3) : 1}
             className="w-full bg-transparent border-0 text-xs text-white placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[36px] leading-relaxed"
           />
+
+          {submitNotice && (
+            <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200" role="status">
+              {submitNotice}
+            </p>
+          )}
 
           {submitError && (
             <p className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300" role="alert">

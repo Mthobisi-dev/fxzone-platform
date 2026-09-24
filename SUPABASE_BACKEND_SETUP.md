@@ -23,6 +23,7 @@ In the Supabase SQL editor, run the tracked files in numerical order:
 6. `supabase/migrations/006_backend_hardening.sql`
 7. `supabase/migrations/008_atomic_session_leave.sql`
 8. `supabase/migrations/009_session_participant_review.sql`
+9. `supabase/migrations/010_post_media_storage.sql`
 
 Migration 007 is an optional privacy hardening migration. Apply it only after
 every public-profile read uses the listed columns instead of `select('*')`.
@@ -52,3 +53,7 @@ Start the frontend with `npm run dev` from `frontend`, then request
 The session join and leave endpoints use Supabase RPC transactions, which
 prevents concurrent requests from exceeding capacity or corrupting viewer
 counts.
+
+The post-media migration creates the public `post-media` Storage bucket used
+for social attachments. Uploads remain authenticated through the Next.js API;
+there is no client-side write policy to configure.
