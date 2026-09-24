@@ -117,6 +117,10 @@ export async function ensureUserProfile(
       id: user.id,
       email: user.email || `${user.id}@fxzone.local`,
       username: uniqueUsername,
+      // Legacy FxZone schemas made this obsolete field NOT NULL. Authentication
+      // is handled by Supabase Auth, so the profile fallback stores no password
+      // material while remaining compatible until migration 011 is applied.
+      password_hash: '',
       display_name: displayName,
       avatar_url: avatarUrl,
       bio,
