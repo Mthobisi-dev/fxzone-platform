@@ -38,6 +38,39 @@ export interface UserFromRequestResult {
   error: string | null;
 }
 
+type CachedProfile = { role: string; isActive: boolean; expiresAt: number };
+const profileCache = new Map<string, CachedProfile>();
+const PROFILE_CACHE_TTL_MS = 10_000;
+
+async function getVerifiedProfile(client: SupabaseClient, userId: string) {
+  const cached = profileCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+
+  let { data, error } = await client
+    .from('users')
+    .select('id, role, is_active')
+    .eq('id', userId)
+    .maybeSingle();
+
+  // Support projects whose migrations have not added is_active yet.
+  if (error && (error.code === 'PGRST204' || /is_active.*column|column.*is_active/i.test(error.message || ''))) {
+    ({ data, error } = await client.from('users').select('id, role').eq('id', userId).maybeSingle());
+  }
+  if (error || !data) return null;
+
+  const profile = {
+    role: typeof data.role === 'string' ? data.role : 'trader',
+    isActive: data.is_active !== false,
+    expiresAt: Date.now() + PROFILE_CACHE_TTL_MS,
+  };
+  if (profileCache.size >= 1_000) {
+    const oldestUserId = profileCache.keys().next().value;
+    if (oldestUserId) profileCache.delete(oldestUserId);
+  }
+  profileCache.set(userId, profile);
+  return profile;
+}
+
 /**
  * Provisions a public.users profile row for a Supabase Auth user.
  *
@@ -146,33 +179,39 @@ export async function getUserFromRequest(request: Request): Promise<UserFromRequ
 
   try {
     const client = getSupabaseAdmin(request);
-
-    // Step 1: Verify the JWT and decode user identity (1 network call)
-    const { data: { user }, error } = await client.auth.getUser(token);
-
-    if (error || !user) {
-      return { user: null, role: null, error: error?.message || 'Invalid authentication token' };
+    // getClaims verifies the access-token signature and expiry. For projects
+    // using asymmetric signing keys it reuses Supabase's JWKS cache, avoiding
+    // an Auth-server round trip on every protected API request.
+    const { data: claimsData, error: claimsError } = await client.auth.getClaims(token);
+    const claims = claimsData?.claims as Record<string, unknown> | undefined;
+    const userId = typeof claims?.sub === 'string' ? claims.sub : null;
+    if (claimsError || !userId) {
+      return { user: null, role: null, error: claimsError?.message || 'Invalid or expired authentication token' };
     }
 
-    // Step 2: Fetch profile row for role — single, cheap SELECT on primary key
-    const { data: profile } = await client
-      .from('users')
-      .select('id, role')
-      .eq('id', user.id)
-      .maybeSingle();
+    const user = {
+      id: userId,
+      email: typeof claims.email === 'string' ? claims.email : undefined,
+      user_metadata: (claims.user_metadata && typeof claims.user_metadata === 'object') ? claims.user_metadata : {},
+      created_at: typeof claims.iat === 'number' ? new Date(claims.iat * 1000).toISOString() : undefined,
+    };
 
-    let role = 'trader';
-
-    if (profile) {
-      // Profile exists — use DB role (authoritative)
-      role = profile.role || 'trader';
-    } else {
-      // Metadata is client-editable. New users always start as traders; the
-      // auth.users trigger provisions the durable profile row.
-      ensureUserProfile(client, user).catch(() => {});
+    let profile = await getVerifiedProfile(client, userId);
+    if (!profile) {
+      // A signed-in user may arrive before the Auth trigger has created their
+      // public profile. Provision synchronously so task routes never operate
+      // with a partially registered account.
+      const provisioned = await ensureUserProfile(client, user);
+      if (!provisioned) {
+        return { user: null, role: null, error: 'Your account is still being provisioned. Please try again shortly.' };
+      }
+      profileCache.delete(userId);
+      profile = await getVerifiedProfile(client, userId);
     }
 
-    return { user, role, error: null };
+    if (!profile) return { user: null, role: null, error: 'Your account could not be verified.' };
+    if (!profile.isActive) return { user: null, role: null, error: 'This account has been disabled.' };
+    return { user, role: profile.role, error: null };
   } catch (err: any) {
     return { user: null, role: null, error: err.message || 'Authentication error' };
   }

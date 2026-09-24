@@ -34,8 +34,10 @@ export async function GET(request: NextRequest) {
 // PUT /api/notifications — mark notifications as read
 export async function PUT(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    if (!user) return NextResponse.json({ success: true });
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) {
+      return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+    }
 
     const client = getSupabaseAdmin(request);
     const body = await request.json().catch(() => ({}));

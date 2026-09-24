@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-
-async function getUser(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  try {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 // POST /api/social/posts/[id]/pin — Toggle pin status on post
 export async function POST(
@@ -21,12 +10,14 @@ export async function POST(
     const params = await Promise.resolve(context.params);
     const postId = params.id;
 
-    const user = await getUser(request);
-    if (!user) {
-      return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) {
+      return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
     }
 
-    const { data: post, error: fetchError } = await supabaseAdmin
+    const db = getSupabaseAdmin(request);
+
+    const { data: post, error: fetchError } = await db
       .from('posts')
       .select('id, is_pinned, user_id')
       .eq('id', postId)
@@ -35,10 +26,13 @@ export async function POST(
     if (fetchError || !post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
+    if (post.user_id !== user.id) {
+      return NextResponse.json({ detail: 'You can only pin your own posts.' }, { status: 403 });
+    }
 
     const newPinned = !post.is_pinned;
 
-    const { error: updateError } = await supabaseAdmin
+    const { error: updateError } = await db
       .from('posts')
       .update({ is_pinned: newPinned })
       .eq('id', postId);

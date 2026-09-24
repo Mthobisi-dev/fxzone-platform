@@ -1,19 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 import { SUPPORTED_ASSETS } from '@/lib/server/marketService';
 
-
-
-async function getUser(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  try {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    return user;
-  } catch { return null; }
-}
-
-async function resolveAssetId(symbolOrId: string): Promise<string | null> {
+async function resolveAssetId(db: ReturnType<typeof getSupabaseAdmin>, symbolOrId: string): Promise<string | null> {
   if (!symbolOrId) return null;
   const cleanSymbol = symbolOrId.replace(/^asset-/, '').toUpperCase();
 
@@ -23,7 +12,7 @@ async function resolveAssetId(symbolOrId: string): Promise<string | null> {
   const targetSymbol = local ? local.symbol : cleanSymbol;
 
   // Query assets table in Supabase
-  const { data } = await supabaseAdmin
+  const { data } = await db
     .from('assets')
     .select('id')
     .or(`id.eq.${symbolOrId},symbol.eq.${targetSymbol}`)
@@ -33,7 +22,7 @@ async function resolveAssetId(symbolOrId: string): Promise<string | null> {
 
   // Auto-upsert into assets table so DB row always exists
   try {
-    const { data: upserted } = await supabaseAdmin
+    const { data: upserted } = await db
       .from('assets')
       .upsert(
         {
@@ -60,7 +49,9 @@ export async function POST(
   context: { params: Promise<{ watchlistId: string }> }
 ) {
   try {
-    const user = await getUser(request);
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+    const db = getSupabaseAdmin(request);
     const body = await request.json();
     const { asset_id, symbol } = body;
     const { watchlistId } = await context.params;
@@ -70,24 +61,18 @@ export async function POST(
       return NextResponse.json({ detail: 'asset_id or symbol required' }, { status: 400 });
     }
 
-    if (!user) {
-      return NextResponse.json({ success: true });
-    }
+    const { data: watchlist } = await db.from('watchlists').select('id').eq('id', watchlistId).eq('user_id', user.id).maybeSingle();
+    if (!watchlist) return NextResponse.json({ detail: 'Watchlist not found.' }, { status: 404 });
 
-    const dbAssetId = await resolveAssetId(symbolOrId);
-
-    if (dbAssetId && watchlistId && !watchlistId.startsWith('watchlist-default')) {
-      try {
-        await supabaseAdmin
-          .from('watchlist_items')
-          .insert({ watchlist_id: watchlistId, asset_id: dbAssetId });
-      } catch (_) {}
-    }
+    const dbAssetId = await resolveAssetId(db, symbolOrId);
+    if (!dbAssetId) return NextResponse.json({ detail: 'Asset could not be resolved.' }, { status: 400 });
+    const { error } = await db.from('watchlist_items').insert({ watchlist_id: watchlistId, asset_id: dbAssetId });
+    if (error && error.code !== '23505') throw error;
 
     return NextResponse.json({ success: true, asset_id: dbAssetId || symbolOrId });
   } catch (error: any) {
     console.error('Add watchlist item error:', error);
-    return NextResponse.json({ success: true, detail: error?.message });
+    return NextResponse.json({ detail: error?.message || 'Unable to add the watchlist item.' }, { status: 500 });
   }
 }
 
@@ -97,26 +82,32 @@ export async function DELETE(
   context: { params: Promise<{ watchlistId: string }> }
 ) {
   try {
-    const user = await getUser(request);
-    if (!user) return NextResponse.json({ success: true });
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+    const db = getSupabaseAdmin(request);
 
     const { watchlistId } = await context.params;
     const body = await request.json().catch(() => ({}));
     const { asset_id } = body;
 
+    const { data: watchlist } = await db.from('watchlists').select('id').eq('id', watchlistId).eq('user_id', user.id).maybeSingle();
+    if (!watchlist) return NextResponse.json({ detail: 'Watchlist not found.' }, { status: 404 });
+
     if (asset_id) {
-      const dbAssetId = await resolveAssetId(asset_id);
+      const dbAssetId = await resolveAssetId(db, asset_id);
       if (dbAssetId) {
-        await supabaseAdmin
+        const { error } = await db
           .from('watchlist_items')
           .delete()
           .eq('watchlist_id', watchlistId)
           .eq('asset_id', dbAssetId);
+        if (error) throw error;
       }
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ success: true });
+    console.error('Remove watchlist item error:', error);
+    return NextResponse.json({ detail: error?.message || 'Unable to remove the watchlist item.' }, { status: 500 });
   }
 }
