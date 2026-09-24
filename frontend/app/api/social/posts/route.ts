@@ -4,8 +4,10 @@ import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/s
 // GET /api/social/posts — fetch paginated posts (alias for /api/social/feed)
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get('limit') || '20', 10);
-  const offset = parseInt(searchParams.get('offset') || '0', 10);
+  const requestedLimit = Number.parseInt(searchParams.get('limit') || '20', 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 50) : 20;
+  const requestedOffset = Number.parseInt(searchParams.get('offset') || '0', 10);
+  const offset = Number.isFinite(requestedOffset) ? Math.max(requestedOffset, 0) : 0;
   const userId = searchParams.get('user_id');
 
   try {
@@ -15,7 +17,8 @@ export async function GET(request: NextRequest) {
       .from('posts')
       .select(`
         id, content, image_url, likes_count, comments_count, reposts_count,
-        is_story, is_pinned, created_at,
+        is_story, is_pinned, created_at, caption,
+        show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share,
         users:user_id (id, username, display_name, avatar_url, role)
       `)
       .eq('is_story', false)
@@ -46,6 +49,12 @@ export async function GET(request: NextRequest) {
       comments_count: p.comments_count || 0,
       reposts_count: p.reposts_count || 0,
       is_story: p.is_story,
+      caption: p.caption,
+      show_comments_count: p.show_comments_count,
+      show_likes_count: p.show_likes_count,
+      allow_reshare: p.allow_reshare,
+      allow_save: p.allow_save,
+      allow_share: p.allow_share,
       created_at: p.created_at,
     }));
 
@@ -64,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { content, image_url, is_story } = body;
+    const { content, image_url, is_story, caption, show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share } = body;
 
     let finalContent = (content || '').trim();
     if (!finalContent) {
@@ -86,6 +95,12 @@ export async function POST(request: NextRequest) {
         image_url: image_url || null,
         is_story: !!is_story,
         expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+        caption: typeof caption === 'string' ? caption.trim().slice(0, 200) || null : null,
+        show_comments_count: typeof show_comments_count === 'boolean' ? show_comments_count : true,
+        show_likes_count: typeof show_likes_count === 'boolean' ? show_likes_count : true,
+        allow_reshare: typeof allow_reshare === 'boolean' ? allow_reshare : true,
+        allow_save: typeof allow_save === 'boolean' ? allow_save : true,
+        allow_share: typeof allow_share === 'boolean' ? allow_share : true,
       })
       .select()
       .single();
@@ -102,6 +117,12 @@ export async function POST(request: NextRequest) {
           image_url: image_url || null,
           is_story: !!is_story,
           expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+          caption: typeof caption === 'string' ? caption.trim().slice(0, 200) || null : null,
+          show_comments_count: typeof show_comments_count === 'boolean' ? show_comments_count : true,
+          show_likes_count: typeof show_likes_count === 'boolean' ? show_likes_count : true,
+          allow_reshare: typeof allow_reshare === 'boolean' ? allow_reshare : true,
+          allow_save: typeof allow_save === 'boolean' ? allow_save : true,
+          allow_share: typeof allow_share === 'boolean' ? allow_share : true,
         })
         .select()
         .single();

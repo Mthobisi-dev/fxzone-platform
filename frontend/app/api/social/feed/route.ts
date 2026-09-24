@@ -6,8 +6,10 @@ import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/s
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const requestedLimit = Number.parseInt(searchParams.get('limit') || '20', 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 50) : 20;
+    const requestedOffset = Number.parseInt(searchParams.get('offset') || '0', 10);
+    const offset = Number.isFinite(requestedOffset) ? Math.max(requestedOffset, 0) : 0;
 
     const db = getSupabaseAdmin(request);
 
@@ -22,6 +24,12 @@ export async function GET(request: NextRequest) {
         reposts_count,
         is_story,
         is_pinned,
+        caption,
+        show_comments_count,
+        show_likes_count,
+        allow_reshare,
+        allow_save,
+        allow_share,
         created_at,
         users:user_id (
           id,
@@ -36,6 +44,19 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (error) throw error;
+
+    const { user: currentUser } = await getUserFromRequest(request);
+    const postIds = (data || []).map((post: any) => post.id);
+    const [reactionsResult, bookmarksResult, repostsResult] = currentUser && postIds.length > 0
+      ? await Promise.all([
+          db.from('reactions').select('post_id').eq('user_id', currentUser.id).eq('reaction_type', 'like').in('post_id', postIds),
+          db.from('bookmarks').select('post_id').eq('user_id', currentUser.id).in('post_id', postIds),
+          db.from('reposts').select('post_id').eq('user_id', currentUser.id).in('post_id', postIds),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }];
+    const likedPostIds = new Set((reactionsResult.data || []).map((row: any) => row.post_id));
+    const bookmarkedPostIds = new Set((bookmarksResult.data || []).map((row: any) => row.post_id));
+    const repostedPostIds = new Set((repostsResult.data || []).map((row: any) => row.post_id));
 
     const posts = (data || []).map((p: any) => ({
       id: p.id,
@@ -56,6 +77,15 @@ export async function GET(request: NextRequest) {
       reposts_count: p.reposts_count || 0,
       is_story: p.is_story,
       is_pinned: p.is_pinned,
+      caption: p.caption,
+      show_comments_count: p.show_comments_count,
+      show_likes_count: p.show_likes_count,
+      allow_reshare: p.allow_reshare,
+      allow_save: p.allow_save,
+      allow_share: p.allow_share,
+      is_liked_by_user: likedPostIds.has(p.id),
+      is_bookmarked_by_user: bookmarkedPostIds.has(p.id),
+      is_reposted_by_user: repostedPostIds.has(p.id),
       created_at: p.created_at,
     }));
 
@@ -81,7 +111,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { content, image_url, is_story } = body;
+    const { content, image_url, is_story, caption, show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share } = body;
 
     let finalContent = (content || '').trim();
     if (!finalContent) {
@@ -102,6 +132,12 @@ export async function POST(request: NextRequest) {
         content: finalContent,
         image_url: image_url || null,
         is_story: !!is_story,
+        caption: typeof caption === 'string' ? caption.trim().slice(0, 200) || null : null,
+        show_comments_count: typeof show_comments_count === 'boolean' ? show_comments_count : true,
+        show_likes_count: typeof show_likes_count === 'boolean' ? show_likes_count : true,
+        allow_reshare: typeof allow_reshare === 'boolean' ? allow_reshare : true,
+        allow_save: typeof allow_save === 'boolean' ? allow_save : true,
+        allow_share: typeof allow_share === 'boolean' ? allow_share : true,
       })
       .select()
       .single();

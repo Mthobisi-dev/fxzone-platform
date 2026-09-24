@@ -22,41 +22,41 @@ export async function POST(
     await ensureUserProfile(db, user);
 
     // Check if reaction exists
-    const { data: existing } = await db
+    const { data: existing, error: existingError } = await db
       .from('reactions')
       .select('id')
       .eq('post_id', id)
       .eq('user_id', user.id)
       .eq('reaction_type', reactionType)
       .maybeSingle();
+    if (existingError) throw existingError;
 
     let active: boolean;
 
     if (existing) {
-      await db.from('reactions').delete().eq('id', existing.id);
+      const { error } = await db.from('reactions').delete().eq('id', existing.id);
+      if (error) throw error;
       active = false;
     } else {
-      await db.from('reactions').insert({
+      const { error } = await db.from('reactions').insert({
         post_id: id,
         user_id: user.id,
         reaction_type: reactionType,
       });
+      if (error) throw error;
       active = true;
     }
 
-    // Get updated likes count
-    const { count } = await db
-      .from('reactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('post_id', id)
-      .eq('reaction_type', 'like');
-
-    const likes_count = count || 0;
-
-    await db
+    // The database trigger updates the counter atomically. Read the resulting
+    // value instead of racing a client-side count/update sequence.
+    const { data: post, error: postError } = await db
       .from('posts')
-      .update({ likes_count })
-      .eq('id', id);
+      .select('likes_count')
+      .eq('id', id)
+      .maybeSingle();
+    if (postError || !post) return NextResponse.json({ detail: 'Post not found' }, { status: 404 });
+
+    const likes_count = post.likes_count || 0;
 
     return NextResponse.json({ active, likes_count, reaction_type: reactionType });
   } catch (error: any) {
