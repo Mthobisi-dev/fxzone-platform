@@ -27,6 +27,6 @@ export const supabase = new Proxy({} as SupabaseClient, {
   },
 });
 
-export { supabaseAdmin, getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from './server/supabaseServer';
+export { supabaseAdmin, getSupabaseAdmin, getSupabaseServerConfig, getUserFromRequest, ensureUserProfile } from './server/supabaseServer';
 
 

@@ -1,19 +1,48 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+function firstConfiguredEnv(...names: string[]): string {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+export function getSupabaseServerConfig() {
+  const url = firstConfiguredEnv(
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'SUPABASE_URL',
+    'SUPABASE_PROJECT_URL'
+  );
+  const serviceKey = firstConfiguredEnv(
+    'SUPABASE_SERVICE_ROLE_KEY',
+    // Supabase's current secret-key name and a common hosting alias.
+    'SUPABASE_SECRET_KEY',
+    'SUPABASE_SERVICE_KEY'
+  );
+
+  return {
+    url,
+    serviceKey,
+    missing: [
+      ...(url ? [] : ['Supabase URL']),
+      ...(serviceKey ? [] : ['Supabase server key']),
+    ],
+  };
+}
 
 let adminClientInstance: SupabaseClient | null = null;
 
 export function getSupabaseAdmin(_request?: Request): SupabaseClient {
-  if (!supabaseUrl || !supabaseServiceKey) {
+  const { url, serviceKey, missing } = getSupabaseServerConfig();
+  if (missing.length > 0) {
     throw new Error(
-      'Supabase server configuration is incomplete. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.'
+      `Supabase server configuration is incomplete: missing ${missing.join(' and ')}.`
     );
   }
 
   if (!adminClientInstance) {
-    adminClientInstance = createClient(supabaseUrl, supabaseServiceKey, {
+    adminClientInstance = createClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
   }
