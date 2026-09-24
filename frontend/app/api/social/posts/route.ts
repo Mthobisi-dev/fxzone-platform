@@ -85,47 +85,42 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getSupabaseAdmin(request);
-    await ensureUserProfile(db, user);
+    if (!await ensureUserProfile(db, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
 
-    let insertRes = await db
-      .from('posts')
-      .insert({
-        user_id: user.id,
-        content: finalContent,
-        image_url: image_url || null,
-        is_story: !!is_story,
-        expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+    const basePost = {
+      user_id: user.id,
+      content: finalContent,
+      image_url: image_url || null,
+      is_story: !!is_story,
+      expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+    };
+    const enhancedPost = {
+      ...basePost,
         caption: typeof caption === 'string' ? caption.trim().slice(0, 200) || null : null,
         show_comments_count: typeof show_comments_count === 'boolean' ? show_comments_count : true,
         show_likes_count: typeof show_likes_count === 'boolean' ? show_likes_count : true,
         allow_reshare: typeof allow_reshare === 'boolean' ? allow_reshare : true,
         allow_save: typeof allow_save === 'boolean' ? allow_save : true,
         allow_share: typeof allow_share === 'boolean' ? allow_share : true,
-      })
-      .select()
-      .single();
+    };
+    const createPost = (payload: typeof enhancedPost | typeof basePost) =>
+      db.from('posts').insert(payload).select().single();
+
+    let insertRes = await createPost(enhancedPost);
+    if (insertRes.error && (insertRes.error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(insertRes.error.message || ''))) {
+      insertRes = await createPost(basePost);
+    }
 
     // If FK constraint violation occurred, force user upsert and retry once
     if (insertRes.error && (insertRes.error.code === '23503' || insertRes.error.message?.includes('posts_user_id_fkey'))) {
       console.warn('[Posts API] FK constraint error detected on user_id, retrying with force profile upsert...');
       await ensureUserProfile(db, user);
-      insertRes = await db
-        .from('posts')
-        .insert({
-          user_id: user.id,
-          content: finalContent,
-          image_url: image_url || null,
-          is_story: !!is_story,
-          expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
-          caption: typeof caption === 'string' ? caption.trim().slice(0, 200) || null : null,
-          show_comments_count: typeof show_comments_count === 'boolean' ? show_comments_count : true,
-          show_likes_count: typeof show_likes_count === 'boolean' ? show_likes_count : true,
-          allow_reshare: typeof allow_reshare === 'boolean' ? allow_reshare : true,
-          allow_save: typeof allow_save === 'boolean' ? allow_save : true,
-          allow_share: typeof allow_share === 'boolean' ? allow_share : true,
-        })
-        .select()
-        .single();
+      insertRes = await createPost(enhancedPost);
+      if (insertRes.error && (insertRes.error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(insertRes.error.message || ''))) {
+        insertRes = await createPost(basePost);
+      }
     }
 
     if (insertRes.error) throw insertRes.error;

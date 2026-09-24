@@ -43,8 +43,6 @@ interface MediaFile {
 
 export function PostComposer({ onPostCreated }: PostComposerProps) {
   const { user } = useAuth();
-  const [mounted, setMounted] = useState(false);
-
   const [content, setContent] = useState('');
   const [caption, setCaption] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -52,6 +50,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const [tagInput, setTagInput] = useState('');
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -111,22 +110,6 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       setIsExpanded(true);
     }
   }, []);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const isAdmin = mounted && user?.role === 'admin';
-
-  if (isAdmin) {
-    return (
-      <Card className="p-4 border border-zinc-900 bg-zinc-950/40 text-center">
-        <p className="text-xs text-zinc-500 italic">
-          FxZone Admin accounts are restricted from publishing posts to the social feed.
-        </p>
-      </Card>
-    );
-  }
 
   const removeMedia = (index: number) => {
     setMediaFiles((prev) => {
@@ -204,6 +187,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const handlePost = async () => {
     if ((!content.trim() && mediaFiles.length === 0) || loading) return;
     setLoading(true);
+    setSubmitError(null);
 
     try {
       // Upload all attached media files
@@ -211,6 +195,10 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       for (const media of mediaFiles) {
         const url = await uploadFile(media);
         if (url) uploadedUrls.push(url);
+      }
+
+      if (mediaFiles.length > 0 && uploadedUrls.length === 0) {
+        throw new Error('Your attachment could not be uploaded. Please try again.');
       }
 
       // Primary attachment is first uploaded media
@@ -250,6 +238,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       onPostCreated?.();
     } catch (err) {
       console.error('Failed to create post:', err);
+      setSubmitError(err instanceof Error ? err.message : 'Unable to publish this post. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -306,8 +295,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         {/* User avatar */}
         <div className="shrink-0 mt-1">
           <Avatar
-            src={mounted && user ? user.avatar_url : undefined}
-            alt={mounted && user ? (user.display_name || user.username) : 'Avatar'}
+            src={user?.avatar_url}
+            alt={user ? (user.display_name || user.username) : 'Avatar'}
             size="sm"
           />
         </div>
@@ -326,6 +315,12 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             rows={isExpanded ? (mediaFiles.length > 0 ? 3 : 3) : 1}
             className="w-full bg-transparent border-0 text-xs text-white placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[36px] leading-relaxed"
           />
+
+          {submitError && (
+            <p className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300" role="alert">
+              {submitError}
+            </p>
+          )}
 
           <input
             type="text"
