@@ -14,25 +14,32 @@ export async function POST(
     const { id: postId } = await params;
     const client = getSupabaseAdmin(request);
 
-    // Get current post
-    const { data: post, error: fetchErr } = await client
+    const { data: existing, error: existingError } = await client
+      .from('reposts')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (existingError) throw existingError;
+
+    if (existing) {
+      const { error } = await client.from('reposts').delete().eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await client.from('reposts').insert({ post_id: postId, user_id: user.id });
+      if (error) throw error;
+    }
+
+    const { data: post, error: postError } = await client
       .from('posts')
       .select('reposts_count')
       .eq('id', postId)
-      .single();
-
-    if (fetchErr || !post) {
+      .maybeSingle();
+    if (postError || !post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    const newCount = (post.reposts_count || 0) + 1;
-
-    await client
-      .from('posts')
-      .update({ reposts_count: newCount })
-      .eq('id', postId);
-
-    return NextResponse.json({ reposts_count: newCount });
+    return NextResponse.json({ is_reposted: !existing, reposts_count: post.reposts_count || 0 });
   } catch (error: any) {
     console.error('Post repost error:', error);
     return NextResponse.json(

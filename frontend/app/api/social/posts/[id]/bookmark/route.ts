@@ -14,9 +14,10 @@ export async function POST(
     const { id: postId } = await params;
     const client = getSupabaseAdmin(request);
 
-    // Check if bookmark exists in saved_posts or bookmarks table
+    // The canonical Supabase table is `bookmarks` (not the legacy
+    // `saved_posts` name). It has a unique user_id/post_id constraint.
     const { data: existing } = await client
-      .from('saved_posts')
+      .from('bookmarks')
       .select('id')
       .eq('user_id', user.id)
       .eq('post_id', postId)
@@ -25,19 +26,21 @@ export async function POST(
     let isBookmarked = false;
 
     if (existing) {
-      await client
-        .from('saved_posts')
+      const { error } = await client
+        .from('bookmarks')
         .delete()
         .eq('user_id', user.id)
         .eq('post_id', postId);
+      if (error) throw error;
       isBookmarked = false;
     } else {
-      await client
-        .from('saved_posts')
+      const { error } = await client
+        .from('bookmarks')
         .upsert(
           { user_id: user.id, post_id: postId, created_at: new Date().toISOString() },
           { onConflict: 'user_id,post_id' }
         );
+      if (error) throw error;
       isBookmarked = true;
     }
 

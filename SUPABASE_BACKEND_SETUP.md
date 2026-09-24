@@ -22,6 +22,7 @@ In the Supabase SQL editor, run the tracked files in numerical order:
 5. `supabase/migrations/005_add_preferred_broker.sql`
 6. `supabase/migrations/006_backend_hardening.sql`
 7. `supabase/migrations/008_atomic_session_leave.sql`
+8. `supabase/migrations/009_session_participant_review.sql`
 
 Migration 007 is an optional privacy hardening migration. Apply it only after
 every public-profile read uses the listed columns instead of `select('*')`.

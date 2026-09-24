@@ -115,10 +115,9 @@ export function SessionRoom({
   }, [sessionId]);
 
   useEffect(() => {
+    if (!isHost) return;
     fetchParticipants();
-    if (isHost) {
-      participantFetchRef.current = setInterval(fetchParticipants, 3500);
-    }
+    participantFetchRef.current = setInterval(fetchParticipants, 3500);
     return () => {
       if (participantFetchRef.current) clearInterval(participantFetchRef.current);
     };
