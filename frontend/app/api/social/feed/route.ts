@@ -13,9 +13,25 @@ export async function GET(request: NextRequest) {
 
     const db = getSupabaseAdmin(request);
 
-    const { data, error } = await db
-      .from('posts')
-      .select(`
+    const basePostSelect = `
+        id,
+        content,
+        image_url,
+        likes_count,
+        comments_count,
+        reposts_count,
+        is_story,
+        is_pinned,
+        created_at,
+        users:user_id (
+          id,
+          username,
+          display_name,
+          avatar_url,
+          role
+        )
+      `;
+    const enhancedPostSelect = `
         id,
         content,
         image_url,
@@ -38,10 +54,21 @@ export async function GET(request: NextRequest) {
           avatar_url,
           role
         )
-      `)
+      `;
+    const fetchPosts = (select: string) => db
+      .from('posts')
+      .select(select)
       .eq('is_story', false)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    let { data, error } = await fetchPosts(enhancedPostSelect);
+    // Older projects can serve the feed before migration 006 adds the
+    // composer-option columns. Retrying with the durable base schema keeps
+    // feeds available while the migration is applied.
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(error.message || ''))) {
+      ({ data, error } = await fetchPosts(basePostSelect));
+    }
 
     if (error) throw error;
 
