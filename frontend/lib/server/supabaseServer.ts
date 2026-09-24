@@ -1,33 +1,23 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://placeholder-project.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
 let adminClientInstance: SupabaseClient | null = null;
 
-export function getSupabaseAdmin(request?: Request): SupabaseClient {
-  // Use service role key if configured (bypasses RLS for server administration)
-  if (supabaseServiceKey) {
-    if (!adminClientInstance) {
-      adminClientInstance = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
-    }
-    return adminClientInstance;
+export function getSupabaseAdmin(_request?: Request): SupabaseClient {
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error(
+      'Supabase server configuration is incomplete. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.'
+    );
   }
 
-  // Fallback to anon key with request Authorization header if present to satisfy RLS auth.uid()
-  const authHeader = request?.headers.get('authorization');
-  const headers: Record<string, string> = {};
-  if (authHeader) {
-    headers['Authorization'] = authHeader;
+  if (!adminClientInstance) {
+    adminClientInstance = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
   }
-
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-    global: { headers },
-  });
+  return adminClientInstance;
 }
 
 // Lazy proxy for backward compatibility
@@ -58,7 +48,7 @@ export interface UserFromRequestResult {
  * false if provisioning failed AND the row is missing.
  */
 export async function ensureUserProfile(
-  _client: SupabaseClient, // kept for API compat; we always use admin internally
+  _client: SupabaseClient, // kept for API compat; the server client is used internally
   user: any
 ): Promise<boolean> {
   if (!user || !user.id) return false;
@@ -77,11 +67,12 @@ export async function ensureUserProfile(
 
     // 2. Row is missing — build profile payload
     const meta = user.user_metadata || {};
-    const baseUsername =
+    const rawUsername =
       meta.username ||
       meta.name?.replace(/\s+/g, '_').toLowerCase() ||
       user.email?.split('@')[0] ||
       'trader';
+    const baseUsername = String(rawUsername).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 48) || 'trader';
 
     const uniqueUsername = `${baseUsername}_${user.id.replace(/[^a-zA-Z0-9]/g, '').substring(0, 6)}`;
     const displayName = meta.display_name || meta.full_name || meta.name || baseUsername;
@@ -176,8 +167,8 @@ export async function getUserFromRequest(request: Request): Promise<UserFromRequ
       // Profile exists — use DB role (authoritative)
       role = profile.role || 'trader';
     } else {
-      // Profile does NOT exist — provision it asynchronously (non-blocking)
-      role = user.user_metadata?.role || 'trader';
+      // Metadata is client-editable. New users always start as traders; the
+      // auth.users trigger provisions the durable profile row.
       ensureUserProfile(client, user).catch(() => {});
     }
 

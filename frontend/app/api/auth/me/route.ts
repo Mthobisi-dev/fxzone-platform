@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 // GET /api/auth/me — returns user profile from public.users via the session token
 export async function GET(request: NextRequest) {
@@ -19,35 +19,26 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (profileError || !profile) {
-      // Profile row missing in public.users — auto-create and save it
-      const meta = user.user_metadata || {};
-      const username = meta.username || user.email?.split('@')[0] || `trader_${user.id.substring(0, 4)}`;
-      const displayName = meta.display_name || meta.full_name || meta.name || username;
-      const role = meta.role || 'trader';
-      const avatarUrl = meta.avatar_url || meta.picture || null;
-      const bio = meta.bio || '';
+    if (profileError) {
+      throw profileError;
+    }
 
-      const newProfile = {
-        id: user.id,
-        email: user.email || '',
-        username,
-        display_name: displayName,
-        avatar_url: avatarUrl,
-        bio,
-        role,
-        followers_count: 0,
-        following_count: 0,
-        created_at: user.created_at || new Date().toISOString(),
-      };
-
-      try {
-        await db.from('users').upsert(newProfile, { onConflict: 'id' });
-      } catch (e) {
-        console.warn('Auto-create user profile row notice:', e);
+    if (!profile) {
+      const provisioned = await ensureUserProfile(db, user);
+      if (!provisioned) {
+        return NextResponse.json({ detail: 'Profile provisioning failed' }, { status: 503 });
       }
 
-      return NextResponse.json(newProfile);
+      const { data: provisionedProfile, error: provisionError } = await db
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (provisionError || !provisionedProfile) {
+        throw provisionError || new Error('Profile was not available after provisioning');
+      }
+      return NextResponse.json(provisionedProfile);
     }
 
     return NextResponse.json(profile);

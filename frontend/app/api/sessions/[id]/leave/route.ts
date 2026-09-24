@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 // POST /api/sessions/[id]/leave
 export async function POST(
@@ -7,46 +7,27 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { user } = await getUserFromRequest(request);
-    if (!user) return NextResponse.json({ success: true });
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) {
+      return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+    }
 
     const { id: sessionId } = await context.params;
 
-    await supabaseAdmin
-      .from('session_participants')
-      .update({ left_at: new Date().toISOString() })
-      .eq('session_id', sessionId)
-      .eq('user_id', user.id);
+    const db = getSupabaseAdmin(request);
+    const { error: leaveError } = await db.rpc('leave_session', {
+      p_session_id: sessionId,
+      p_user_id: user.id,
+    });
 
-    const { data: session } = await supabaseAdmin
-      .from('live_sessions')
-      .select('host_id')
-      .eq('id', sessionId)
-      .maybeSingle();
-
-    if (session && user.id === session.host_id) {
-      await supabaseAdmin
-        .from('live_sessions')
-        .update({ status: 'ended', ended_at: new Date().toISOString(), viewer_count: 0 })
-        .eq('id', sessionId);
-    } else {
-      // Recalculate remaining active viewers
-      const { count: remainingViewers } = await supabaseAdmin
-        .from('session_participants')
-        .select('*', { count: 'exact', head: true })
-        .eq('session_id', sessionId)
-        .is('left_at', null)
-        .neq('role', 'pending');
-
-      await supabaseAdmin
-        .from('live_sessions')
-        .update({ viewer_count: Math.max(0, remainingViewers || 0) })
-        .eq('id', sessionId);
+    if (leaveError) {
+      const status = /not found/i.test(leaveError.message) ? 404 : 400;
+      return NextResponse.json({ detail: leaveError.message }, { status });
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Leave session error:', error);
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ detail: error?.message || 'Failed to leave session' }, { status: 500 });
   }
 }
