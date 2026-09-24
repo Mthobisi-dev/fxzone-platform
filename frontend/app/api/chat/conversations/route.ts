@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
     }
 
-    const allMemberIds = [...new Set([user.id, ...participant_ids.filter((id: string) => id !== user.id)])];
+    const allMemberIds = Array.from(new Set([user.id, ...participant_ids.filter((id: string) => id !== user.id)]));
     const { data: registeredMembers, error: memberLookupError } = await db
       .from('users')
       .select('id')
