@@ -7,7 +7,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q') || '';
     const limitParam = searchParams.get('limit');
-    const limit = limitParam ? parseInt(limitParam, 10) : 100;
+    const requestedLimit = limitParam ? Number.parseInt(limitParam, 10) : 100;
+    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 100;
 
     const { user: currentUser } = await getUserFromRequest(request);
     const db = getSupabaseAdmin(request);
@@ -15,18 +16,26 @@ export async function GET(request: NextRequest) {
     // 1. Query registered accounts from public.users table
     let query = db
       .from('users')
-      .select('id, email, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at')
+      .select('id, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at')
       .order('created_at', { ascending: false })
       .limit(limit);
 
     if (q.trim()) {
-      query = query.or(`username.ilike.%${q}%,display_name.ilike.%${q}%`);
+      const safeQuery = q.trim().replace(/[^\w .-]/g, '').slice(0, 80);
+      if (safeQuery) {
+        query = query.or(`username.ilike.%${safeQuery}%,display_name.ilike.%${safeQuery}%`);
+      }
     }
 
     const { data: usersData, error } = await query;
     if (error) throw error;
 
-    let users = usersData || [];
+    let users = (usersData || []).map((account: any) => ({
+      ...account,
+      is_following: false,
+      is_follower: false,
+      is_mutual: false,
+    }));
 
     // 2. If authenticated user, annotate with follow status
     if (currentUser && users.length > 0) {
@@ -72,7 +81,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/social/users — create/add trader to public.users or follow user
+// Registered accounts are provisioned by the auth.users trigger. This route is
+// intentionally not an account-creation endpoint: creating arbitrary public
+// profiles made Discover show accounts that could not sign in.
 export async function POST(request: NextRequest) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
@@ -82,10 +93,13 @@ export async function POST(request: NextRequest) {
 
     const db = getSupabaseAdmin(request);
     const body = await request.json();
-    const { username, display_name, role, bio, avatar_url, following_id } = body;
+    const { following_id } = body;
 
     // Follow action
     if (following_id) {
+      if (following_id === user.id) {
+        return NextResponse.json({ detail: 'Cannot follow yourself' }, { status: 400 });
+      }
       const { data, error } = await db
         .from('follows')
         .insert({ follower_id: user.id, following_id })
@@ -96,28 +110,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data }, { status: 201 });
     }
 
-    // Create / Add trader to network directory
-    if (username) {
-      const newId = crypto.randomUUID();
-      const { data: created, error: createError } = await db
-        .from('users')
-        .insert({
-          id: newId,
-          username: username.trim(),
-          display_name: (display_name || username).trim(),
-          role: role || 'trader',
-          bio: (bio || '').trim() || null,
-          avatar_url: avatar_url || null,
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (createError) throw createError;
-      return NextResponse.json(created, { status: 201 });
-    }
-
-    return NextResponse.json({ detail: 'Invalid request body' }, { status: 400 });
+    return NextResponse.json({ detail: 'Accounts must be created through Supabase Auth registration.' }, { status: 405 });
   } catch (error: any) {
     console.error('Error in social users POST:', error);
     return NextResponse.json(

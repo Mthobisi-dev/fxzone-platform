@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-
-
-
-async function getUser(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  try {
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    return user;
-  } catch { return null; }
-}
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 // POST /api/social/users/[id]/follow — toggle follow/unfollow
 export async function POST(
@@ -18,8 +7,8 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getUser(request);
-    if (!user) return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
+    const { user, error: authError } = await getUserFromRequest(request);
+    if (authError || !user) return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
 
     const { id: targetUserId } = await context.params;
 
@@ -27,49 +16,40 @@ export async function POST(
       return NextResponse.json({ detail: 'Cannot follow yourself' }, { status: 400 });
     }
 
-    // Check existing follow
-    const { data: existing } = await supabaseAdmin
+    const db = getSupabaseAdmin(request);
+    const { data: target } = await db.from('users').select('id').eq('id', targetUserId).maybeSingle();
+    if (!target) return NextResponse.json({ detail: 'Trader not found' }, { status: 404 });
+
+    const { data: existing, error: existingError } = await db
       .from('follows')
       .select('id')
       .eq('follower_id', user.id)
       .eq('following_id', targetUserId)
       .single();
+    if (existingError && existingError.code !== 'PGRST116') throw existingError;
 
     let is_following: boolean;
 
     if (existing) {
-      await supabaseAdmin.from('follows').delete().eq('id', existing.id);
+      const { error } = await db.from('follows').delete().eq('id', existing.id);
+      if (error) throw error;
       is_following = false;
     } else {
-      await supabaseAdmin.from('follows').insert({
+      const { error } = await db.from('follows').insert({
         follower_id: user.id,
         following_id: targetUserId,
       });
+      if (error) throw error;
       is_following = true;
     }
 
     // Get updated counts
-    const { count: followerCount } = await supabaseAdmin
-      .from('follows')
-      .select('id', { count: 'exact', head: true })
-      .eq('following_id', targetUserId);
-
-    const { count: followingCount } = await supabaseAdmin
-      .from('follows')
-      .select('id', { count: 'exact', head: true })
-      .eq('follower_id', user.id);
-
-    await supabaseAdmin
+    const { data: updatedTarget } = await db
       .from('users')
-      .update({ followers_count: followerCount || 0 })
-      .eq('id', targetUserId);
-
-    await supabaseAdmin
-      .from('users')
-      .update({ following_count: followingCount || 0 })
-      .eq('id', user.id);
-
-    return NextResponse.json({ is_following, followers_count: followerCount || 0 });
+      .select('followers_count')
+      .eq('id', targetUserId)
+      .single();
+    return NextResponse.json({ is_following, followers_count: updatedTarget?.followers_count || 0 });
   } catch (error: any) {
     console.error('Follow error:', error);
     return NextResponse.json({ error: 'Follow action failed', detail: error?.message }, { status: 500 });

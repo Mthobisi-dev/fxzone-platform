@@ -80,16 +80,14 @@ export default function DiscoverPage() {
   const handleFollow = async (targetUser: DiscoverUser) => {
     setFollowLoading(targetUser.id);
     try {
-      await api.post(`/api/social/users/${targetUser.id}/follow`);
+      const result = await api.post(`/api/social/users/${targetUser.id}/follow`);
       setUsers((prev) =>
         prev.map((u) =>
           u.id === targetUser.id
             ? {
                 ...u,
-                is_following: !u.is_following,
-                followers_count: u.is_following
-                  ? u.followers_count - 1
-                  : u.followers_count + 1,
+                is_following: result.is_following,
+                followers_count: result.followers_count,
               }
             : u
         )
@@ -234,16 +232,6 @@ export default function DiscoverPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setAddTraderModalOpen(true)}
-            size="sm"
-            variant="outline"
-            className="h-8 px-3 text-[10px] flex items-center gap-1.5 border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white hover:bg-zinc-800"
-          >
-            <UserPlus size={12} className="text-blue-400" />
-            Add Trader
-          </Button>
-
           <Button
             onClick={() => setGroupModalOpen(true)}
             size="sm"
