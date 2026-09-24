@@ -41,22 +41,22 @@ export async function GET(request: NextRequest) {
     if (currentUser && users.length > 0) {
       const userIds = users.map((u: any) => u.id);
       
-      // Fetch user's following list
-      const { data: followings } = await db
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', currentUser.id)
-        .in('following_id', userIds);
+      const [followingsResult, followersResult] = await Promise.all([
+        db
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', currentUser.id)
+          .in('following_id', userIds),
+        db
+          .from('follows')
+          .select('follower_id')
+          .eq('following_id', currentUser.id)
+          .in('follower_id', userIds),
+      ]);
+      const followings = followingsResult.data;
+      const followers = followersResult.data;
 
       const followingSet = new Set((followings || []).map((f: any) => f.following_id));
-
-      // Fetch user's followers list (to check mutuals)
-      const { data: followers } = await db
-        .from('follows')
-        .select('follower_id')
-        .eq('following_id', currentUser.id)
-        .in('follower_id', userIds);
-
       const followerSet = new Set((followers || []).map((f: any) => f.follower_id));
 
       users = users.map((u: any) => {

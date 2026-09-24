@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
     const offset = Number.isFinite(requestedOffset) ? Math.max(requestedOffset, 0) : 0;
 
     const db = getSupabaseAdmin(request);
+    // Authentication and the public post query do not depend on each other.
+    // Start both so an authenticated feed does not pay their combined latency.
+    const currentUserPromise = getUserFromRequest(request);
 
     const basePostSelect = `
         id,
@@ -72,7 +75,7 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    const { user: currentUser } = await getUserFromRequest(request);
+    const { user: currentUser } = await currentUserPromise;
     const postIds = (data || []).map((post: any) => post.id);
     const [reactionsResult, bookmarksResult, repostsResult] = currentUser && postIds.length > 0
       ? await Promise.all([

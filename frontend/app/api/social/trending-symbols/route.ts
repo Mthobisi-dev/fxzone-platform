@@ -30,7 +30,9 @@ export async function GET() {
       .sort((a, b) => b.posts - a.posts)
       .slice(0, 5);
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
+    });
   } catch (error: any) {
     console.error('Trending symbols error:', error);
     return NextResponse.json([]);

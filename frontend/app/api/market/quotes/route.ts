@@ -7,7 +7,7 @@ export async function GET() {
     const prices = await fetchLivePrices();
     return NextResponse.json(prices, {
       headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=10',
       },
     });
   } catch (error: any) {

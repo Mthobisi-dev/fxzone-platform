@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
       total_profit_pct: '0.0%',
     }));
 
-    return NextResponse.json(experts);
+    return NextResponse.json(experts, {
+      headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
+    });
   } catch (error: any) {
     console.error('Featured experts error:', error);
     return NextResponse.json([]);

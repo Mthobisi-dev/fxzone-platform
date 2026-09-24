@@ -149,17 +149,29 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
 
   const result: Record<string, PriceData> = { ...priceCache };
   const timestamp = new Date().toISOString();
+  const cgIds = Object.values(COINGECKO_MAP).join(',');
+  const cgUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${cgIds}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`;
+  const yahooTickers = Object.values(YAHOO_MAP).join(',');
+  const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooTickers)}`;
+
+  // Start both independent providers immediately. On a cold cache this avoids
+  // making page latency the sum of two network timeouts.
+  const coinGeckoRequest = fetch(cgUrl, {
+    headers: { 'User-Agent': 'FxZonePlatform/1.0' },
+    next: { revalidate: 15 },
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+  });
+  const yahooRequest = fetch(yahooUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+    next: { revalidate: 15 },
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+  });
 
   // 1. Fetch Crypto from CoinGecko
   try {
-    const cgIds = Object.values(COINGECKO_MAP).join(',');
-    const cgUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${cgIds}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`;
-    
-    const cgRes = await fetch(cgUrl, {
-      headers: { 'User-Agent': 'FxZonePlatform/1.0' },
-      next: { revalidate: 15 },
-      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-    });
+    const cgRes = await coinGeckoRequest;
 
     if (cgRes.ok) {
       const cgData = await cgRes.json();
@@ -195,16 +207,7 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
 
   // 2. Fetch Stocks & Forex from Yahoo Finance HTTP API
   try {
-    const yahooTickers = Object.values(YAHOO_MAP).join(',');
-    const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooTickers)}`;
-    
-    const yRes = await fetch(yahooUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      next: { revalidate: 15 },
-      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-    });
+    const yRes = await yahooRequest;
 
     if (yRes.ok) {
       const yData = await yRes.json();

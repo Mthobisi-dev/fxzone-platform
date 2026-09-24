@@ -65,15 +65,11 @@ export default function DiscoverPage() {
     }
   }, [user?.id]);
 
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
-
-  // Debounced search
+  // Fetch immediately when the page opens, then debounce subsequent searches.
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchUsers(search);
-    }, 400);
+    }, search ? 300 : 0);
     return () => clearTimeout(timer);
   }, [search, fetchUsers]);
 

@@ -16,14 +16,16 @@ export async function GET(request: Request) {
           filteredMap[sym] = livePricesMap[sym];
         }
       });
-      return NextResponse.json(filteredMap);
+      return NextResponse.json(filteredMap, {
+        headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=10' },
+      });
     }
 
     // Default: return array of all price objects or dictionary
     const pricesArray = Object.values(livePricesMap);
     return NextResponse.json(pricesArray, {
       headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=10',
       },
     });
   } catch (err: any) {
