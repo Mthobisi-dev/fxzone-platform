@@ -25,6 +25,7 @@ In the Supabase SQL editor, run the tracked files in numerical order:
 8. `supabase/migrations/009_session_participant_review.sql`
 9. `supabase/migrations/010_post_media_storage.sql`
 10. `supabase/migrations/011_repair_profile_provisioning.sql`
+11. `supabase/migrations/012_backfill_auth_user_profiles.sql`
 
 Migration 007 is an optional privacy hardening migration. Apply it only after
 every public-profile read uses the listed columns instead of `select('*')`.

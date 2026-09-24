@@ -70,6 +70,9 @@ export interface UserFromRequestResult {
 type CachedProfile = { role: string; isActive: boolean; expiresAt: number };
 const profileCache = new Map<string, CachedProfile>();
 const PROFILE_CACHE_TTL_MS = 10_000;
+const AUTH_PROFILE_SYNC_TTL_MS = 5 * 60_000;
+let lastAuthProfileSyncAt = 0;
+let authProfileSyncPromise: Promise<number> | null = null;
 
 async function getVerifiedProfile(client: SupabaseClient, userId: string) {
   const cached = profileCache.get(userId);
@@ -193,6 +196,42 @@ export async function ensureUserProfile(
     return true;
   } catch (err: any) {
     return false;
+  }
+}
+
+/**
+ * Backfill public profiles for accounts created before the auth trigger was
+ * installed. The work is single-flight and rate-limited so Discover remains
+ * responsive while still repairing legacy accounts automatically.
+ */
+export async function syncAuthProfiles(): Promise<number> {
+  if (Date.now() - lastAuthProfileSyncAt < AUTH_PROFILE_SYNC_TTL_MS) return 0;
+  if (authProfileSyncPromise) return authProfileSyncPromise;
+
+  authProfileSyncPromise = (async () => {
+    const adminDb = getSupabaseAdmin();
+    const { data, error } = await adminDb.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (error) throw error;
+
+    // Keep this self-healing request bounded; migration 012 handles a full
+    // historical backfill without making an interactive Discover request wait
+    // for an arbitrarily large Auth directory.
+    const users = (data.users || []).slice(0, 100);
+    let repaired = 0;
+    for (let index = 0; index < users.length; index += 10) {
+      const results = await Promise.all(
+        users.slice(index, index + 10).map((authUser) => ensureUserProfile(adminDb, authUser))
+      );
+      repaired += results.filter(Boolean).length;
+    }
+    lastAuthProfileSyncAt = Date.now();
+    return repaired;
+  })();
+
+  try {
+    return await authProfileSyncPromise;
+  } finally {
+    authProfileSyncPromise = null;
   }
 }
 

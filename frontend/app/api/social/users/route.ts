@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest, syncAuthProfiles } from '@/lib/supabase';
 
 // GET /api/social/users — list all registered accounts from public.users with follow state
 export async function GET(request: NextRequest) {
@@ -14,20 +14,35 @@ export async function GET(request: NextRequest) {
     const db = getSupabaseAdmin(request);
 
     // 1. Query registered accounts from public.users table
-    let query = db
-      .from('users')
-      .select('id, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    const loadUsers = () => {
+      let query = db
+        .from('users')
+        .select('id, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at')
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-    if (q.trim()) {
-      const safeQuery = q.trim().replace(/[^\w .-]/g, '').slice(0, 80);
-      if (safeQuery) {
-        query = query.or(`username.ilike.%${safeQuery}%,display_name.ilike.%${safeQuery}%`);
+      if (q.trim()) {
+        const safeQuery = q.trim().replace(/[^\w .-]/g, '').slice(0, 80);
+        if (safeQuery) {
+          query = query.or(`username.ilike.%${safeQuery}%,display_name.ilike.%${safeQuery}%`);
+        }
       }
-    }
+      return query;
+    };
 
-    const { data: usersData, error } = await query;
+    let { data: usersData, error } = await loadUsers();
+    // A legacy installation can have real auth.accounts but only the current
+    // user's public profile. Repair that gap before returning Discover data.
+    if (!error && !q.trim() && (usersData || []).length <= 1) {
+      try {
+        await syncAuthProfiles();
+      } catch (syncError) {
+        // Discover can still return its existing public profiles if Auth is
+        // temporarily unavailable. The next request retries the repair.
+        console.warn('Discover profile sync notice:', syncError);
+      }
+      ({ data: usersData, error } = await loadUsers());
+    }
     if (error) throw error;
 
     let users = (usersData || []).map((account: any) => ({
