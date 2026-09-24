@@ -12,6 +12,7 @@
 import { supabase } from '@/lib/supabase';
 
 const BASE_URL = ''; // Proxied through Next.js rewrite rules in next.config.mjs
+const REQUEST_TIMEOUT_MS = 12_000;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number>;
@@ -28,6 +29,20 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 let refreshPromise: Promise<string | null> | null = null;
+
+async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+  if (options.signal) {
+    return fetch(url, { ...options, cache: 'no-store' });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, cache: 'no-store', signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 /** Single-flight token refresh lock to prevent stampedes when multiple API calls return 401 concurrently */
 async function refreshAccessToken(): Promise<string | null> {
@@ -58,6 +73,7 @@ export async function apiRequest(
   options: RequestOptions = {}
 ): Promise<any> {
   let url = `${BASE_URL}${endpoint}`;
+  const { params: _params, ...requestOptions } = options;
 
   // Append query params if present
   if (options.params) {
@@ -88,11 +104,12 @@ export async function apiRequest(
 
   let response: Response;
   try {
-    response = await fetch(url, { ...options, cache: 'no-store', headers });
+    response = await fetchWithTimeout(url, { ...requestOptions, headers });
   } catch (netErr: any) {
-    const error = new Error('Network error: Unable to connect to the server.');
+    const timedOut = netErr?.name === 'AbortError';
+    const error = new Error(timedOut ? 'The request timed out. Please try again.' : 'Network error: Unable to connect to the server.');
     (error as any).status = 0;
-    (error as any).detail = netErr?.message || 'Connection refused.';
+    (error as any).detail = timedOut ? 'Request timed out.' : netErr?.message || 'Connection refused.';
     throw error;
   }
 
@@ -101,7 +118,14 @@ export async function apiRequest(
     const newToken = await refreshAccessToken();
     if (newToken) {
       headers.set('Authorization', `Bearer ${newToken}`);
-      const retryRes = await fetch(url, { ...options, cache: 'no-store', headers });
+      let retryRes: Response;
+      try {
+        retryRes = await fetchWithTimeout(url, { ...requestOptions, headers });
+      } catch (netErr: any) {
+        const error = new Error(netErr?.name === 'AbortError' ? 'The request timed out. Please try again.' : 'Network error: Unable to connect to the server.');
+        Object.assign(error, { status: 0, detail: netErr?.message || error.message });
+        throw error;
+      }
       if (retryRes.status === 204) return null;
       if (!retryRes.ok) {
         const body = await retryRes.json().catch(() => null);

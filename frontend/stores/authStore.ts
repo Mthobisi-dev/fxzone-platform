@@ -63,7 +63,9 @@ function buildUserFromSession(session: Session): FxUser {
       `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(email)}`,
     bio: meta.bio || '',
     preferred_broker: meta.preferred_broker || 'Exness',
-    role: meta.role || 'trader',
+    // Roles are authorized by the database. Auth user metadata is editable by
+    // the user and must never decide client-visible privileges.
+    role: 'trader',
   };
 }
 
@@ -387,9 +389,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   deleteAccount: async () => {
     try {
       const { api } = await import('@/lib/api');
-      await api.delete('/api/auth/me').catch(() => {});
+      await api.delete('/api/auth/me');
     } catch (e) {
-      console.warn('Backend account deletion API warning:', e);
+      const message = e instanceof Error ? e.message : 'Unable to delete account.';
+      set({ error: message, isLoading: false });
+      throw e;
     }
 
     cacheUser(null);
@@ -429,20 +433,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (profileData) => {
     set({ isLoading: true, error: null });
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          username: profileData.username,
-          display_name: profileData.display_name,
-          bio: profileData.bio,
-          avatar_url: profileData.avatar_url,
-          preferred_broker: profileData.preferred_broker,
-        },
-      });
-      if (error) throw error;
+      const { api } = await import('@/lib/api');
+      const updatedProfile = await api.put('/api/auth/me', profileData);
 
       const currentUser = get().user;
       if (!currentUser) throw new Error('No active user');
-      const updatedUser: FxUser = { ...currentUser, ...profileData };
+      const updatedUser: FxUser = { ...currentUser, ...profileData, ...updatedProfile };
       cacheUser(updatedUser);
       set({ user: updatedUser, isLoading: false });
     } catch (err: any) {

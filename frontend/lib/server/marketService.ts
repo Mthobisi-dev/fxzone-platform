@@ -129,6 +129,7 @@ const YAHOO_MAP: Record<string, string> = {
 let priceCache: Record<string, PriceData> = {};
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 15000; // 15 seconds
+const PROVIDER_TIMEOUT_MS = 5_000;
 
 function getDecimals(symbol: string, price: number): number {
   if (symbol in YAHOO_MAP && symbol.length === 6 && !symbol.startsWith('X')) {
@@ -156,7 +157,8 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
     
     const cgRes = await fetch(cgUrl, {
       headers: { 'User-Agent': 'FxZonePlatform/1.0' },
-      next: { revalidate: 15 }
+      next: { revalidate: 15 },
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
 
     if (cgRes.ok) {
@@ -200,7 +202,8 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
-      next: { revalidate: 15 }
+      next: { revalidate: 15 },
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
 
     if (yRes.ok) {
