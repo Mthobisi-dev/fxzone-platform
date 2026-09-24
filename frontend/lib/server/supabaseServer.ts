@@ -185,7 +185,7 @@ export async function getUserFromRequest(request: Request): Promise<UserFromRequ
     const { data: claimsData, error: claimsError } = await client.auth.getClaims(token);
     const claims = claimsData?.claims as Record<string, unknown> | undefined;
     const userId = typeof claims?.sub === 'string' ? claims.sub : null;
-    if (claimsError || !userId) {
+    if (claimsError || !claims || !userId) {
       return { user: null, role: null, error: claimsError?.message || 'Invalid or expired authentication token' };
     }
 
