@@ -1,6 +1,6 @@
 /**
  * FxZone Supabase Realtime WebSocket Client Wrapper
- * Replaces old Render/FastAPI WebSockets with Supabase Realtime Broadcast Channels.
+ * Uses Supabase Realtime Broadcast Channels for application events.
  */
 
 import { supabase } from '@/lib/supabase';

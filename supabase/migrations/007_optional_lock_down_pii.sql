@@ -7,10 +7,10 @@
 -- and download every user's email address.
 --
 -- Fix: column-level privileges. anon/authenticated may only read the public
--- profile columns. The FastAPI backend and the service_role key are unaffected.
+-- profile columns. The service_role key used by Next.js server routes is unaffected.
 --
 -- WHEN TO APPLY
---   * After the frontend is routed to the FastAPI backend (BACKEND_URL set), OR
+--   * After every public profile read has been verified against the policies below, OR
 --   * after confirming SUPABASE_SERVICE_ROLE_KEY is set for the legacy Next.js
 --     API routes. Without it those routes fall back to the anon client and
 --     `select('*')` on users (e.g. /api/auth/me) would start failing.
