@@ -52,10 +52,11 @@ export async function PUT(request: NextRequest) {
       query = query.in('id', ids);
     }
 
-    await query;
+    const { error } = await query;
+    if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Notifications update error:', error);
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ detail: error?.message || 'Unable to update notifications.' }, { status: 500 });
   }
 }

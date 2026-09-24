@@ -88,14 +88,24 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { participant_ids, is_group, name } = body;
 
-    if (!participant_ids || participant_ids.length === 0) {
-      return NextResponse.json({ detail: 'participant_ids required' }, { status: 400 });
+    if (!Array.isArray(participant_ids) || participant_ids.length === 0 || participant_ids.some((id: unknown) => typeof id !== 'string' || !id.trim())) {
+      return NextResponse.json({ detail: 'participant_ids must contain at least one user ID.' }, { status: 400 });
     }
 
-    // Ensure creator's profile exists for FK references
-    await ensureUserProfile(db, user);
+    // Ensure creator's profile exists for FK references.
+    if (!await ensureUserProfile(db, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
 
-    const allMemberIds: string[] = [user.id, ...participant_ids.filter((id: string) => id !== user.id)];
+    const allMemberIds = [...new Set([user.id, ...participant_ids.filter((id: string) => id !== user.id)])];
+    const { data: registeredMembers, error: memberLookupError } = await db
+      .from('users')
+      .select('id')
+      .in('id', allMemberIds);
+    if (memberLookupError) throw memberLookupError;
+    if ((registeredMembers || []).length !== allMemberIds.length) {
+      return NextResponse.json({ detail: 'One or more selected chat members no longer exist.' }, { status: 400 });
+    }
 
     // For 1-on-1 chats, check if a conversation already exists
     if (!is_group && allMemberIds.length === 2) {
@@ -145,7 +155,11 @@ export async function POST(request: NextRequest) {
       conversation_id: conv.id,
       user_id: uid,
     }));
-    await db.from('conversation_members').insert(memberInserts);
+    const { error: memberInsertError } = await db.from('conversation_members').insert(memberInserts);
+    if (memberInsertError) {
+      await db.from('conversations').delete().eq('id', conv.id);
+      throw memberInsertError;
+    }
 
     return NextResponse.json({ ...conv, members: allMemberIds }, { status: 201 });
   } catch (error: any) {

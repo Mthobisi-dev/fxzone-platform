@@ -150,24 +150,31 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getSupabaseAdmin(request);
-    await ensureUserProfile(db, user);
-
-    const { data, error } = await db
-      .from('posts')
-      .insert({
-        user_id: user.id,
-        content: finalContent,
-        image_url: image_url || null,
-        is_story: !!is_story,
-        caption: typeof caption === 'string' ? caption.trim().slice(0, 200) || null : null,
-        show_comments_count: typeof show_comments_count === 'boolean' ? show_comments_count : true,
-        show_likes_count: typeof show_likes_count === 'boolean' ? show_likes_count : true,
-        allow_reshare: typeof allow_reshare === 'boolean' ? allow_reshare : true,
-        allow_save: typeof allow_save === 'boolean' ? allow_save : true,
-        allow_share: typeof allow_share === 'boolean' ? allow_share : true,
-      })
-      .select()
-      .single();
+    if (!await ensureUserProfile(db, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
+    const basePost = {
+      user_id: user.id,
+      content: finalContent,
+      image_url: image_url || null,
+      is_story: !!is_story,
+      expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+    };
+    const enhancedPost = {
+      ...basePost,
+      caption: typeof caption === 'string' ? caption.trim().slice(0, 200) || null : null,
+      show_comments_count: typeof show_comments_count === 'boolean' ? show_comments_count : true,
+      show_likes_count: typeof show_likes_count === 'boolean' ? show_likes_count : true,
+      allow_reshare: typeof allow_reshare === 'boolean' ? allow_reshare : true,
+      allow_save: typeof allow_save === 'boolean' ? allow_save : true,
+      allow_share: typeof allow_share === 'boolean' ? allow_share : true,
+    };
+    const createPost = (payload: typeof enhancedPost | typeof basePost) =>
+      db.from('posts').insert(payload).select().single();
+    let { data, error } = await createPost(enhancedPost);
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(error.message || ''))) {
+      ({ data, error } = await createPost(basePost));
+    }
 
     if (error) throw error;
 

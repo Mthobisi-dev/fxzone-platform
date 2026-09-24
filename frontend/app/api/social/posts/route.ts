@@ -13,23 +13,33 @@ export async function GET(request: NextRequest) {
   try {
     const db = getSupabaseAdmin(request);
 
-    let query = db
-      .from('posts')
-      .select(`
+    const basePostSelect = `
+        id, content, image_url, likes_count, comments_count, reposts_count,
+        is_story, is_pinned, created_at,
+        users:user_id (id, username, display_name, avatar_url, role)
+      `;
+    const enhancedPostSelect = `
         id, content, image_url, likes_count, comments_count, reposts_count,
         is_story, is_pinned, created_at, caption,
         show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share,
         users:user_id (id, username, display_name, avatar_url, role)
-      `)
+      `;
+    const fetchPosts = (select: string) => {
+      let query = db
+        .from('posts')
+        .select(select)
       .eq('is_story', false)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
+      if (userId) query = query.eq('user_id', userId);
+      return query;
+    };
 
-    const { data, error } = await query;
+    let { data, error } = await fetchPosts(enhancedPostSelect);
+    if (error && (error.code === '42703' || error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(error.message || ''))) {
+      ({ data, error } = await fetchPosts(basePostSelect));
+    }
     if (error) throw error;
 
     const posts = (data || []).map((p: any) => ({

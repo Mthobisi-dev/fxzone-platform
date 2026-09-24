@@ -75,7 +75,8 @@ export async function DELETE(
       return NextResponse.json({ detail: 'Unauthorized' }, { status: 403 });
     }
 
-    await supabaseAdmin.from('live_sessions').delete().eq('id', id);
+    const { error: deleteError } = await supabaseAdmin.from('live_sessions').delete().eq('id', id);
+    if (deleteError) throw deleteError;
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json(

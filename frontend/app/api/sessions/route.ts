@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { supabaseAdmin, getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/supabase';
 
 // GET /api/sessions — list all live sessions with host info
 export async function GET() {
@@ -56,6 +56,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
     }
 
+    const db = getSupabaseAdmin(request);
+    if (!await ensureUserProfile(db, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
+
     const body = await request.json();
     const { title, description, session_type, max_participants, requires_approval } = body;
 
@@ -75,7 +80,7 @@ export async function POST(request: NextRequest) {
       started_at: new Date().toISOString(),
     };
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('live_sessions')
       .insert(insertPayload)
       .select()
@@ -83,14 +88,16 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    // Auto-add host as participant
-    try {
-      await supabaseAdmin.from('session_participants').insert({
+    // The host must be a participant before this endpoint reports a live session.
+    const { error: participantError } = await db.from('session_participants').insert({
         session_id: data.id,
         user_id: user.id,
         role: 'host',
-      });
-    } catch (_) { /* ignore */ }
+    });
+    if (participantError) {
+      await db.from('live_sessions').delete().eq('id', data.id);
+      throw participantError;
+    }
 
     return NextResponse.json({ id: data.id, ...data }, { status: 201 });
   } catch (error: any) {
