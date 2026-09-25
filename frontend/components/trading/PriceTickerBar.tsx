@@ -14,7 +14,7 @@ export function PriceTickerBar() {
     'BTCUSD', 'ETHUSD', 'SOLUSD', 'DOGEUSD'
   ];
 
-  const { prices } = useMarketData(symbols);
+  const { prices } = useMarketData(symbols, { loadPortfolio: false });
 
   // Repeat items to ensure smooth infinite loop scroll
   const tickerItems = symbols.map(sym => {

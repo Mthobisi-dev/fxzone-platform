@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { Avatar } from '@/components/ui/Avatar';
@@ -35,6 +36,7 @@ interface DiscoverUser {
 }
 
 export default function DiscoverPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [users, setUsers] = useState<DiscoverUser[]>([]);
   const [search, setSearch] = useState('');
@@ -103,12 +105,12 @@ export default function DiscoverPage() {
         is_group: false,
       });
       if (response?.id) {
-        window.location.href = `/chat?conv=${response.id}`;
+        router.push(`/chat?conv=${response.id}`);
       }
     } catch (err) {
       console.error('Failed to start DM:', err);
       // Navigate to chat page anyway
-      window.location.href = '/chat';
+      router.push('/chat');
     }
   };
 
@@ -132,7 +134,7 @@ export default function DiscoverPage() {
         is_group: true,
       });
       if (response?.id) {
-        window.location.href = `/chat?conv=${response.id}`;
+        router.push(`/chat?conv=${response.id}`);
       }
     } catch (err) {
       console.error('Failed to create group:', err);
@@ -276,7 +278,7 @@ export default function DiscoverPage() {
                 className="flex items-start gap-3 cursor-pointer hover:opacity-90 transition-opacity"
                 onClick={() => {
                   if (u.username !== 'fxzone_bot') {
-                    window.location.href = `/profile/${u.id || u.username}`;
+                    router.push(`/profile/${u.id || u.username}`);
                   }
                 }}
                 title={`View @${u.username}'s profile`}

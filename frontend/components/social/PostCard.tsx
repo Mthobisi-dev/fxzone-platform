@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow, format, parseISO } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { CommentThread } from './CommentThread';
@@ -82,6 +83,7 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps) {
+  const router = useRouter();
   const { user } = useAuth();
 
   const raw = post as any;
@@ -412,6 +414,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       id={`post-${post.id}`}
       onClick={() => onSelect?.(post)}
       className="p-0 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer rounded-xl overflow-hidden"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 280px' }}
     >
       {/* Repost Banner */}
       {repostedBy && (
@@ -423,7 +426,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                window.location.href = `/profile/${repostedBy.id || repostedBy.username}`;
+                router.push(`/profile/${repostedBy.id || repostedBy.username}`);
               }}
               className="hover:underline font-bold"
             >
@@ -440,7 +443,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             e.stopPropagation();
             const target = postUser.id || postUser.username;
             if (target && postUser.username !== 'fxzone_bot') {
-              window.location.href = `/profile/${target}`;
+              router.push(`/profile/${target}`);
             }
           }}
           title={`View @${postUser.username}'s profile`}
@@ -462,7 +465,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                 e.stopPropagation();
                 const target = postUser.id || postUser.username;
                 if (target && postUser.username !== 'fxzone_bot') {
-                  window.location.href = `/profile/${target}`;
+                  router.push(`/profile/${target}`);
                 }
               }}
               title={`View @${postUser.username}'s profile`}

@@ -3,7 +3,11 @@ import { useMarketStore } from '@/stores/marketStore';
 import { FxZoneWebSocket } from '@/lib/websocket';
 import { api } from '@/lib/api';
 
-export function useMarketData(symbols: string[] = []) {
+interface MarketDataOptions {
+  loadPortfolio?: boolean;
+}
+
+export function useMarketData(symbols: string[] = [], options: MarketDataOptions = {}) {
   const {
     assets,
     prices,
@@ -21,12 +25,15 @@ export function useMarketData(symbols: string[] = []) {
     updateBulkPrices,
   } = useMarketStore();
 
+  const loadPortfolio = options.loadPortfolio ?? true;
+
   useEffect(() => {
+    if (!loadPortfolio) return;
     if (assets.length === 0 && !isLoading) {
       fetchAssets();
     }
     fetchWatchlists();
-  }, [assets.length, fetchAssets, fetchWatchlists, isLoading]);
+  }, [assets.length, fetchAssets, fetchWatchlists, isLoading, loadPortfolio]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

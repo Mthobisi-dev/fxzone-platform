@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { NotificationDropdown } from './NotificationDropdown';
 import { Avatar } from '../ui/Avatar';
@@ -26,6 +27,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const { theme } = useTheme();
   const [isThemeOpen, setIsThemeOpen] = useState(false);
@@ -41,7 +43,7 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
       icon: <UserIcon size={14} />,
       onClick: () => {
         if (user) {
-          window.location.href = `/profile/${user.id}`;
+          router.push(`/profile/${user.id}`);
         }
       },
     },
@@ -56,7 +58,7 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
       danger: true,
       onClick: () => {
         if (user) {
-          window.location.href = `/profile/${user.id}?action=delete`;
+          router.push(`/profile/${user.id}?action=delete`);
         }
       },
     },
@@ -72,7 +74,7 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
     <>
       <nav className="h-14 border-b border-zinc-850 bg-zinc-950/80 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between shrink-0 select-none z-40 relative">
         {/* Left Side: Brand Logo */}
-        <div className="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onClick={() => (window.location.href = '/')}>
+        <div className="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onClick={() => router.push('/dashboard')}>
           <img
             src="/fxzone-logo.jpg"
             alt="FxZone Logo"
