@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
+import { createNotification } from '@/lib/server/notifications';
 
 
 // GET /api/social/posts/[id]/comments
@@ -85,6 +86,17 @@ export async function POST(
       .select('id, username, display_name, avatar_url')
       .eq('id', user.id)
       .maybeSingle();
+
+    const { data: post } = await db.from('posts').select('user_id').eq('id', id).maybeSingle();
+    const actorName = author?.display_name || author?.username || user.email?.split('@')[0] || 'A trader';
+    await createNotification(db, {
+      recipientId: post?.user_id,
+      actorId: user.id,
+      type: 'comment',
+      title: 'New comment',
+      message: `${actorName} commented on your post.`,
+      data: { post_id: id, comment_id: data.id },
+    });
 
     return NextResponse.json({
       ...data,

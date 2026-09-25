@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
+import { createNotification } from '@/lib/server/notifications';
 
 // GET /api/chat/conversations/[id]/messages
 export async function GET(
@@ -124,11 +125,28 @@ export async function POST(
       .update({ updated_at: new Date().toISOString() })
       .eq('id', id);
 
+    const { data: recipients } = await db
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', id)
+      .neq('user_id', user.id);
     const { data: sender } = await db
       .from('users')
       .select('id, username, display_name, avatar_url')
       .eq('id', user.id)
       .maybeSingle();
+
+    const senderName = sender?.display_name || sender?.username || user.email?.split('@')[0] || 'A trader';
+    await Promise.all((recipients || []).map((recipient: { user_id: string }) =>
+      createNotification(db, {
+        recipientId: recipient.user_id,
+        actorId: user.id,
+        type: 'message',
+        title: `New message from ${senderName}`,
+        message: content.trim().slice(0, 140),
+        data: { conversation_id: id, message_id: data.id },
+      })
+    ));
 
     return NextResponse.json({
       ...data,

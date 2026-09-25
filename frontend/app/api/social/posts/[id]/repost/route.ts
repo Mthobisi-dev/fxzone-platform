@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
+import { createNotification } from '@/lib/server/notifications';
 
 export async function POST(
   request: NextRequest,
@@ -20,7 +21,7 @@ export async function POST(
 
     const { data: post, error: postError } = await client
       .from('posts')
-      .select('id, allow_reshare')
+      .select('id, user_id, allow_reshare')
       .eq('id', postId)
       .maybeSingle();
     if (postError) throw postError;
@@ -52,6 +53,18 @@ export async function POST(
       .maybeSingle();
     if (updatedPostError || !updatedPost) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
+
+    if (!existing) {
+      const actorName = user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'A trader';
+      await createNotification(client, {
+        recipientId: post.user_id,
+        actorId: user.id,
+        type: 'repost',
+        title: 'New repost',
+        message: `${actorName} reshared your post.`,
+        data: { post_id: postId },
+      });
     }
 
     return NextResponse.json({ is_reposted: !existing, reposts_count: updatedPost.reposts_count || 0 });

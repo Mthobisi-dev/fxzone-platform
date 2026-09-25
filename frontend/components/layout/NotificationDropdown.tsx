@@ -1,16 +1,18 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useNotificationStore, NotificationItem } from '@/stores/notificationStore';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useAuthStore } from '@/stores/authStore';
-import { Bell, Check, Trash, AlertCircle, Info, TrendingUp, MessageSquare, Heart, UserPlus, Video } from 'lucide-react';
+import { Bell, Check, Trash, AlertCircle, Info, TrendingUp, MessageSquare, Heart, UserPlus, Video, Repeat2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { timeAgo } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 export function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
   const { notifications, unreadCount, markAsRead, markAllRead, addNotification, fetchNotifications } = useNotificationStore();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +55,21 @@ export function NotificationDropdown() {
     };
   }, []);
 
+  const openNotification = (notification: NotificationItem) => {
+    if (!notification.is_read) void markAsRead(notification.id);
+
+    const data = notification.data || {};
+    const destination =
+      typeof data.post_id === 'string' ? `/feed?post=${data.post_id}` :
+      typeof data.conversation_id === 'string' ? `/chat?conversation=${data.conversation_id}` :
+      typeof data.session_id === 'string' ? `/session/${data.session_id}` :
+      typeof data.profile_id === 'string' ? `/profile/${data.profile_id}` :
+      null;
+
+    setIsOpen(false);
+    if (destination) router.push(destination);
+  };
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'follow':
@@ -60,7 +77,10 @@ export function NotificationDropdown() {
       case 'like':
         return <Heart size={14} className="text-rose-500 fill-rose-500/20" />;
       case 'comment':
+      case 'message':
         return <MessageSquare size={14} className="text-purple-400" />;
+      case 'repost':
+        return <Repeat2 size={14} className="text-emerald-400" />;
       case 'market':
       case 'session_live':
         return <Video size={14} className="text-red-400" />;
@@ -77,13 +97,16 @@ export function NotificationDropdown() {
     <div className="relative" ref={dropdownRef}>
       {/* Bell Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen) void fetchNotifications();
+          setIsOpen(!isOpen);
+        }}
         className="relative p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors focus:outline-none"
       >
         <Bell size={20} />
         {unreadCount > 0 && (
           <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]">
-            {unreadCount}
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
@@ -123,7 +146,7 @@ export function NotificationDropdown() {
                 notifications.map((n) => (
                   <div
                     key={n.id}
-                    onClick={() => !n.is_read && markAsRead(n.id)}
+                    onClick={() => openNotification(n)}
                     className={cn(
                       'p-4 flex gap-3 transition-colors cursor-pointer select-none',
                       n.is_read ? 'bg-transparent hover:bg-white/[0.01]' : 'bg-blue-600/[0.03] hover:bg-blue-600/[0.05]'
