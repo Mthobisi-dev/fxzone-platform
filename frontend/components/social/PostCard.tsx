@@ -283,7 +283,9 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       try {
         const stored = localStorage.getItem('fxzone_saved_posts') || '[]';
         let list = JSON.parse(stored);
-        list = nextSaved ? list.filter((id: string) => id !== post.id) : [...new Set([...list, post.id])];
+        list = nextSaved
+          ? list.filter((id: string) => id !== post.id)
+          : Array.from(new Set([...list, post.id]));
         localStorage.setItem('fxzone_saved_posts', JSON.stringify(list));
       } catch {}
       alert(err?.message || 'Could not update your saved posts. Please try again.');
