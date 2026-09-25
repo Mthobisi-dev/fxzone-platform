@@ -29,14 +29,26 @@ ALTER TYPE participant_role ADD VALUE IF NOT EXISTS 'pending';
 ALTER TYPE participant_role ADD VALUE IF NOT EXISTS 'rejected';
 
 -- ----------------------------------------------------------------------------
--- 1b. users.preferred_broker (also added by 005_add_preferred_broker.sql; IF NOT EXISTS makes either order safe)
+-- 1b. Profile and session columns used by the current API routes.
+-- `requires_approval` is used when creating, listing, joining, and reviewing
+-- sessions. Existing sessions preserve the original product default: approval
+-- is required unless a host explicitly disables it.
 -- ----------------------------------------------------------------------------
-ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_broker VARCHAR(100) DEFAULT 'Exness';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS preferred_broker VARCHAR(100) DEFAULT 'Exness';
+ALTER TABLE public.live_sessions
+    ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE public.live_sessions
+    ALTER COLUMN requires_approval SET DEFAULT true;
+UPDATE public.live_sessions
+SET requires_approval = true
+WHERE requires_approval IS NULL;
+ALTER TABLE public.live_sessions
+    ALTER COLUMN requires_approval SET NOT NULL;
 
 -- ----------------------------------------------------------------------------
 -- 2. Posts: composer options + sanity limits
 -- ----------------------------------------------------------------------------
-ALTER TABLE posts
+ALTER TABLE public.posts
     ADD COLUMN IF NOT EXISTS caption TEXT,
     ADD COLUMN IF NOT EXISTS show_comments_count BOOLEAN NOT NULL DEFAULT true,
     ADD COLUMN IF NOT EXISTS show_likes_count    BOOLEAN NOT NULL DEFAULT true,
@@ -48,15 +60,15 @@ ALTER TABLE posts
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'posts_content_length') THEN
-        ALTER TABLE posts ADD CONSTRAINT posts_content_length
+        ALTER TABLE public.posts ADD CONSTRAINT posts_content_length
             CHECK (char_length(content) <= 5000) NOT VALID;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'comments_content_length') THEN
-        ALTER TABLE comments ADD CONSTRAINT comments_content_length
+        ALTER TABLE public.comments ADD CONSTRAINT comments_content_length
             CHECK (char_length(content) <= 2000) NOT VALID;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'messages_content_length') THEN
-        ALTER TABLE messages ADD CONSTRAINT messages_content_length
+        ALTER TABLE public.messages ADD CONSTRAINT messages_content_length
             CHECK (char_length(content) <= 4000) NOT VALID;
     END IF;
 END $$;
@@ -72,12 +84,12 @@ CREATE TABLE IF NOT EXISTS reposts (
     UNIQUE (user_id, post_id)
 );
 CREATE INDEX IF NOT EXISTS idx_reposts_post ON reposts(post_id);
-ALTER TABLE reposts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reposts ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
 -- 4. News: numeric sentiment (headline aggregator writes this)
 -- ----------------------------------------------------------------------------
-ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS sentiment_score REAL DEFAULT 0;
+ALTER TABLE public.news_articles ADD COLUMN IF NOT EXISTS sentiment_score REAL DEFAULT 0;
 
 -- ----------------------------------------------------------------------------
 -- 5. Atomic counters maintained by triggers (SECURITY DEFINER so the guard
@@ -282,14 +294,22 @@ END $$;
 -- ----------------------------------------------------------------------------
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'bookmarks' AND policyname = 'Users view own bookmarks') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'bookmarks' AND policyname = 'Users view own bookmarks') THEN
         CREATE POLICY "Users view own bookmarks"   ON bookmarks FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'bookmarks' AND policyname = 'Users insert own bookmarks') THEN
         CREATE POLICY "Users insert own bookmarks" ON bookmarks FOR INSERT WITH CHECK (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'bookmarks' AND policyname = 'Users delete own bookmarks') THEN
         CREATE POLICY "Users delete own bookmarks" ON bookmarks FOR DELETE USING (auth.uid() = user_id);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'reposts' AND policyname = 'Reposts readable by all') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'reposts' AND policyname = 'Reposts readable by all') THEN
         CREATE POLICY "Reposts readable by all"  ON reposts FOR SELECT USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'reposts' AND policyname = 'Users insert own reposts') THEN
         CREATE POLICY "Users insert own reposts" ON reposts FOR INSERT WITH CHECK (auth.uid() = user_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'reposts' AND policyname = 'Users delete own reposts') THEN
         CREATE POLICY "Users delete own reposts" ON reposts FOR DELETE USING (auth.uid() = user_id);
     END IF;
 END $$;
@@ -308,4 +328,4 @@ CREATE INDEX IF NOT EXISTS idx_bookmarks_user_created ON bookmarks (user_id, cre
 CREATE INDEX IF NOT EXISTS idx_post_tags_asset     ON post_asset_tags (asset_id);
 CREATE INDEX IF NOT EXISTS idx_session_parts_user  ON session_participants (user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations (updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_news_symbols        ON news_articles USING gin (symbols);
+CREATE INDEX IF NOT EXISTS idx_news_asset_tags     ON news_articles USING gin (asset_tags);
