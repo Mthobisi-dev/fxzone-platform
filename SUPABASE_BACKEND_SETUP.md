@@ -59,3 +59,6 @@ counts.
 The post-media migration creates the public `post-media` Storage bucket used
 for social attachments. Uploads remain authenticated through the Next.js API;
 there is no client-side write policy to configure.
+
+- 013_social_interaction_reliability.sql — recalculates interaction counters and normalizes preferred-broker defaults.
+- 014_remove_jack_d9e07f.sql — removes the requested @jack_d9e07f account and revokes its Supabase sessions.

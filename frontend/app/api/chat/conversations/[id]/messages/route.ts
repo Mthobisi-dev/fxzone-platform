@@ -102,7 +102,9 @@ export async function POST(
     }
 
     // Ensure sender profile row exists before INSERT (FK: messages.sender_id → users.id)
-    await ensureUserProfile(db, user);
+    if (!await ensureUserProfile(db, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
 
     const { data, error } = await db
       .from('messages')

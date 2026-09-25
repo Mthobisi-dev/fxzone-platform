@@ -63,7 +63,9 @@ export async function POST(
     }
 
     const db = getSupabaseAdmin(request);
-    await ensureUserProfile(db, user);
+    if (!await ensureUserProfile(db, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
 
     const { data, error } = await db
       .from('comments')

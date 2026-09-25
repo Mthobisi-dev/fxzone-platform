@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
+import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
 
 export async function POST(
   request: NextRequest,
@@ -13,6 +13,21 @@ export async function POST(
 
     const { id: postId } = await params;
     const client = getSupabaseAdmin(request);
+
+    if (!await ensureUserProfile(client, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
+
+    const { data: post, error: postError } = await client
+      .from('posts')
+      .select('id, allow_reshare')
+      .eq('id', postId)
+      .maybeSingle();
+    if (postError) throw postError;
+    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    if (post.allow_reshare === false) {
+      return NextResponse.json({ detail: 'The author has disabled reshares for this post.' }, { status: 403 });
+    }
 
     const { data: existing, error: existingError } = await client
       .from('reposts')
@@ -30,16 +45,16 @@ export async function POST(
       if (error) throw error;
     }
 
-    const { data: post, error: postError } = await client
+    const { data: updatedPost, error: updatedPostError } = await client
       .from('posts')
       .select('reposts_count')
       .eq('id', postId)
       .maybeSingle();
-    if (postError || !post) {
+    if (updatedPostError || !updatedPost) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ is_reposted: !existing, reposts_count: post.reposts_count || 0 });
+    return NextResponse.json({ is_reposted: !existing, reposts_count: updatedPost.reposts_count || 0 });
   } catch (error: any) {
     console.error('Post repost error:', error);
     return NextResponse.json(

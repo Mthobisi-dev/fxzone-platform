@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
+import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
 
 export async function POST(
   request: NextRequest,
@@ -14,14 +14,30 @@ export async function POST(
     const { id: postId } = await params;
     const client = getSupabaseAdmin(request);
 
+    if (!await ensureUserProfile(client, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
+
+    const { data: post, error: postError } = await client
+      .from('posts')
+      .select('id, allow_save')
+      .eq('id', postId)
+      .maybeSingle();
+    if (postError) throw postError;
+    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    if (post.allow_save === false) {
+      return NextResponse.json({ detail: 'The author has disabled saving for this post.' }, { status: 403 });
+    }
+
     // The canonical Supabase table is `bookmarks` (not the legacy
     // `saved_posts` name). It has a unique user_id/post_id constraint.
-    const { data: existing } = await client
+    const { data: existing, error: existingError } = await client
       .from('bookmarks')
       .select('id')
       .eq('user_id', user.id)
       .eq('post_id', postId)
       .maybeSingle();
+    if (existingError) throw existingError;
 
     let isBookmarked = false;
 

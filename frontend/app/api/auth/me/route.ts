@@ -63,13 +63,31 @@ export async function PUT(request: NextRequest) {
     const { username, display_name, bio, avatar_url, preferred_broker } = body;
 
     const db = getSupabaseAdmin(request);
+    if (!await ensureUserProfile(db, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
+
+    const cleanText = (value: unknown, maxLength: number) =>
+      typeof value === 'string' ? value.trim().slice(0, maxLength) : undefined;
+    const cleanUsername = cleanText(username, 48);
+    const cleanDisplayName = cleanText(display_name, 100);
+    const cleanBio = cleanText(bio, 1000);
+    const cleanAvatarUrl = cleanText(avatar_url, 2000);
+    const cleanBroker = cleanText(preferred_broker, 100);
+
+    if (username !== undefined && (!cleanUsername || !/^[a-zA-Z0-9_]+$/.test(cleanUsername))) {
+      return NextResponse.json({ detail: 'Username may only contain letters, numbers, and underscores.' }, { status: 400 });
+    }
+    if (preferred_broker !== undefined && !cleanBroker) {
+      return NextResponse.json({ detail: 'Choose a valid preferred broker.' }, { status: 400 });
+    }
 
     const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-    if (username !== undefined) updatePayload.username = username;
-    if (display_name !== undefined) updatePayload.display_name = display_name;
-    if (bio !== undefined) updatePayload.bio = bio;
-    if (avatar_url !== undefined) updatePayload.avatar_url = avatar_url;
-    if (preferred_broker !== undefined) updatePayload.preferred_broker = preferred_broker;
+    if (cleanUsername !== undefined) updatePayload.username = cleanUsername;
+    if (cleanDisplayName !== undefined) updatePayload.display_name = cleanDisplayName;
+    if (cleanBio !== undefined) updatePayload.bio = cleanBio;
+    if (cleanAvatarUrl !== undefined) updatePayload.avatar_url = cleanAvatarUrl;
+    if (cleanBroker !== undefined) updatePayload.preferred_broker = cleanBroker;
 
     let updated: any = null;
     let updateError: any = null;
@@ -87,39 +105,27 @@ export async function PUT(request: NextRequest) {
       updateError = e;
     }
 
-    // If database update failed because preferred_broker column does not exist yet on public.users table, fallback to updating without it
-    if (updateError && preferred_broker !== undefined) {
-      console.warn('[PUT /api/auth/me] DB update with preferred_broker failed, retrying without column in table update:', updateError.message || updateError);
-      const fallbackPayload = { ...updatePayload };
-      delete fallbackPayload.preferred_broker;
-
-      const retryRes = await db
-        .from('users')
-        .update(fallbackPayload)
-        .eq('id', user.id)
-        .select()
-        .maybeSingle();
-
-      if (!retryRes.error) {
-        updated = { ...(retryRes.data || { id: user.id, ...fallbackPayload }), preferred_broker };
-        updateError = null;
-      }
-    }
-
     if (updateError) {
       console.error('[PUT /api/auth/me] Update failed:', updateError);
-      return NextResponse.json({ detail: updateError.message || 'Failed to update profile' }, { status: 400 });
+      const missingBrokerColumn = updateError.code === '42703' && cleanBroker !== undefined;
+      return NextResponse.json(
+        { detail: missingBrokerColumn ? 'Preferred broker is not configured yet. Apply migration 005 or later in Supabase.' : updateError.message || 'Failed to update profile' },
+        { status: missingBrokerColumn ? 503 : 400 }
+      );
+    }
+    if (!updated) {
+      return NextResponse.json({ detail: 'Profile was not found after provisioning.' }, { status: 503 });
     }
 
     // Always update Supabase Auth user metadata so buildUserFromSession stays in sync
     try {
       await db.auth.admin.updateUserById(user.id, {
         user_metadata: {
-          username: updated?.username || username || user.user_metadata?.username,
-          display_name: updated?.display_name || display_name || user.user_metadata?.display_name,
-          bio: updated?.bio || bio || user.user_metadata?.bio,
-          avatar_url: updated?.avatar_url || avatar_url || user.user_metadata?.avatar_url,
-          preferred_broker: preferred_broker || updated?.preferred_broker || user.user_metadata?.preferred_broker || 'Exness',
+          username: updated?.username || cleanUsername || user.user_metadata?.username,
+          display_name: updated?.display_name || cleanDisplayName || user.user_metadata?.display_name,
+          bio: updated?.bio || cleanBio || user.user_metadata?.bio,
+          avatar_url: updated?.avatar_url || cleanAvatarUrl || user.user_metadata?.avatar_url,
+          preferred_broker: updated?.preferred_broker || cleanBroker || user.user_metadata?.preferred_broker || 'Exness',
         },
       });
     } catch (e: any) {

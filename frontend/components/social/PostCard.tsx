@@ -208,6 +208,8 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   };
 
   const submitRepost = async () => {
+    const previousReposted = isReposted;
+    const previousReposts = reposts;
     setRepostLoading(true);
     try {
       if (repostCaption.trim()) {
@@ -231,8 +233,11 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       }
       window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
       setRepostModalOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Repost error:', err);
+      setIsReposted(previousReposted);
+      setReposts(previousReposts);
+      alert(err?.message || 'Could not reshare this post. Please try again.');
     } finally {
       setRepostLoading(false);
     }
@@ -272,8 +277,16 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
         window.dispatchEvent(new CustomEvent('fxzone_refresh_saved_posts'));
         window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Bookmark error:', err);
+      setIsBookmarked(!nextSaved);
+      try {
+        const stored = localStorage.getItem('fxzone_saved_posts') || '[]';
+        let list = JSON.parse(stored);
+        list = nextSaved ? list.filter((id: string) => id !== post.id) : [...new Set([...list, post.id])];
+        localStorage.setItem('fxzone_saved_posts', JSON.stringify(list));
+      } catch {}
+      alert(err?.message || 'Could not update your saved posts. Please try again.');
     } finally {
       setBookmarkLoading(false);
     }
@@ -326,8 +339,9 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
         setSharedSent(targetUser.username);
         setTimeout(() => setSharedSent(null), 3000);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to reshare post to chat:', err);
+      alert(err?.message || 'Could not send this post to chat. Please try again.');
     }
   };
 

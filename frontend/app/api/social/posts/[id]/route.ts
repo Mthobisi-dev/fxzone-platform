@@ -90,6 +90,7 @@ export async function DELETE(
       db.from('reactions').delete().eq('post_id', postId),
       db.from('post_reactions').delete().eq('post_id', postId),
       db.from('bookmarks').delete().eq('post_id', postId),
+      db.from('reposts').delete().eq('post_id', postId),
       db.from('post_asset_tags').delete().eq('post_id', postId),
     ]);
 

@@ -87,8 +87,9 @@ export function CommentThread({
         setCommentInput('');
         onCommentAdded?.();
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to submit comment:', err);
+      alert(err?.message || 'Could not post your comment. Please try again.');
     } finally {
       setSubmitting(false);
     }

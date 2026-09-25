@@ -15,11 +15,16 @@ export async function POST(
     const { id } = await context.params;
     const body = await request.json();
     const reactionType = body.reaction_type || 'like';
+    if (reactionType !== 'like') {
+      return NextResponse.json({ detail: 'Only likes are supported for this post.' }, { status: 400 });
+    }
 
     const db = getSupabaseAdmin(request);
 
     // Ensure profile row exists before writing (reactions has FK to users)
-    await ensureUserProfile(db, user);
+    if (!await ensureUserProfile(db, user)) {
+      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+    }
 
     // Check if reaction exists
     const { data: existing, error: existingError } = await db
