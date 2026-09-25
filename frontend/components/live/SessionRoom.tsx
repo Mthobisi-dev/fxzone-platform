@@ -116,10 +116,15 @@ export function SessionRoom({
 
   useEffect(() => {
     if (!isHost) return;
-    fetchParticipants();
-    participantFetchRef.current = setInterval(fetchParticipants, 3500);
+    const refreshParticipants = () => {
+      if (document.visibilityState === 'visible') fetchParticipants();
+    };
+    refreshParticipants();
+    participantFetchRef.current = setInterval(refreshParticipants, 5000);
+    document.addEventListener('visibilitychange', refreshParticipants);
     return () => {
       if (participantFetchRef.current) clearInterval(participantFetchRef.current);
+      document.removeEventListener('visibilitychange', refreshParticipants);
     };
   }, [sessionId, isHost, fetchParticipants]);
 

@@ -64,7 +64,7 @@ export default function DashboardLayout({
         <Sidebar />
 
         {/* Center: Main Dashboard Viewport */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full min-h-0 bg-zinc-950/40 relative pb-20 md:pb-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full min-h-0 bg-zinc-950/40 relative pb-20 md:pb-0 overscroll-contain">
           {children}
         </main>
 

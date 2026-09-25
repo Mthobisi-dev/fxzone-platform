@@ -108,6 +108,56 @@
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
+/* Most dashboard surfaces use Tailwind's zinc utilities. Override those
+   concrete values so the Settings light theme changes the whole application,
+   not only components that happen to use the CSS variables above. */
+.theme-minimal-light body,
+.theme-minimal-light .bg-zinc-950,
+.theme-minimal-light [class*="bg-zinc-950/"],
+.theme-minimal-light .bg-zinc-900,
+.theme-minimal-light [class*="bg-zinc-900/"],
+.theme-minimal-light .bg-zinc-800,
+.theme-minimal-light [class*="bg-zinc-800/"] {
+  background-color: #f8fafc !important;
+}
+
+.theme-minimal-light .bg-zinc-700,
+.theme-minimal-light [class*="bg-zinc-700/"] {
+  background-color: #e2e8f0 !important;
+}
+
+.theme-minimal-light .text-white,
+.theme-minimal-light .text-zinc-100,
+.theme-minimal-light .text-zinc-200,
+.theme-minimal-light .text-zinc-300 {
+  color: #0f172a !important;
+}
+
+.theme-minimal-light .text-zinc-400,
+.theme-minimal-light .text-zinc-500,
+.theme-minimal-light .text-zinc-600 {
+  color: #475569 !important;
+}
+
+.theme-minimal-light .border-zinc-950,
+.theme-minimal-light .border-zinc-900,
+.theme-minimal-light .border-zinc-850,
+.theme-minimal-light .border-zinc-800,
+.theme-minimal-light .border-zinc-700 {
+  border-color: #cbd5e1 !important;
+}
+
+.theme-minimal-light ::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.35);
+}
+
+.theme-minimal-light .fxzone-ambient-background {
+  background-color: #f8fafc !important;
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(37, 99, 235, 0.1), transparent 34%),
+    radial-gradient(circle at 90% 12%, rgba(109, 40, 217, 0.08), transparent 30%) !important;
+}
+
 /* Trading Ticker scrolling animation */
 @keyframes ticker {
   0% {

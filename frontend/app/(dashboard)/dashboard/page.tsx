@@ -16,10 +16,18 @@ export default function DashboardPage() {
 
   // Initialize assets and market prices
   useEffect(() => {
+    const refreshPrices = () => {
+      if (document.visibilityState === 'visible') fetchPrices();
+    };
+
     fetchAssets();
-    fetchPrices();
-    const interval = setInterval(fetchPrices, 30000);
-    return () => clearInterval(interval);
+    refreshPrices();
+    const interval = setInterval(refreshPrices, 30000);
+    document.addEventListener('visibilitychange', refreshPrices);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshPrices);
+    };
   }, [fetchAssets, fetchPrices]);
 
   // Set default asset once assets are loaded

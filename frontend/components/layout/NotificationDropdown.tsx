@@ -26,12 +26,20 @@ export function NotificationDropdown() {
   });
 
   useEffect(() => {
-    fetchNotifications();
+    if (!userId) return;
+    const refreshNotifications = () => {
+      if (document.visibilityState === 'visible') fetchNotifications();
+    };
+    refreshNotifications();
     const intervalId = setInterval(() => {
-      fetchNotifications();
+      refreshNotifications();
     }, 30000);
-    return () => clearInterval(intervalId);
-  }, []);
+    document.addEventListener('visibilitychange', refreshNotifications);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', refreshNotifications);
+    };
+  }, [userId, fetchNotifications]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

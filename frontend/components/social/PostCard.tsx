@@ -221,8 +221,8 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
           image_url: imageUrl,
           asset_tags: assetTags
         });
-        setReposts(prev => prev + 1);
-        setIsReposted(true);
+        // A quote post is independent. Only the repost endpoint changes the
+        // source post's repost count and active state.
       } else {
         const nextReposted = !isReposted;
         setIsReposted(nextReposted);
