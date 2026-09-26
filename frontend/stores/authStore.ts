@@ -284,7 +284,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const redirectTo =
-        typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : '/dashboard';
+        typeof window !== 'undefined' ? `${window.location.origin}/auth/callback?next=/dashboard` : '/auth/callback?next=/dashboard';
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo },

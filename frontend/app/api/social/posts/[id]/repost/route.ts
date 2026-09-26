@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
+import { getPostInteractionCounts } from '@/lib/server/socialCounters';
 
 export async function POST(
   request: NextRequest,
@@ -54,14 +55,7 @@ export async function POST(
       if (error) throw error;
     }
 
-    const { data: updatedPost, error: updatedPostError } = await client
-      .from('posts')
-      .select('reposts_count')
-      .eq('id', postId)
-      .maybeSingle();
-    if (updatedPostError || !updatedPost) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-    }
+    const { reposts_count } = await getPostInteractionCounts(client, postId);
 
     if (!existing) {
       const actorName = user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'A trader';
@@ -75,7 +69,7 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ is_reposted: !existing, reposts_count: updatedPost.reposts_count || 0 });
+    return NextResponse.json({ is_reposted: !existing, reposts_count: reposts_count });
   } catch (error: any) {
     console.error('Post repost error:', error);
     return NextResponse.json(

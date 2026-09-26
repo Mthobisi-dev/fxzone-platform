@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
+import { getPostInteractionCounts } from '@/lib/server/socialCounters';
 
 // POST /api/social/posts/[id]/react — toggle like/reaction
 export async function POST(
@@ -57,12 +58,12 @@ export async function POST(
     // value instead of racing a client-side count/update sequence.
     const { data: post, error: postError } = await db
       .from('posts')
-      .select('user_id, likes_count')
+      .select('user_id')
       .eq('id', id)
       .maybeSingle();
     if (postError || !post) return NextResponse.json({ detail: 'Post not found' }, { status: 404 });
 
-    const likes_count = post.likes_count || 0;
+    const { likes_count } = await getPostInteractionCounts(db, id);
     if (active) {
       const actorName = user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'A trader';
       await createNotification(db, {

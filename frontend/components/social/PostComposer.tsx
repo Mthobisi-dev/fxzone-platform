@@ -228,7 +228,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         allow_reshare: allowReshare,
         allow_save: allowSave,
         allow_share: allowShare,
-      }, { timeoutMs: 30_000 });
+      }, { timeoutMs: 60_000 });
 
       // Reset state
       setContent('');

@@ -27,8 +27,8 @@ export interface Comment {
 interface CommentThreadProps {
   postId: string;
   initialComments?: Comment[];
-  onCommentAdded?: () => void;
-  onCommentDeleted?: () => void;
+  onCommentAdded?: (count: number) => void;
+  onCommentDeleted?: (count: number) => void;
 }
 
 export function CommentThread({
@@ -64,9 +64,9 @@ export function CommentThread({
   const handleDeleteComment = async (commentId: string) => {
     if (!confirm('Are you sure you want to delete this comment?')) return;
     try {
-      await api.delete(`/api/social/comments/${commentId}`);
+      const response = await api.delete(`/api/social/comments/${commentId}`);
       setComments((prev) => prev.filter((c) => c.id !== commentId));
-      onCommentDeleted?.();
+      onCommentDeleted?.(typeof response?.comments_count === 'number' ? response.comments_count : Math.max(0, comments.length - 1));
     } catch (err) {
       console.error('Failed to delete comment:', err);
       alert('Could not delete comment.');
@@ -85,7 +85,7 @@ export function CommentThread({
       if (response) {
         setComments((prev) => [...prev, response]);
         setCommentInput('');
-        onCommentAdded?.();
+        onCommentAdded?.(typeof response.comments_count === 'number' ? response.comments_count : comments.length + 1);
       }
     } catch (err: any) {
       console.error('Failed to submit comment:', err);

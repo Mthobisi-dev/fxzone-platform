@@ -105,7 +105,7 @@ export default function DashboardPage() {
         {/* Left/Middle: Google AI Insights */}
         <div className="xl:col-span-2 space-y-4">
           <div className="flex items-center justify-between select-none">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Google AI Market Intelligence</h3>
+            <h3 className="text-xs font-bold text-[var(--color-text)] uppercase tracking-wider">Google AI Market Intelligence</h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

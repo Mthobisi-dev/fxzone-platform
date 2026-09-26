@@ -84,6 +84,14 @@ export async function GET(request: NextRequest) {
           db.from('reposts').select('post_id').eq('user_id', currentUser.id).in('post_id', postIds),
         ])
       : [{ data: [] }, { data: [] }, { data: [] }];
+    const { data: bookmarkRows, error: bookmarkRowsError } = postIds.length > 0
+      ? await db.from('bookmarks').select('post_id').in('post_id', postIds)
+      : { data: [], error: null };
+    if (bookmarkRowsError) throw bookmarkRowsError;
+    const savesCountByPost = new Map<string, number>();
+    for (const row of bookmarkRows || []) {
+      savesCountByPost.set(row.post_id, (savesCountByPost.get(row.post_id) || 0) + 1);
+    }
     const likedPostIds = new Set((reactionsResult.data || []).map((row: any) => row.post_id));
     const bookmarkedPostIds = new Set((bookmarksResult.data || []).map((row: any) => row.post_id));
     const repostedPostIds = new Set((repostsResult.data || []).map((row: any) => row.post_id));
@@ -105,6 +113,7 @@ export async function GET(request: NextRequest) {
       likes_count: p.likes_count || 0,
       comments_count: p.comments_count || 0,
       reposts_count: p.reposts_count || 0,
+      saves_count: savesCountByPost.get(p.id) || 0,
       is_story: p.is_story,
       is_pinned: p.is_pinned,
       caption: p.caption,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
+import { getPostInteractionCounts } from '@/lib/server/socialCounters';
 
 
 // GET /api/social/posts/[id]/comments
@@ -88,6 +89,7 @@ export async function POST(
       .maybeSingle();
 
     const { data: post } = await db.from('posts').select('user_id').eq('id', id).maybeSingle();
+    const { comments_count } = await getPostInteractionCounts(db, id);
     const actorName = author?.display_name || author?.username || user.email?.split('@')[0] || 'A trader';
     await createNotification(db, {
       recipientId: post?.user_id,
@@ -106,6 +108,7 @@ export async function POST(
         display_name: author?.display_name || '',
         avatar_url: author?.avatar_url || null,
       },
+      comments_count,
     }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: 'Failed to post comment', detail: error?.message }, { status: 500 });

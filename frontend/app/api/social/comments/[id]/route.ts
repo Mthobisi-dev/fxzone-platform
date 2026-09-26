@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { getPostInteractionCounts } from '@/lib/server/socialCounters';
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -9,7 +10,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const db = getSupabaseAdmin(request);
     const { data: comment, error: commentError } = await db
       .from('comments')
-      .select('id, user_id')
+      .select('id, user_id, post_id')
       .eq('id', id)
       .single();
     if (commentError || !comment) return NextResponse.json({ detail: 'Comment not found' }, { status: 404 });
@@ -17,7 +18,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
     const { error } = await db.from('comments').delete().eq('id', id);
     if (error) throw error;
-    return NextResponse.json({ success: true });
+    const { comments_count } = await getPostInteractionCounts(db, comment.post_id);
+    return NextResponse.json({ success: true, comments_count });
   } catch (error: any) {
     return NextResponse.json({ detail: error?.message || 'Unable to delete comment' }, { status: 500 });
   }

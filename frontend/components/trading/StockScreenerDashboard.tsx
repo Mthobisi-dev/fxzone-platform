@@ -432,7 +432,7 @@ export function StockScreenerDashboard() {
   return (
     <div
       className={cn(
-        "w-full transition-all duration-300 relative select-none rounded-3xl p-1 bg-gradient-to-b from-cyan-500/20 via-purple-600/10 to-transparent shadow-[0_0_50px_rgba(59,130,246,0.15)]",
+        "fxzone-screener w-full transition-all duration-300 relative select-none rounded-3xl p-1 bg-gradient-to-b from-cyan-500/20 via-purple-600/10 to-transparent shadow-[0_0_50px_rgba(59,130,246,0.15)]",
         isFullscreen && "fixed inset-0 z-50 p-4 bg-[#05070c] overflow-y-auto rounded-none"
       )}
     >

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
+import { getPostInteractionCounts } from '@/lib/server/socialCounters';
 
 export async function POST(
   request: NextRequest,
@@ -68,7 +69,8 @@ export async function POST(
       isBookmarked = true;
     }
 
-    return NextResponse.json({ is_bookmarked: isBookmarked });
+    const { saves_count } = await getPostInteractionCounts(client, postId);
+    return NextResponse.json({ is_bookmarked: isBookmarked, saves_count });
   } catch (error: any) {
     console.error('Post bookmark error:', error);
     return NextResponse.json(
