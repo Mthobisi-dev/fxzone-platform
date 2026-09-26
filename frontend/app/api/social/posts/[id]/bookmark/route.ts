@@ -18,11 +18,19 @@ export async function POST(
       return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
     }
 
-    const { data: post, error: postError } = await client
+    let { data: post, error: postError } = await client
       .from('posts')
       .select('id, allow_save')
       .eq('id', postId)
       .maybeSingle();
+    // allow_save is an optional composer column in older Supabase schemas.
+    if (postError && (postError.code === '42703' || postError.code === 'PGRST204')) {
+      ({ data: post, error: postError } = await client
+        .from('posts')
+        .select('id')
+        .eq('id', postId)
+        .maybeSingle());
+    }
     if (postError) throw postError;
     if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     if (post.allow_save === false) {
