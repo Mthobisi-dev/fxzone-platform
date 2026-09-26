@@ -300,9 +300,10 @@ export default function ProfilePage() {
         const formData = new FormData();
         formData.append('file', avatarFile);
         const uploadRes = await api.post('/api/social/posts/upload', formData);
-        if (uploadRes?.url) {
-          finalAvatarUrl = uploadRes.url;
+        if (!uploadRes?.url || typeof uploadRes.url !== 'string') {
+          throw new Error('Your profile picture could not be uploaded. Please try again.');
         }
+        finalAvatarUrl = uploadRes.url;
       }
 
       const res = await api.put('/api/auth/me', {
