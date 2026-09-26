@@ -696,6 +696,25 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* Username */}
+            <div>
+              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">Username</label>
+              <input
+                type="text"
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value.toLowerCase())}
+                placeholder="your_trader_name"
+                minLength={3}
+                maxLength={48}
+                pattern="[a-z0-9_]+"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full h-8 bg-zinc-950 border border-zinc-850 rounded px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+              />
+              <p className="mt-1 text-[9px] text-zinc-500">3–48 lowercase letters, numbers, or underscores.</p>
+            </div>
+
             {/* Display Name */}
             <div>
               <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">Display Name</label>
