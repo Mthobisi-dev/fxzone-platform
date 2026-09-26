@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Check, ShieldCheck, Sparkles, Building2 } from 'lucide-react';
+import { Check, Sparkles, Building2, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface BrokerOption {
@@ -11,6 +11,7 @@ export interface BrokerOption {
   isFeatured?: boolean;
   accentColor: string;
   tagline: string;
+  website: string;
 }
 
 export const SUPPORTED_BROKERS: BrokerOption[] = [
@@ -21,6 +22,7 @@ export const SUPPORTED_BROKERS: BrokerOption[] = [
     isFeatured: true,
     accentColor: 'from-amber-500 via-yellow-400 to-amber-600',
     tagline: 'Ultra-low spreads, instant withdrawals & zero commissions on ECN accounts.',
+    website: 'https://www.exness.com/',
   },
   {
     id: 'ic_markets',
@@ -28,6 +30,7 @@ export const SUPPORTED_BROKERS: BrokerOption[] = [
     badge: 'Raw ECN',
     accentColor: 'from-emerald-500 to-teal-400',
     tagline: 'True ECN liquidity provider with raw spread trading execution.',
+    website: 'https://www.icmarkets.com/',
   },
   {
     id: 'pepperstone',
@@ -35,6 +38,7 @@ export const SUPPORTED_BROKERS: BrokerOption[] = [
     badge: 'cTrader / MT5',
     accentColor: 'from-blue-500 to-cyan-400',
     tagline: 'Award-winning execution speed across MT4, MT5, and cTrader.',
+    website: 'https://pepperstone.com/',
   },
   {
     id: 'xm',
@@ -42,6 +46,7 @@ export const SUPPORTED_BROKERS: BrokerOption[] = [
     badge: 'Zero Requotes',
     accentColor: 'from-rose-500 to-red-400',
     tagline: 'Strict zero requotes & zero rejection policy with micro account leverage.',
+    website: 'https://www.xm.com/',
   },
   {
     id: 'deriv',
@@ -49,6 +54,7 @@ export const SUPPORTED_BROKERS: BrokerOption[] = [
     badge: 'Synthetic Indices',
     accentColor: 'from-orange-500 to-amber-400',
     tagline: '24/7 trading on synthetic volatility indices, forex & multipliers.',
+    website: 'https://deriv.com/',
   },
   {
     id: 'fxtm',
@@ -56,6 +62,7 @@ export const SUPPORTED_BROKERS: BrokerOption[] = [
     badge: 'Copy Trading',
     accentColor: 'from-purple-500 to-indigo-400',
     tagline: 'Regulated global forex broker with integrated copy trading accounts.',
+    website: 'https://www.fxtm.com/',
   },
   {
     id: 'interactive_brokers',
@@ -63,6 +70,7 @@ export const SUPPORTED_BROKERS: BrokerOption[] = [
     badge: 'Institutional',
     accentColor: 'from-sky-500 to-blue-600',
     tagline: 'Direct market access to stocks, options, futures & forex worldwide.',
+    website: 'https://www.interactivebrokers.com/',
   },
   {
     id: 'oanda',
@@ -70,6 +78,7 @@ export const SUPPORTED_BROKERS: BrokerOption[] = [
     badge: 'API & Forex',
     accentColor: 'from-teal-500 to-emerald-400',
     tagline: 'Multi-asset broker with premium charting & developer REST APIs.',
+    website: 'https://www.oanda.com/',
   },
 ];
 
@@ -98,6 +107,15 @@ export function BrokerSelector({ selectedBroker, onSelectBroker }: BrokerSelecto
             <div
               key={broker.id}
               onClick={() => onSelectBroker(broker.name)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onSelectBroker(broker.name);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isSelected}
               className={cn(
                 'relative p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between group select-none',
                 isSelected
@@ -137,6 +155,16 @@ export function BrokerSelector({ selectedBroker, onSelectBroker }: BrokerSelecto
               <p className="text-[10px] text-zinc-400 leading-tight font-medium">
                 {broker.tagline}
               </p>
+              <a
+                href={broker.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="mt-2 inline-flex w-fit items-center gap-1 text-[10px] font-semibold text-amber-300 hover:text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-400 rounded"
+                aria-label={`Visit ${broker.name}`}
+              >
+                Visit broker <ExternalLink size={11} aria-hidden="true" />
+              </a>
             </div>
           );
         })}

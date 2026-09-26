@@ -177,12 +177,15 @@ export async function DELETE(request: NextRequest) {
     const tablesToDelete = [
       { name: 'posts', key: 'user_id' },
       { name: 'comments', key: 'user_id' },
+      { name: 'reposts', key: 'user_id' },
       { name: 'reactions', key: 'user_id' },
       { name: 'bookmarks', key: 'user_id' },
       { name: 'messages', key: 'sender_id' },
       { name: 'conversation_members', key: 'user_id' },
       { name: 'session_participants', key: 'user_id' },
       { name: 'notifications', key: 'user_id' },
+      { name: 'notification_preferences', key: 'user_id' },
+      { name: 'user_behavior_events', key: 'user_id' },
       { name: 'watchlists', key: 'user_id' },
     ];
 
@@ -197,26 +200,26 @@ export async function DELETE(request: NextRequest) {
     await db.from('follows').delete().eq('follower_id', userId);
     await db.from('follows').delete().eq('following_id', userId);
 
-    // 2. Remove the Supabase Auth identity before reporting completion. The
-    // previous implementation returned success even when this step failed,
-    // leaving an account that could still sign in.
-    const { error: authDelErr } = await db.auth.admin.deleteUser(userId);
-    if (authDelErr) {
-      console.error(`[Account Delete] Supabase auth deleteUser error:`, authDelErr.message);
-      return NextResponse.json(
-        { success: false, error: 'ACCOUNT_DELETE_FAILED', detail: 'Could not delete the authentication identity.' },
-        { status: 502 }
-      );
-    }
-
-    // 3. Delete the application profile if it was not removed by a foreign-key
-    // cascade from auth.users.
+    // 2. Delete the application profile before the Auth identity. This prevents
+    // a stale public.users row from blocking a later registration if there is no
+    // foreign-key cascade in a legacy database. Keep Auth intact if this fails
+    // so the user can safely retry deletion.
     const { error: userDelErr } = await db.from('users').delete().eq('id', userId);
     if (userDelErr) {
       console.error(`[Account Delete] Failed to delete public.users profile for user ${userId}:`, userDelErr.message);
       return NextResponse.json(
-        { success: false, error: 'ACCOUNT_DELETE_PARTIAL', detail: 'Authentication was deleted but the profile could not be removed.' },
+        { success: false, error: 'ACCOUNT_DELETE_FAILED', detail: 'Could not remove account data. Please try again.' },
         { status: 500 }
+      );
+    }
+
+    // 3. Remove the Supabase Auth identity only after application data is gone.
+    const { error: authDelErr } = await db.auth.admin.deleteUser(userId);
+    if (authDelErr) {
+      console.error(`[Account Delete] Supabase auth deleteUser error:`, authDelErr.message);
+      return NextResponse.json(
+        { success: false, error: 'ACCOUNT_DELETE_PARTIAL', detail: 'Account data was removed but the authentication identity could not be deleted.' },
+        { status: 502 }
       );
     }
 

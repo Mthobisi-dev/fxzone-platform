@@ -18,6 +18,7 @@ interface RequestOptions extends RequestInit {
   params?: Record<string, string | number>;
   /** Use only for endpoints whose response is public for every visitor. */
   public?: boolean;
+  timeoutMs?: number;
 }
 
 /** Get the current Supabase access token without side-effects. */
@@ -32,13 +33,13 @@ async function getAccessToken(): Promise<string | null> {
 
 let refreshPromise: Promise<string | null> | null = null;
 
-async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   if (options.signal) {
     return fetch(url, { ...options, cache: options.cache ?? 'no-store' });
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...options, cache: options.cache ?? 'no-store', signal: controller.signal });
   } finally {
@@ -75,7 +76,7 @@ export async function apiRequest(
   options: RequestOptions = {}
 ): Promise<any> {
   let url = `${BASE_URL}${endpoint}`;
-  const { params: _params, public: publicRequest = false, ...requestOptions } = options;
+  const { params: _params, public: publicRequest = false, timeoutMs, ...requestOptions } = options;
 
   // Append query params if present
   if (options.params) {
@@ -114,7 +115,7 @@ export async function apiRequest(
       ...requestOptions,
       cache: publicRequest ? requestOptions.cache ?? 'default' : 'no-store',
       headers,
-    });
+    }, timeoutMs);
   } catch (netErr: any) {
     const timedOut = netErr?.name === 'AbortError';
     const error = new Error(timedOut ? 'The request timed out. Please try again.' : 'Network error: Unable to connect to the server.');
@@ -130,7 +131,7 @@ export async function apiRequest(
       headers.set('Authorization', `Bearer ${newToken}`);
       let retryRes: Response;
       try {
-        retryRes = await fetchWithTimeout(url, { ...requestOptions, cache: 'no-store', headers });
+        retryRes = await fetchWithTimeout(url, { ...requestOptions, cache: 'no-store', headers }, timeoutMs);
       } catch (netErr: any) {
         const error = new Error(netErr?.name === 'AbortError' ? 'The request timed out. Please try again.' : 'Network error: Unable to connect to the server.');
         Object.assign(error, { status: 0, detail: netErr?.message || error.message });

@@ -100,7 +100,7 @@ export function StoryBar() {
         content: newContent.trim() || 'Live Setup',
         image_url: imageUrl,
         is_story: true,
-      });
+      }, { timeoutMs: 30_000 });
       setNewContent('');
       setNewImageUrl('');
       setStoryFile(null);
