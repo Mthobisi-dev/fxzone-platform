@@ -33,6 +33,7 @@ export function StoryBar() {
   const [newImageUrl, setNewImageUrl] = useState('');
   const [storyFile, setStoryFile] = useState<File | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const fetchStories = async () => {
     try {
@@ -95,7 +96,7 @@ export function StoryBar() {
         }
       }
 
-      await api.post('/api/social/stories', {
+      await api.post('/api/social/posts', {
         content: newContent.trim() || 'Live Setup',
         image_url: imageUrl,
         is_story: true,
@@ -111,6 +112,7 @@ export function StoryBar() {
       }
     } catch (err) {
       console.error('Failed to create story:', err);
+      setPublishError(err instanceof Error ? err.message : 'Unable to publish this story. Please try again.');
     } finally {
       setPublishing(false);
     }
@@ -243,6 +245,9 @@ export function StoryBar() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
+              {publishError && (
+                <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300" role="alert">{publishError}</p>
+              )}
               <Button size="sm" variant="ghost" onClick={() => { setCreating(false); setStoryFile(null); }} disabled={publishing}>
                 Cancel
               </Button>

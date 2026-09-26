@@ -120,9 +120,9 @@ export function ChatWindow({
   };
 
   return (
-    <div className="flex-1 h-full flex flex-col justify-between bg-[#070b13] relative overflow-hidden">
+    <div className="flex-1 h-full flex flex-col justify-between bg-[#070b13] fxzone-chat-surface relative overflow-hidden">
       {/* ─── CHAT & TRADINGVIEW HEADER ─── */}
-      <div className="h-14 px-3 sm:px-4 border-b border-zinc-850 flex items-center justify-between bg-[#0a0f1d] select-none shrink-0 z-20">
+      <div className="h-14 px-3 sm:px-4 border-b border-zinc-850 flex items-center justify-between bg-[#0a0f1d] fxzone-chat-header select-none shrink-0 z-20">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onBack && (
             <button
@@ -295,7 +295,7 @@ export function ChatWindow({
                           'p-2.5 rounded-2xl border text-xs leading-relaxed break-words shadow-lg',
                           isSelf
                             ? 'bg-blue-600/10 border-blue-500/20 text-zinc-200 rounded-tr-none'
-                            : 'bg-[#0f1523] border-zinc-850 text-zinc-300 rounded-tl-none'
+                            : 'bg-[#0f1523] fxzone-chat-message border-zinc-850 text-zinc-300 rounded-tl-none'
                         )}
                       >
                         {/* 1. Custom Renderer: TradingView Chart Snapshot Card */}

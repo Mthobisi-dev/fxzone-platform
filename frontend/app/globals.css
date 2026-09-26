@@ -200,3 +200,9 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Chat surfaces use a few bespoke dark colors, so map them explicitly when
+   the user selects the global light theme. */
+.theme-minimal-light .fxzone-chat-surface { background-color: #f8fafc !important; }
+.theme-minimal-light .fxzone-chat-header { background-color: #ffffff !important; }
+.theme-minimal-light .fxzone-chat-message { background-color: #ffffff !important; }

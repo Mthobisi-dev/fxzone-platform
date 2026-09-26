@@ -106,12 +106,27 @@ export async function PUT(request: NextRequest) {
     }
 
     if (updateError) {
-      console.error('[PUT /api/auth/me] Update failed:', updateError);
       const missingBrokerColumn = updateError.code === '42703' && cleanBroker !== undefined;
-      return NextResponse.json(
-        { detail: missingBrokerColumn ? 'Preferred broker is not configured yet. Apply migration 005 or later in Supabase.' : updateError.message || 'Failed to update profile' },
-        { status: missingBrokerColumn ? 503 : 400 }
-      );
+      if (missingBrokerColumn) {
+        // Older schemas may not have public.users.preferred_broker yet. Keep the
+        // profile update working and persist the chosen broker in Auth metadata.
+        const fallbackPayload = { ...updatePayload };
+        delete fallbackPayload.preferred_broker;
+        const fallback = await db
+          .from('users')
+          .update(fallbackPayload)
+          .eq('id', user.id)
+          .select()
+          .maybeSingle();
+        if (fallback.error || !fallback.data) {
+          return NextResponse.json({ detail: fallback.error?.message || 'Failed to update profile' }, { status: 400 });
+        }
+        updated = { ...fallback.data, preferred_broker: cleanBroker };
+        updateError = null;
+      } else {
+        console.error('[PUT /api/auth/me] Update failed:', updateError);
+        return NextResponse.json({ detail: updateError.message || 'Failed to update profile' }, { status: 400 });
+      }
     }
     if (!updated) {
       return NextResponse.json({ detail: 'Profile was not found after provisioning.' }, { status: 503 });
