@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const { data: posts, error } = await supabaseAdmin
       .from('posts')
-      .select('content')
+      .select('content, asset_tags')
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -16,8 +16,8 @@ export async function GET() {
 
     if (posts) {
       posts.forEach((p: any) => {
-        const text = p.content?.toUpperCase() || '';
-        ['BTCUSD', 'EURUSD', 'GBPUSD', 'XAUUSD', 'AAPL', 'NVDA', 'TSLA', 'ETHUSD', 'USDJPY'].forEach((sym) => {
+        const text = [p.content, ...(Array.isArray(p.asset_tags) ? p.asset_tags : [])].filter(Boolean).join(' ').toUpperCase();
+        ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'XAGUSD', 'AAPL', 'NVDA', 'TSLA', 'MSFT', 'GOOGL', 'AMZN'].forEach((sym) => {
           if (text.includes(sym)) {
             counts[sym] = (counts[sym] || 0) + 1;
           }

@@ -8,7 +8,6 @@ import { CommentThread } from '@/components/social/CommentThread';
 import { Card } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
-import { TrendingUp, RefreshCw, Loader2, Sparkles, Star } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -28,13 +27,11 @@ export default function SocialFeedPage() {
 
   // Sidebar dynamic real data
   const [trendingSymbols, setTrendingSymbols] = useState<any[]>([]);
-  const [featuredExperts, setFeaturedExperts] = useState<any[]>([]);
 
   const fetchSidebarData = async () => {
     try {
-      const [trendRes, expertRes, quotesRes] = await Promise.allSettled([
+      const [trendRes, quotesRes] = await Promise.allSettled([
         api.get('/api/social/trending-symbols', { public: true }),
-        api.get('/api/social/featured-experts', { public: true }),
         api.get('/api/market/quotes', { public: true }),
       ]);
 
@@ -67,7 +64,6 @@ export default function SocialFeedPage() {
       }
 
       if (expertRes.status === 'fulfilled' && Array.isArray(expertRes.value)) {
-        setFeaturedExperts(expertRes.value);
       }
     } catch (e) {
       console.error('Failed to load sidebar data:', e);
@@ -266,36 +262,6 @@ export default function SocialFeedPage() {
           </div>
         </Card>
 
-        {/* Featured Analysts */}
-        <Card className="p-4 border border-zinc-900 bg-zinc-950/40">
-          <h4 className="text-xs font-bold text-white mb-3 uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles size={14} className="text-purple-400" /> Featured Experts
-          </h4>
-          <div className="space-y-3">
-            {featuredExperts.length === 0 ? (
-              <p className="text-[10px] text-zinc-500 italic">No registered experts yet.</p>
-            ) : (
-              featuredExperts.map((expert, idx) => (
-                <div key={idx} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Avatar name={expert.name} src={expert.avatar_url} size="sm" />
-                    <div>
-                      <span className="text-[10px] font-bold text-white block truncate max-w-[100px]">
-                        {expert.name}
-                      </span>
-                      <span className="text-[8px] text-zinc-500 block truncate max-w-[100px]">
-                        @{expert.handle}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="text-[9px] text-zinc-400 font-semibold">
-                    {expert.followers} {expert.followers === 1 ? 'follower' : 'followers'}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
       </div>
 
       {/* Post Modal Details & Discussion */}

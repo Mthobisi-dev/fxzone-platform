@@ -219,8 +219,8 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     try {
       if (repostCaption.trim()) {
         await api.post('/api/social/posts', {
-          content: `[Reshared from @${postUser.username}]: ${post.content}`,
-          caption: repostCaption,
+          content: post.content,
+          caption: "Quote from @" + postUser.username + ": " + repostCaption.trim(),
           image_url: imageUrl,
           asset_tags: assetTags
         });
