@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
 const BUCKET = 'post-media';
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const ALLOWED_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp',
   'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/x-matroska': 'mkv',
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file');
     if (!file || typeof file === 'string') return NextResponse.json({ detail: 'Choose an attachment before publishing.' }, { status: 400 });
     if (file.size === 0) return NextResponse.json({ detail: 'The selected attachment is empty.' }, { status: 400 });
-    if (file.size > MAX_FILE_SIZE) return NextResponse.json({ detail: 'Attachments must be 50 MB or smaller.' }, { status: 413 });
+    if (file.size > MAX_FILE_SIZE) return NextResponse.json({ detail: 'Attachments must be 100 MB or smaller.' }, { status: 413 });
 
     const extension = ALLOWED_TYPES[file.type];
     if (!extension) return NextResponse.json({ detail: 'This attachment type is not supported.' }, { status: 415 });

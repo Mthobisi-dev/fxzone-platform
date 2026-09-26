@@ -99,7 +99,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     Array.from(files).forEach((file) => {
       const type = getFileType(file);
       if (!type) return;
-      if (file.size > 50 * 1024 * 1024) return; // 50MB limit
+      if (file.size > 100 * 1024 * 1024) return; // 100MB limit
 
       const previewUrl =
         type === 'document' ? '' : URL.createObjectURL(file);
@@ -177,7 +177,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     const formData = new FormData();
     formData.append('file', media.file);
     try {
-      const res = await api.post('/api/social/posts/upload', formData);
+      const res = await api.post('/api/social/posts/upload', formData, { timeoutMs: 60_000 });
       return { url: typeof res?.url === 'string' ? res.url : null, error: null };
     } catch (err: unknown) {
       console.error('File upload failed:', err);

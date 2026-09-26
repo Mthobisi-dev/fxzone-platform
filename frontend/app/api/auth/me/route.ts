@@ -75,15 +75,13 @@ export async function PUT(request: NextRequest) {
     const cleanAvatarUrl = cleanText(avatar_url, 2000);
     const cleanBroker = cleanText(preferred_broker, 100);
 
-    if (username !== undefined && (!cleanUsername || !/^[a-zA-Z0-9_]+$/.test(cleanUsername))) {
-      return NextResponse.json({ detail: 'Username may only contain letters, numbers, and underscores.' }, { status: 400 });
-    }
+    const invalidUsername = username !== undefined && (!cleanUsername || !/^[a-zA-Z0-9_]+$/.test(cleanUsername));
     if (preferred_broker !== undefined && !cleanBroker) {
       return NextResponse.json({ detail: 'Choose a valid preferred broker.' }, { status: 400 });
     }
 
     const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-    if (cleanUsername !== undefined) updatePayload.username = cleanUsername;
+    if (cleanUsername !== undefined && !invalidUsername) updatePayload.username = cleanUsername;
     if (cleanDisplayName !== undefined) updatePayload.display_name = cleanDisplayName;
     if (cleanBio !== undefined) updatePayload.bio = cleanBio;
     if (cleanAvatarUrl !== undefined) updatePayload.avatar_url = cleanAvatarUrl;
@@ -156,7 +154,7 @@ export async function PUT(request: NextRequest) {
       responseData.preferred_broker = preferred_broker;
     }
 
-    return NextResponse.json(responseData);
+    return NextResponse.json({ ...responseData, username_issue: invalidUsername ? 'Username was unchanged: use only letters, numbers, and underscores.' : undefined });
   } catch (err: any) {
     return NextResponse.json(
       { error: 'Failed to update profile', detail: err?.message },
