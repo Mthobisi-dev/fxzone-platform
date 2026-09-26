@@ -18,25 +18,19 @@ export async function GET(
 
     const db = getSupabaseAdmin(request);
     let data: any = null;
+    const profileFields = 'id, username, display_name, avatar_url, bio, role, preferred_broker, followers_count, following_count, created_at';
+    const legacyProfileFields = 'id, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at';
+    const fetchProfile = (fields: string) => isUuid
+      ? db.from('users').select(fields).eq('id', userId).maybeSingle()
+      : db.from('users').select(fields).eq('username', userId).maybeSingle();
 
-    if (isUuid) {
-      // Query users table by UUID
-      const { data: byId } = await db
-        .from('users')
-        .select('id, username, display_name, avatar_url, bio, role, preferred_broker, followers_count, following_count, created_at')
-        .eq('id', userId)
-        .maybeSingle();
-      data = byId;
-
-    } else {
-      // Query users table by username
-      const { data: byUsername } = await db
-        .from('users')
-        .select('id, username, display_name, avatar_url, bio, role, preferred_broker, followers_count, following_count, created_at')
-        .eq('username', userId)
-        .maybeSingle();
-      data = byUsername;
+    let profileResult = await fetchProfile(profileFields);
+    if (profileResult.error && (profileResult.error.code === '42703' || profileResult.error.code === 'PGRST204' || /preferred_broker|schema cache|column .* does not exist/i.test(profileResult.error.message || ''))) {
+      profileResult = await fetchProfile(legacyProfileFields);
     }
+    if (profileResult.error) throw profileResult.error;
+    data = profileResult.data;
+
 
     if (!data) return NextResponse.json({ detail: 'Trader not found' }, { status: 404 });
 

@@ -106,7 +106,11 @@ export async function PUT(request: NextRequest) {
     }
 
     if (updateError) {
-      const missingBrokerColumn = updateError.code === '42703' && cleanBroker !== undefined;
+      const missingBrokerColumn = cleanBroker !== undefined && (
+        updateError.code === '42703' ||
+        updateError.code === 'PGRST204' ||
+        /preferred_broker|schema cache|column .* does not exist/i.test(updateError.message || '')
+      );
       if (missingBrokerColumn) {
         // Older schemas may not have public.users.preferred_broker yet. Keep the
         // profile update working and persist the chosen broker in Auth metadata.
