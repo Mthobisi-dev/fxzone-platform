@@ -31,7 +31,16 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       void createNotification(db, { recipientId: target.id, actorId: user.id, type: 'follow', title: 'New follower', message: actorName + ' started following you.', data: { profile_id: user.id } });
     }
     const [targetCounts, actorCounts] = await Promise.all([getFollowCounts(db, target.id), getFollowCounts(db, user.id)]);
-    return NextResponse.json({ is_following, followers_count: targetCounts.followers_count, following_count: actorCounts.following_count });
+    return NextResponse.json({
+      is_following,
+      // Backwards-compatible counts for the profile being followed/unfollowed.
+      followers_count: targetCounts.followers_count,
+      following_count: targetCounts.following_count,
+      target_followers_count: targetCounts.followers_count,
+      target_following_count: targetCounts.following_count,
+      actor_followers_count: actorCounts.followers_count,
+      actor_following_count: actorCounts.following_count,
+    });
   } catch (error: any) {
     console.error('Follow error:', error);
     return NextResponse.json({ error: 'Follow action failed', detail: error?.message }, { status: 500 });

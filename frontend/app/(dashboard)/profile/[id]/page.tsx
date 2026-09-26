@@ -306,23 +306,13 @@ export default function ProfilePage() {
         finalAvatarUrl = uploadRes.url;
       }
 
-      const res = await api.put('/api/auth/me', {
+      const res = await updateProfile({
         username: editUsername.trim() || undefined,
         display_name: editDisplayName.trim() || undefined,
         bio: editBio.trim() || undefined,
         avatar_url: finalAvatarUrl || undefined,
         preferred_broker: editPreferredBroker || 'Exness',
       });
-
-      if (updateProfile) {
-        await updateProfile({
-          username: res.username || editUsername.trim(),
-          display_name: res.display_name || editDisplayName.trim(),
-          bio: res.bio || editBio.trim(),
-          avatar_url: res.avatar_url || finalAvatarUrl,
-          preferred_broker: res.preferred_broker || editPreferredBroker,
-        }).catch(() => {});
-      }
 
       setProfile((prev: any) => ({
         ...prev,
@@ -335,7 +325,12 @@ export default function ProfilePage() {
       }));
 
       setEditModalOpen(false);
-      fetchProfile();
+      const updatedUsername = res.username || editUsername.trim();
+      if (rawId !== 'me' && rawId === profile?.username && updatedUsername !== rawId) {
+        router.replace(`/profile/${updatedUsername}`);
+      } else {
+        fetchProfile();
+      }
     } catch (err: any) {
       console.error('Failed to update profile:', err);
       setSaveError(err?.detail || 'Failed to save profile. Username may already be taken.');

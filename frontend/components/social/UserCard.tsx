@@ -41,7 +41,11 @@ export function UserCard({ userSummary, onProfileClick }: UserCardProps) {
     setFollowers((prev) => (newFollowing ? prev + 1 : prev - 1));
 
     try {
-      await api.post(`/api/social/users/${userSummary.id}/follow`, {});
+      const result = await api.post(`/api/social/users/${userSummary.id}/follow`, {});
+      setIsFollowing(Boolean(result?.is_following));
+      if (typeof result?.followers_count === 'number') {
+        setFollowers(result.followers_count);
+      }
     } catch (err) {
       console.error('Follow error:', err);
       // Revert on error

@@ -22,6 +22,8 @@ export interface FxUser {
   avatar_url?: string;
   bio?: string;
   preferred_broker?: string;
+  followers_count?: number;
+  following_count?: number;
   role: string;
 }
 
@@ -37,7 +39,7 @@ interface AuthState {
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
-  updateProfile: (data: Partial<FxUser>) => Promise<void>;
+  updateProfile: (data: Partial<FxUser>) => Promise<FxUser>;
   initialize: () => Promise<void>;
   _setFromSession: (session: Session | null, event?: string) => void;
 }
@@ -118,6 +120,8 @@ async function fetchDbProfile(token: string): Promise<Partial<FxUser> | null> {
       bio: data.bio,
       avatar_url: data.avatar_url,
       preferred_broker: data.preferred_broker || 'Exness',
+      followers_count: data.followers_count ?? 0,
+      following_count: data.following_count ?? 0,
       role: data.role,
     };
   } catch {
@@ -441,6 +445,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const updatedUser: FxUser = { ...currentUser, ...profileData, ...updatedProfile };
       cacheUser(updatedUser);
       set({ user: updatedUser, isLoading: false });
+      return updatedUser;
     } catch (err: any) {
       set({ error: err?.message || 'Failed to update profile.', isLoading: false });
       throw err;

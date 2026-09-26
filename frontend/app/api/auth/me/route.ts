@@ -38,10 +38,16 @@ export async function GET(request: NextRequest) {
       if (provisionError || !provisionedProfile) {
         throw provisionError || new Error('Profile was not available after provisioning');
       }
-      return NextResponse.json(provisionedProfile);
+      return NextResponse.json({
+        ...provisionedProfile,
+        preferred_broker: provisionedProfile.preferred_broker || user.user_metadata?.preferred_broker || 'Exness',
+      });
     }
 
-    return NextResponse.json(profile);
+    return NextResponse.json({
+      ...profile,
+      preferred_broker: profile.preferred_broker || user.user_metadata?.preferred_broker || 'Exness',
+    });
   } catch (err: any) {
     return NextResponse.json(
       { error: 'Failed to fetch profile', detail: err?.message },
@@ -69,19 +75,29 @@ export async function PUT(request: NextRequest) {
 
     const cleanText = (value: unknown, maxLength: number) =>
       typeof value === 'string' ? value.trim().slice(0, maxLength) : undefined;
-    const cleanUsername = cleanText(username, 48);
+    const cleanUsername = cleanText(username, 48)?.toLowerCase();
     const cleanDisplayName = cleanText(display_name, 100);
     const cleanBio = cleanText(bio, 1000);
     const cleanAvatarUrl = cleanText(avatar_url, 2000);
     const cleanBroker = cleanText(preferred_broker, 100);
 
-    const invalidUsername = username !== undefined && (!cleanUsername || !/^[a-zA-Z0-9_]+$/.test(cleanUsername));
+    const invalidUsername = username !== undefined && (
+      !cleanUsername ||
+      !/^[a-z0-9_]{3,48}$/.test(cleanUsername) ||
+      ['fxzone_bot', 'jackbot_analysis'].includes(cleanUsername)
+    );
+    if (invalidUsername) {
+      return NextResponse.json(
+        { detail: 'Username must be 3–48 lowercase letters, numbers, or underscores, and cannot use a reserved system name.' },
+        { status: 400 }
+      );
+    }
     if (preferred_broker !== undefined && !cleanBroker) {
       return NextResponse.json({ detail: 'Choose a valid preferred broker.' }, { status: 400 });
     }
 
     const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
-    if (cleanUsername !== undefined && !invalidUsername) updatePayload.username = cleanUsername;
+    if (cleanUsername !== undefined) updatePayload.username = cleanUsername;
     if (cleanDisplayName !== undefined) updatePayload.display_name = cleanDisplayName;
     if (cleanBio !== undefined) updatePayload.bio = cleanBio;
     if (cleanAvatarUrl !== undefined) updatePayload.avatar_url = cleanAvatarUrl;
@@ -104,6 +120,9 @@ export async function PUT(request: NextRequest) {
     }
 
     if (updateError) {
+      if (updateError.code === '23505' && cleanUsername !== undefined) {
+        return NextResponse.json({ detail: 'That username is already in use. Choose another one.' }, { status: 409 });
+      }
       const missingBrokerColumn = cleanBroker !== undefined && (
         updateError.code === '42703' ||
         updateError.code === 'PGRST204' ||
@@ -154,7 +173,7 @@ export async function PUT(request: NextRequest) {
       responseData.preferred_broker = preferred_broker;
     }
 
-    return NextResponse.json({ ...responseData, username_issue: invalidUsername ? 'Username was unchanged: use only letters, numbers, and underscores.' : undefined });
+    return NextResponse.json(responseData);
   } catch (err: any) {
     return NextResponse.json(
       { error: 'Failed to update profile', detail: err?.message },
