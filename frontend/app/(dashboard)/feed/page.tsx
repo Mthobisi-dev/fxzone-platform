@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import { Loader2, RefreshCw, TrendingUp } from 'lucide-react';
 
 export default function SocialFeedPage() {
   const { user } = useAuth();
@@ -61,9 +62,6 @@ export default function SocialFeedPage() {
           { symbol: 'AAPL', posts: 0, change: '+0.00%' },
           { symbol: 'SOLUSD', posts: 0, change: '+0.00%' },
         ]);
-      }
-
-      if (expertRes.status === 'fulfilled' && Array.isArray(expertRes.value)) {
       }
     } catch (e) {
       console.error('Failed to load sidebar data:', e);

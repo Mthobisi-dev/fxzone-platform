@@ -9,6 +9,7 @@ import { Dropdown } from '../ui/Dropdown';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
+import { getBrokerDestination } from '@/lib/brokers';
 import {
   TrendingUp,
   Search,
@@ -36,6 +37,8 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  const broker = getBrokerDestination(user?.preferred_broker);
 
   const userMenuItems = [
     {
@@ -114,16 +117,16 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
             </button>
           )}
 
-          {/* Exness Direct Trade Action */}
+          {/* Preferred broker direct trade action */}
           <a
-            href="https://one.exnesstrack.net"
+            href={broker.url}
             target="_blank"
             rel="noopener noreferrer"
             className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold transition-all shadow-sm"
-            title="Trade live markets on Exness Broker"
+            title={`Trade live markets with ${broker.name}`}
           >
             <TrendingUp size={13} />
-            <span>Trade Exness</span>
+            <span>Trade {broker.name}</span>
           </a>
 
           {/* TradingView Chart Link */}

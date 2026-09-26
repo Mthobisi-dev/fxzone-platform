@@ -30,6 +30,7 @@ export interface ChatMessage {
   conversationId: string;
   senderId: string;
   content: string;
+  messageType?: 'text' | 'image' | 'video' | 'audio' | string;
   createdAt: string;
   sender?: {
     username: string;
@@ -46,7 +47,7 @@ interface ChatWindowProps {
   isGroup: boolean;
   members?: any[];
   conversationData?: any;
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (text: string, messageType?: 'text' | 'image' | 'video' | 'audio') => Promise<void>;
   onDeleteMessage?: (messageId: string) => void;
   onStartLiveCall?: () => void;
   onTyping?: () => void;
@@ -265,6 +266,7 @@ export function ChatWindow({
               messages.map((msg) => {
                 const senderIdVal = msg.senderId || (msg as any).sender_id;
                 const isSelf = String(senderIdVal) === String(currentUserId);
+                const legacyVoiceUrl = msg.content.match(/^\[Voice Note\]\s*\(url:\s*(https?:\/\/[^\s)]+)\)$/i)?.[1];
 
                 return (
                   <div
@@ -409,6 +411,23 @@ export function ChatWindow({
                               </div>
                             );
                           })()
+                        ) : msg.messageType === 'image' ? (
+                          <img
+                            src={msg.content}
+                            alt="Shared image"
+                            className="max-h-72 max-w-full rounded-lg object-contain"
+                            loading="lazy"
+                          />
+                        ) : msg.messageType === 'video' ? (
+                          <video
+                            src={msg.content}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            className="max-h-72 max-w-full rounded-lg"
+                          />
+                        ) : msg.messageType === 'audio' || legacyVoiceUrl ? (
+                          <audio src={legacyVoiceUrl || msg.content} controls preload="metadata" className="max-w-full" />
                         ) : (
                           <p>{msg.content}</p>
                         )}

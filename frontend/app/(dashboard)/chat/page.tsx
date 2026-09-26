@@ -251,7 +251,7 @@ export default function ChatPage() {
     }
   }, [newChatOpen]);
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, messageType: 'text' | 'image' | 'video' | 'audio' = 'text') => {
     if (!activeConvId || !user) return;
 
     const tempId = `temp-${Date.now()}`;
@@ -260,6 +260,7 @@ export default function ChatPage() {
       conversationId: activeConvId,
       senderId: String(user.id),
       content: text,
+      messageType,
       createdAt: new Date().toISOString(),
       sender: {
         username: user.username,
@@ -280,7 +281,7 @@ export default function ChatPage() {
     try {
       const res = await api.post(`/api/chat/conversations/${activeConvId}/messages`, {
         content: text,
-        message_type: 'text',
+        message_type: messageType,
       });
       if (res && res.id) {
         setMessages((prev) =>
@@ -288,6 +289,7 @@ export default function ChatPage() {
             ...m,
             id: res.id,
             createdAt: res.created_at || res.createdAt || m.createdAt,
+            messageType: res.message_type || res.messageType || messageType,
           } : m))
         );
       }

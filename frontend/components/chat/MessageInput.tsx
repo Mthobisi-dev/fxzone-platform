@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { Modal } from '../ui/Modal';
 
 interface MessageInputProps {
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (text: string, messageType?: 'text' | 'image' | 'video' | 'audio') => Promise<void>;
   onTyping?: () => void;
   disabled?: boolean;
 }
@@ -16,7 +16,7 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
-  // Picture sharing states
+  // Media sharing states
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,7 +53,7 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
     }
   };
 
-  // Image Upload Handler
+  // Image and video upload handler
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -62,10 +62,9 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await api.post('/api/social/posts/upload', formData);
+      const res = await api.post('/api/social/posts/upload', formData, { timeoutMs: 60_000 });
       if (res?.url) {
-        // Send image URL directly in message
-        await onSendMessage(res.url);
+        await onSendMessage(res.url, file.type.startsWith('video/') ? 'video' : 'image');
       }
     } catch (err) {
       console.error('Failed to upload image in chat:', err);
@@ -94,9 +93,9 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
         try {
           const formData = new FormData();
           formData.append('file', file);
-          const res = await api.post('/api/social/posts/upload', formData);
+          const res = await api.post('/api/social/posts/upload', formData, { timeoutMs: 60_000 });
           if (res?.url) {
-            await onSendMessage(`[Voice Note] (url: ${res.url})`);
+            await onSendMessage(res.url, 'audio');
           }
         } catch (err) {
           console.error('Failed to upload voice note:', err);
@@ -157,19 +156,19 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
         {/* Hidden File Input */}
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           ref={fileInputRef}
           onChange={handleImageUpload}
           className="hidden"
         />
 
-        {/* Upload Image Button */}
+        {/* Upload Image or Video Button */}
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="p-2 text-zinc-500 hover:text-white rounded-lg hover:bg-zinc-900 transition-colors shrink-0"
           disabled={disabled || uploadingImage || uploadingVoice}
-          title="Share picture"
+          title="Share a picture or video"
         >
           {uploadingImage ? <Loader2 size={15} className="animate-spin text-blue-400" /> : <Image size={15} />}
         </button>

@@ -4,6 +4,8 @@ import React from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { TrendingUp, ExternalLink, ShieldCheck, Zap, BarChart2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { getBrokerDestination } from '@/lib/brokers';
 
 interface TradeActionModalProps {
   isOpen: boolean;
@@ -12,11 +14,12 @@ interface TradeActionModalProps {
 }
 
 export function TradeActionModal({ isOpen, onClose, symbol = 'EURUSD' }: TradeActionModalProps) {
+  const { user } = useAuth();
   const tradingViewUrl = symbol 
     ? `https://www.tradingview.com/chart/?symbol=${symbol.includes('USD') && !symbol.startsWith('BTC') && !symbol.startsWith('ETH') ? 'FX:' + symbol : symbol}`
     : 'https://www.tradingview.com';
 
-  const exnessUrl = 'https://one.exnesstrack.net';
+  const broker = getBrokerDestination(user?.preferred_broker);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Execute Trade & Analysis - ${symbol}`}>
@@ -26,9 +29,9 @@ export function TradeActionModal({ isOpen, onClose, symbol = 'EURUSD' }: TradeAc
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Exness Direct Trade */}
+          {/* Preferred broker direct trade */}
           <a
-            href={exnessUrl}
+            href={broker.url}
             target="_blank"
             rel="noopener noreferrer"
             className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 hover:border-emerald-400 transition-all flex flex-col justify-between group shadow-lg"
@@ -43,10 +46,10 @@ export function TradeActionModal({ isOpen, onClose, symbol = 'EURUSD' }: TradeAc
                 </span>
               </div>
               <h4 className="text-sm font-black text-white flex items-center gap-1.5 group-hover:text-emerald-300">
-                Trade on Exness <ExternalLink size={14} />
+                Trade on {broker.name} <ExternalLink size={14} />
               </h4>
               <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
-                Execute live Forex, Crypto & Commodities orders with ultra-low spreads on Exness.
+                Open {broker.name} to execute live Forex, Crypto, and Commodities orders.
               </p>
             </div>
             <div className="mt-4 pt-2 border-t border-emerald-500/20 flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">

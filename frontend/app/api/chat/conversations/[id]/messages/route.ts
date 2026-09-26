@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
 
+const MESSAGE_TYPES = new Set(['text', 'image', 'video', 'audio']);
+
 // GET /api/chat/conversations/[id]/messages
 export async function GET(
   request: NextRequest,
@@ -97,9 +99,13 @@ export async function POST(
 
     const body = await request.json();
     const { content, message_type } = body;
+    const normalizedMessageType = message_type || 'text';
 
     if (!content?.trim()) {
       return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
+    }
+    if (typeof normalizedMessageType !== 'string' || !MESSAGE_TYPES.has(normalizedMessageType)) {
+      return NextResponse.json({ detail: 'Unsupported message type' }, { status: 400 });
     }
 
     // Ensure sender profile row exists before INSERT (FK: messages.sender_id → users.id)
@@ -113,7 +119,7 @@ export async function POST(
         conversation_id: id,
         sender_id: user.id,
         content: content.trim(),
-        message_type: message_type || 'text',
+        message_type: normalizedMessageType,
       })
       .select()
       .single();

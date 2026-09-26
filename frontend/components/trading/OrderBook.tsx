@@ -5,6 +5,8 @@ import { useMarketStore } from '@/stores/marketStore';
 import { formatPrice } from '@/lib/utils';
 import { Card } from '../ui/Card';
 import { ArrowUp, ArrowDown } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { getBrokerDestination } from '@/lib/brokers';
 
 interface OrderBookRow {
   price: number;
@@ -14,6 +16,7 @@ interface OrderBookRow {
 
 export function OrderBook() {
   const { selectedAsset, prices } = useMarketStore();
+  const { user } = useAuth();
   const [bids, setBids] = useState<OrderBookRow[]>([]);
   const [asks, setAsks] = useState<OrderBookRow[]>([]);
   
@@ -58,6 +61,7 @@ export function OrderBook() {
 
   const spreadAmount = asks[asks.length - 1]?.price - bids[0]?.price || 0;
   const spreadPct = (spreadAmount / currentPrice) * 100;
+  const broker = getBrokerDestination(user?.preferred_broker);
 
   return (
     <Card className="p-4 bg-zinc-950/40 border-zinc-900/60 flex flex-col justify-between h-full font-mono text-[10px] select-none">
@@ -124,10 +128,10 @@ export function OrderBook() {
         ))}
       </div>
 
-      {/* Quick Execution Action Bar — Exness Only */}
+      {/* Quick Execution Action Bar */}
       <div className="mt-3 pt-2 border-t border-zinc-900 grid grid-cols-2 gap-2 font-sans">
         <a
-          href="https://one.exnesstrack.net"
+          href={broker.url}
           target="_blank"
           rel="noopener noreferrer"
           className="py-2 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-black text-center text-[11px] transition-all shadow-md flex items-center justify-center gap-1.5 select-none"
@@ -135,7 +139,7 @@ export function OrderBook() {
           ▲ BUY {selectedAsset.symbol}
         </a>
         <a
-          href="https://one.exnesstrack.net"
+          href={broker.url}
           target="_blank"
           rel="noopener noreferrer"
           className="py-2 px-2 rounded-lg bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-black text-center text-[11px] transition-all shadow-md flex items-center justify-center gap-1.5 select-none"
@@ -143,7 +147,7 @@ export function OrderBook() {
           ▼ SELL {selectedAsset.symbol}
         </a>
         <p className="col-span-2 text-center text-[9px] text-zinc-500 mt-0.5">
-          Executing via <span className="text-emerald-400 font-semibold">Exness</span> — Institutional liquidity, instant fill
+          Trading with <span className="text-emerald-400 font-semibold">{broker.name}</span>
         </p>
       </div>
     </Card>
