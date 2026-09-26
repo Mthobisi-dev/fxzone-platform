@@ -45,6 +45,7 @@ export default function ProfilePage() {
 
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [sharedAnalysisCount, setSharedAnalysisCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
@@ -153,14 +154,15 @@ export default function ProfilePage() {
     try {
       const [response, userPosts] = await Promise.all([
         api.get(`/api/social/users/${targetId}`),
-        api.get(`/api/social/users/${targetId}/posts`),
+        api.get(`/api/social/users/${targetId}/posts?include_total=1`),
       ]);
       if (response && response.id) {
         setProfile(response);
       }
 
-      if (Array.isArray(userPosts)) {
-        const mapped = userPosts.map((p: any) => ({
+      const profilePosts = Array.isArray(userPosts) ? userPosts : userPosts?.posts;
+      if (Array.isArray(profilePosts)) {
+        const mapped = profilePosts.map((p: any) => ({
           id: String(p.id),
           userId: String(p.user_id || p.userId),
           user: {
@@ -194,6 +196,10 @@ export default function ProfilePage() {
         }));
         const unique = Array.from(new Map(mapped.map((p: any) => [String(p.id), p])).values());
         setPosts(unique as Post[]);
+        setSharedAnalysisCount(typeof userPosts?.total === 'number' ? userPosts.total : unique.length);
+      } else {
+        setPosts([]);
+        setSharedAnalysisCount(0);
       }
     } catch (err: any) {
       console.error('Failed to load profile details:', err);
@@ -220,6 +226,7 @@ export default function ProfilePage() {
         setProfile(null);
       }
       setPosts([]);
+      setSharedAnalysisCount(0);
     } finally {
       setLoading(false);
     }
@@ -379,6 +386,7 @@ export default function ProfilePage() {
 
   const handlePostDeleted = (deletedId: string) => {
     setPosts((prev) => prev.filter((p) => p.id !== deletedId));
+    setSharedAnalysisCount((count) => Math.max(0, count - 1));
     setSavedPosts((prev) => prev.filter((p) => p.id !== deletedId));
   };
 
@@ -541,7 +549,7 @@ export default function ProfilePage() {
               : 'text-zinc-500 hover:text-white'
           }`}
         >
-          Shared Analysis ({posts.length})
+          Shared Analysis ({sharedAnalysisCount})
         </button>
 
         {isSelf && (

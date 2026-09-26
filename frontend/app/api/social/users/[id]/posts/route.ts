@@ -16,16 +16,17 @@ export async function GET(request: NextRequest, context: { params: { id: string 
     if (profileError) throw profileError;
     if (!profile) return NextResponse.json([]);
 
-    const { data: posts, error } = await db
+    const { data: posts, error, count } = await db
       .from('posts')
-      .select('id, content, image_url, caption, asset_tags, likes_count, comments_count, reposts_count, is_story, is_pinned, created_at, users:user_id (id, username, display_name, avatar_url, role)')
+      .select('id, content, image_url, caption, asset_tags, likes_count, comments_count, reposts_count, is_story, is_pinned, created_at, users:user_id (id, username, display_name, avatar_url, role)', { count: 'exact' })
       .eq('user_id', profile.id)
       .eq('is_story', false)
+      .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) throw error;
 
-    return NextResponse.json((posts || []).map((post: any) => ({
+    const mappedPosts = (posts || []).map((post: any) => ({
       ...post,
       user_id: post.users?.id || profile.id,
       user: {
@@ -38,7 +39,9 @@ export async function GET(request: NextRequest, context: { params: { id: string 
       likes_count: post.likes_count || 0,
       comments_count: post.comments_count || 0,
       reposts_count: post.reposts_count || 0,
-    })));
+    }));
+    const includeTotal = new URL(request.url).searchParams.get('include_total') === '1';
+    return NextResponse.json(includeTotal ? { posts: mappedPosts, total: count || 0 } : mappedPosts);
   } catch (error: any) {
     console.error('Error fetching user posts:', error);
     return NextResponse.json([], { status: 200 });

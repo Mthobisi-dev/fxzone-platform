@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
       let query = db
         .from('posts')
         .select(select)
-      .eq('is_story', false)
+        .eq('is_story', false)
+      .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
       comments_count: p.comments_count || 0,
       reposts_count: p.reposts_count || 0,
       is_story: p.is_story,
+      is_pinned: p.is_pinned,
       caption: p.caption,
       show_comments_count: p.show_comments_count,
       show_likes_count: p.show_likes_count,

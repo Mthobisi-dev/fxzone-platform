@@ -108,7 +108,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const initialLikes = post.likesCount ?? raw.likes_count ?? 0;
   const initialComments = post.commentsCount ?? raw.comments_count ?? 0;
   const initialReposts = post.repostsCount ?? raw.reposts_count ?? 0;
-  const initialSaves = post.savesCount ?? raw.saves_count ?? 0;
   const initialLiked = post.isLikedByUser ?? raw.is_liked_by_user ?? false;
   const initialReposted = post.isRepostedByUser ?? raw.is_reposted_by_user ?? false;
   const initialBookmarked = post.isBookmarkedByUser ?? raw.is_bookmarked_by_user ?? false;
@@ -121,7 +120,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const [reposts, setReposts] = useState(initialReposts);
   const [isReposted, setIsReposted] = useState(!!initialReposted);
   const [isBookmarked, setIsBookmarked] = useState(!!initialBookmarked);
-  const [saves, setSaves] = useState(initialSaves);
   const isPinned = post.isPinned ?? raw.is_pinned ?? false;
   const [pinned, setPinned] = useState(!!isPinned);
   const isStory = post.isStory ?? raw.is_story ?? false;
@@ -143,7 +141,8 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     const newPinned = !pinned;
     setPinned(newPinned);
     try {
-      await api.post(`/api/social/posts/${post.id}/pin`, {});
+      const result = await api.post(`/api/social/posts/${post.id}/pin`, {});
+      setPinned(typeof result?.is_pinned === 'boolean' ? result.is_pinned : newPinned);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
       }
@@ -277,7 +276,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       if (res && typeof res.is_bookmarked === 'boolean') {
         setIsBookmarked(res.is_bookmarked);
       }
-      if (res && typeof res.saves_count === 'number') setSaves(res.saves_count);
       // Immediately notify profile and feed to sync saved bookmarks
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('fxzone_refresh_saved_posts'));
@@ -771,7 +769,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                               : 'group-hover:scale-110'
                           )}
                         />
-                        <span className="text-[10px] font-medium">{saves}</span>
                       </button>
                     )}
 

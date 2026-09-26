@@ -32,17 +32,19 @@ export async function POST(
 
     const newPinned = !post.is_pinned;
 
-    const { error: updateError } = await db
+    const { data: updatedPost, error: updateError } = await db
       .from('posts')
       .update({ is_pinned: newPinned })
-      .eq('id', postId);
+      .eq('id', postId)
+      .select('id, is_pinned')
+      .single();
 
     if (updateError) throw updateError;
 
     return NextResponse.json({
       id: postId,
-      is_pinned: newPinned,
-      message: newPinned ? 'Post pinned' : 'Post unpinned',
+      is_pinned: Boolean(updatedPost?.is_pinned),
+      message: updatedPost?.is_pinned ? 'Post pinned' : 'Post unpinned',
     });
   } catch (error: any) {
     console.error('Pin post error:', error);
