@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { apiError } from '@/lib/api-error';
 
 // Fetch posts and chart analyses published by a profile. The route accepts both
 // a UUID and a username because profile URLs use either form.
 export async function GET(request: NextRequest, context: { params: { id: string } | Promise<{ id: string }> }) {
   try {
     const { id: profileIdentifier } = await Promise.resolve(context.params);
-    if (!profileIdentifier) return NextResponse.json([]);
+    if (!profileIdentifier) return apiError('BAD_REQUEST', 'A profile identifier is required.', 400);
 
     const db = getSupabaseAdmin(request);
     const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(profileIdentifier);
@@ -42,8 +43,8 @@ export async function GET(request: NextRequest, context: { params: { id: string 
     }));
     const includeTotal = new URL(request.url).searchParams.get('include_total') === '1';
     return NextResponse.json(includeTotal ? { posts: mappedPosts, total: count || 0 } : mappedPosts);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching user posts:', error);
-    return NextResponse.json([], { status: 200 });
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to load profile posts.', 500);
   }
 }

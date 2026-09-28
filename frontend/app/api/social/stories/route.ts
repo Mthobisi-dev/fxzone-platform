@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { apiError } from '@/lib/api-error';
 
 
 
@@ -46,8 +47,8 @@ export async function GET() {
     return NextResponse.json(stories, {
       headers: { 'Cache-Control': 'no-cache, no-store' },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Stories fetch error:', error);
-    return NextResponse.json([], { status: 200 });
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to load stories.', 500);
   }
 }

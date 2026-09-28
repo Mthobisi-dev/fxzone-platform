@@ -33,8 +33,12 @@ export interface PriceData {
   timestamp: string;
   /** Flag indicating whether quote spread is calculated/indicative */
   is_indicative?: boolean;
-  /** Primary data provider name */
-  data_source?: 'coingecko' | 'yahoo_finance' | 'indicative_fallback';
+  /** Primary data provider name. Never represents hard-coded production data. */
+  data_source: 'coingecko' | 'yahoo_finance';
+  /** Data quality metadata: cached values are never presented as live. */
+  freshness: 'live' | 'cached' | 'stale';
+  is_stale: boolean;
+  is_live: boolean;
 }
 
 export const SUPPORTED_ASSETS: MarketAsset[] = [
@@ -129,7 +133,19 @@ const YAHOO_MAP: Record<string, string> = {
 let priceCache: Record<string, PriceData> = {};
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 15000; // 15 seconds
+const STALE_CACHE_TTL_MS = 5 * 60 * 1000;
 const PROVIDER_TIMEOUT_MS = 5_000;
+
+function cachedPrices(freshness: 'cached' | 'stale'): Record<string, PriceData> {
+  return Object.fromEntries(Object.entries(priceCache)
+    .filter(([, quote]) => Date.now() - Date.parse(quote.timestamp) <= STALE_CACHE_TTL_MS)
+    .map(([symbol, quote]) => [symbol, {
+      ...quote,
+      freshness,
+      is_stale: freshness === 'stale',
+      is_live: false,
+    }]));
+}
 
 function getDecimals(symbol: string, price: number): number {
   if (symbol in YAHOO_MAP && symbol.length === 6 && !symbol.startsWith('X')) {
@@ -144,11 +160,12 @@ function getDecimals(symbol: string, price: number): number {
 export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
   const now = Date.now();
   if (Object.keys(priceCache).length > 0 && now - lastFetchTime < CACHE_TTL_MS) {
-    return priceCache;
+    return cachedPrices('cached');
   }
 
-  const result: Record<string, PriceData> = { ...priceCache };
+  const result: Record<string, PriceData> = cachedPrices('stale');
   const timestamp = new Date().toISOString();
+  let receivedLiveQuote = false;
   const cgIds = Object.values(COINGECKO_MAP).join(',');
   const cgUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${cgIds}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`;
   const yahooTickers = Object.values(YAHOO_MAP).join(',');
@@ -197,7 +214,11 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
             timestamp,
             is_indicative: true,
             data_source: 'coingecko',
+            freshness: 'live',
+            is_stale: false,
+            is_live: true,
           };
+          receivedLiveQuote = true;
         }
       });
     }
@@ -246,7 +267,11 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
             timestamp,
             is_indicative: true,
             data_source: 'yahoo_finance',
+            freshness: 'live',
+            is_stale: false,
+            is_live: true,
           };
+          receivedLiveQuote = true;
         }
       });
     }
@@ -254,72 +279,17 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
     console.warn('Yahoo Finance live fetch warning:', err);
   }
 
-  // 3. Fallback defaults for any symbol missing from live API responses
-  const fallbacks: Record<string, Partial<PriceData>> = {
-    BTCUSD: { price: 96450.00, change_pct: 1.92, volume: 28450000000 },
-    ETHUSD: { price: 2740.80, change_pct: 1.56, volume: 14500000000 },
-    SOLUSD: { price: 188.50, change_pct: 3.17, volume: 4200000000 },
-    XRPUSD: { price: 2.4580, change_pct: 5.31, volume: 7800000000 },
-    ADAUSD: { price: 0.7850, change_pct: 3.15, volume: 1200000000 },
-    DOTUSD: { price: 8.4500, change_pct: 3.42, volume: 450000000 },
-    LINKUSD: { price: 14.8000, change_pct: 4.20, volume: 680000000 },
-    UNIUSD: { price: 8.2000, change_pct: 2.10, volume: 320000000 },
-    DOGEUSD: { price: 0.2450, change_pct: 6.40, volume: 2100000000 },
-    AVAXUSD: { price: 34.1000, change_pct: 3.80, volume: 540000000 },
-    NVDA: { price: 138.80, change_pct: 3.04, volume: 72000000 },
-    AAPL: { price: 228.40, change_pct: 0.55, volume: 48000000 },
-    MSFT: { price: 418.50, change_pct: 0.50, volume: 22000000 },
-    GOOGL: { price: 182.20, change_pct: 0.80, volume: 25000000 },
-    AMZN: { price: 204.80, change_pct: 1.29, volume: 35000000 },
-    TSLA: { price: 242.60, change_pct: 2.88, volume: 65000000 },
-    META: { price: 638.50, change_pct: 1.17, volume: 18000000 },
-    AVGO: { price: 178.20, change_pct: 1.45, volume: 12000000 },
-    INTC: { price: 22.40, change_pct: -0.80, volume: 38000000 },
-    QCOM: { price: 175.50, change_pct: 2.10, volume: 14000000 },
-    AMD: { price: 158.30, change_pct: 2.80, volume: 42000000 },
-    LLY: { price: 948.50, change_pct: -0.40, volume: 8500000 },
-    JNJ: { price: 161.80, change_pct: -0.20, volume: 11000000 },
-    WMT: { price: 74.20, change_pct: 0.60, volume: 19000000 },
-    CAT: { price: 348.50, change_pct: 1.80, volume: 6200000 },
-    GE: { price: 174.20, change_pct: 0.90, volume: 7800000 },
-    EURUSD: { price: 1.04850, change_pct: -0.17, volume: 185000000 },
-    GBPUSD: { price: 1.25800, change_pct: 0.18, volume: 142000000 },
-    USDJPY: { price: 153.850, change_pct: 0.27, volume: 165000000 },
-    AUDUSD: { price: 0.63500, change_pct: -0.19, volume: 95000000 },
-    USDCAD: { price: 1.41800, change_pct: 0.11, volume: 88000000 },
-    NZDUSD: { price: 0.57200, change_pct: -0.14, volume: 62000000 },
-    USDCHF: { price: 0.90200, change_pct: 0.07, volume: 75000000 },
-    EURGBP: { price: 0.83350, change_pct: -0.17, volume: 82000000 },
-    XAUUSD: { price: 2892.40, change_pct: 0.65, volume: 42000000 },
-    XAGUSD: { price: 32.85, change_pct: 1.39, volume: 18000000 },
-  };
-
-  SUPPORTED_ASSETS.forEach((asset) => {
-    if (!result[asset.symbol]) {
-      const fb = fallbacks[asset.symbol] || { price: 100, change_pct: 0, volume: 100000 };
-      const price = fb.price || 100;
-      const changePct = fb.change_pct || 0;
-      const dec = getDecimals(asset.symbol, price);
-
-      result[asset.symbol] = {
-        symbol: asset.symbol,
-        price: Number(price.toFixed(dec)),
-        change: Number((price * changePct / 100).toFixed(dec)),
-        change_pct: Number(changePct.toFixed(2)),
-        bid: Number((price * 0.9998).toFixed(dec)),
-        ask: Number((price * 1.0002).toFixed(dec)),
-        high: Number((price * 1.008).toFixed(dec)),
-        low: Number((price * 0.992).toFixed(dec)),
-        open: Number((price - (price * changePct / 100)).toFixed(dec)),
-        volume: fb.volume || 1000000,
-        timestamp,
-        is_indicative: true,
-        data_source: 'indicative_fallback',
-      };
-    }
-  });
-
-  priceCache = result;
-  lastFetchTime = now;
+  // Never fabricate a quote. If a provider is unavailable, retain only a
+  // recent provider quote marked stale; otherwise omit the symbol so callers
+  // can render it as unavailable.
+  if (receivedLiveQuote) {
+    priceCache = Object.fromEntries(Object.entries(result).map(([symbol, quote]) => [symbol, {
+      ...quote,
+      freshness: quote.freshness === 'stale' ? 'cached' : quote.freshness,
+      is_stale: false,
+      is_live: quote.freshness === 'live',
+    }]));
+    lastFetchTime = now;
+  }
   return result;
 }

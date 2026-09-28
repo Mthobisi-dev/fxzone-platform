@@ -1,13 +1,18 @@
 import os
 import urllib.request
 import json
+import argparse
 
-def purge_bot_followers():
-    supabase_url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "https://cxmvfdnckedjvfcqsiiw.supabase.co")
-    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", ""))
+def purge_bot_followers(confirm: bool):
+    supabase_url = os.environ.get("SUPABASE_URL")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
-    if not service_key:
-        print("Error: SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY missing.")
+    if not supabase_url or not service_key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
+
+    print(f"Target Supabase project: {supabase_url}")
+    if not confirm:
+        print("Dry run only. Re-run with --confirm to delete bot follower records.")
         return
 
     headers = {
@@ -39,7 +44,9 @@ def purge_bot_followers():
         else:
             print("No bot accounts found on Supabase.")
     except Exception as e:
-        print(f"Error purging bot followers: {e}")
+        raise RuntimeError("Unable to purge bot followers") from e
 
 if __name__ == '__main__':
-    purge_bot_followers()
+    parser = argparse.ArgumentParser(description="Remove follower rows targeting bot profiles.")
+    parser.add_argument('--confirm', action='store_true', help='Perform deletion instead of the default dry run.')
+    purge_bot_followers(parser.parse_args().confirm)

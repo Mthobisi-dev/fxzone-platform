@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
+import { apiError } from '@/lib/api-error';
 
 // GET /api/notifications — fetch notifications for authenticated user
 export async function GET(request: NextRequest) {
   try {
     const { user } = await getUserFromRequest(request);
     if (!user) {
-      return NextResponse.json([], { status: 200 });
+      return apiError('UNAUTHORIZED', 'Authentication required', 401);
     }
 
     const client = getSupabaseAdmin(request);
@@ -25,9 +26,9 @@ export async function GET(request: NextRequest) {
         'Cache-Control': 'private, max-age=10, stale-while-revalidate=20',
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Notifications fetch error:', error);
-    return NextResponse.json([], { status: 200 });
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to load notifications.', 500);
   }
 }
 
@@ -36,7 +37,7 @@ export async function PUT(request: NextRequest) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
     if (authError || !user) {
-      return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+      return apiError('UNAUTHORIZED', authError || 'Authentication required', 401);
     }
 
     const client = getSupabaseAdmin(request);
@@ -55,8 +56,8 @@ export async function PUT(request: NextRequest) {
     const { error } = await query;
     if (error) throw error;
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Notifications update error:', error);
-    return NextResponse.json({ detail: error?.message || 'Unable to update notifications.' }, { status: 500 });
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to update notifications.', 500);
   }
 }

@@ -2,25 +2,12 @@ import { createHmac } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import turnCredentials from '@/lib/server/turnCredentials';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const MIN_TTL_SECONDS = 60;
-const MAX_TTL_SECONDS = 86_400;
-
-function turnUrlsFromEnvironment(value: string | undefined): string[] {
-  return (value || '')
-    .split(',')
-    .map((url) => url.trim())
-    .filter((url) => /^(turn|turns):\/\//i.test(url));
-}
-
-function credentialTtlSeconds(value: string | undefined): number {
-  const parsed = Number.parseInt(value || '', 10);
-  if (!Number.isFinite(parsed)) return 3_600;
-  return Math.min(Math.max(parsed, MIN_TTL_SECONDS), MAX_TTL_SECONDS);
-}
+const { parseTurnUrls, credentialTtlSeconds } = turnCredentials;
 
 /**
  * Issues short-lived TURN REST credentials for an authenticated participant.
@@ -38,9 +25,9 @@ export async function GET(request: NextRequest) {
     return apiError('UNPROCESSABLE_ENTITY', 'A valid sessionId is required.', 422);
   }
 
-  const urls = turnUrlsFromEnvironment(process.env.TURN_URL);
+  const urls = parseTurnUrls(process.env.TURN_URL);
   const sharedSecret = process.env.TURN_SHARED_SECRET?.trim();
-  if (!urls.length || !sharedSecret) {
+  if (!urls || !sharedSecret) {
     return apiError('SERVICE_UNAVAILABLE', 'TURN relay is not configured.', 503);
   }
 

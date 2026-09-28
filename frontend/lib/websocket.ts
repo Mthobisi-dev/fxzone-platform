@@ -8,6 +8,9 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 
 type WSCallback = (data: any) => void;
 
+const PRIVATE_TOPIC_PREFIXES = ['chat_', 'session_', 'notifications_'] as const;
+const PUBLIC_READ_ONLY_TOPICS = new Set(['market', 'news']);
+
 export type WSState = 'IDLE' | 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'CLOSING' | 'CLOSED';
 
 export class FxZoneWebSocket {
@@ -18,6 +21,8 @@ export class FxZoneWebSocket {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private readonly isPrivateTopic: boolean;
+  private readonly isPublicReadOnlyTopic: boolean;
 
   constructor(path: string) {
     // Sanitize path into valid Supabase channel name e.g. /ws/chat/123 -> chat_123
@@ -26,6 +31,8 @@ export class FxZoneWebSocket {
       .replace(/^\//, '')
       .replace(/[^a-zA-Z0-9_-]/g, '_');
     this.channelName = sanitized || 'fxzone_global';
+    this.isPrivateTopic = PRIVATE_TOPIC_PREFIXES.some((prefix) => this.channelName.startsWith(prefix));
+    this.isPublicReadOnlyTopic = PUBLIC_READ_ONLY_TOPICS.has(this.channelName);
   }
 
   public getState(): WSState {
@@ -41,7 +48,12 @@ export class FxZoneWebSocket {
     this.state = this.reconnectAttempts > 0 ? 'RECONNECTING' : 'CONNECTING';
 
     this.channel = supabase.channel(this.channelName, {
-      config: { broadcast: { self: true } },
+      config: {
+        // Private topic access is enforced by RLS policies on
+        // realtime.messages. Market and news remain read-only public topics.
+        private: this.isPrivateTopic,
+        broadcast: { self: true },
+      },
     });
 
     this.channel
@@ -105,13 +117,18 @@ export class FxZoneWebSocket {
    * Broadcast message over Supabase Realtime.
    */
   public send(payload: any) {
-    if (!this.channel) return;
+    if (!this.channel) return false;
+    if (this.isPublicReadOnlyTopic) {
+      console.warn(`Broadcasting is disabled for public ${this.channelName} data.`);
+      return false;
+    }
     const eventType = payload.type || payload.event || 'message';
-    this.channel.send({
+    void this.channel.send({
       type: 'broadcast',
       event: eventType,
       payload: payload,
     });
+    return true;
   }
 
   /**

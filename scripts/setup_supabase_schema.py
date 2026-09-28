@@ -22,14 +22,14 @@ if sys.platform == "win32":
 import httpx
 
 # -- Configuration -----------------------------------------------------------
-SUPABASE_URL = os.getenv(
-    "SUPABASE_URL",
-    "https://cxmvfdnckedjvfcqsiiw.supabase.co"
-)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv(
     "SUPABASE_SERVICE_ROLE_KEY",
     ""
 )
+
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
 
 HEADERS = {
     "apikey": SUPABASE_SERVICE_ROLE_KEY,

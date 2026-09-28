@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { SessionRoom } from '@/components/live/SessionRoom';
-import { useWebSocket } from '@/hooks/useWebSocket';
 import { Loader2, ShieldAlert, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -63,25 +62,9 @@ export default function SessionRoomPage() {
     joinSession();
   }, [sessionId]);
 
-  // Reactive approval check via WebSocket while pending
-  useWebSocket(isPendingApproval ? `/ws/session/${sessionId}` : '', {
-    participant_approved: (payload) => {
-      const targetUserId = String(payload.user_id || payload.userId || '');
-      if (user && String(user.id) === targetUserId) {
-        setIsPendingApproval(false);
-        joinSession();
-      }
-    },
-    participant_rejected: (payload) => {
-      const targetUserId = String(payload.user_id || payload.userId || '');
-      if (user && String(user.id) === targetUserId) {
-        setIsPendingApproval(false);
-        setIsRejected(true);
-      }
-    },
-  });
-
-  // Polling fallback for approval status
+  // Pending users do not join the session signaling topic. Polling this
+  // authenticated endpoint exposes only their own approval state until they
+  // become an active participant and may enter the private session channel.
   useEffect(() => {
     let interval: any;
     if (isPendingApproval && !isRejected) {
