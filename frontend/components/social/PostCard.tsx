@@ -33,6 +33,7 @@ import { CommentThread } from './CommentThread';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import { playExclusive, releaseMedia } from '@/lib/mediaPlayback';
 
 export interface Post {
   id: string;
@@ -604,6 +605,8 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                 preload="metadata"
                 className="w-full max-h-96 rounded-xl object-contain bg-black"
                 onClick={(e) => e.stopPropagation()}
+                onPlay={(event) => playExclusive(event.currentTarget)}
+                onEnded={(event) => releaseMedia(event.currentTarget)}
               />
             </div>
           )}
@@ -621,7 +624,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                 <span className="text-[9px] font-bold text-purple-400 uppercase tracking-wider block mb-1">
                   Audio / Voice Memo
                 </span>
-                <audio src={imageUrl} controls className="w-full h-8" />
+                <audio src={imageUrl} controls className="w-full h-8" onPlay={(event) => playExclusive(event.currentTarget)} onEnded={(event) => releaseMedia(event.currentTarget)} />
               </div>
             </div>
           )}

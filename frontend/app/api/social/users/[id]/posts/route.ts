@@ -21,7 +21,7 @@ export async function GET(request: NextRequest, context: { params: { id: string 
       .from('posts')
       .select('id, content, image_url, caption, asset_tags, likes_count, comments_count, reposts_count, is_story, is_pinned, created_at, users:user_id (id, username, display_name, avatar_url, role)', { count: 'exact' })
       .eq('user_id', profile.id)
-      .eq('is_story', false)
+      .or('is_story.is.null,is_story.eq.false')
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50);

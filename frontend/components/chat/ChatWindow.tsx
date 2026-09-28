@@ -24,6 +24,7 @@ import { api } from '@/lib/api';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { TradingViewChatPanel } from '../trading/TradingViewChatPanel';
+import { playExclusive, releaseMedia } from '@/lib/mediaPlayback';
 
 export interface ChatMessage {
   id: string;
@@ -425,9 +426,11 @@ export function ChatWindow({
                             playsInline
                             preload="metadata"
                             className="max-h-72 max-w-full rounded-lg"
+                            onPlay={(event) => playExclusive(event.currentTarget)}
+                            onEnded={(event) => releaseMedia(event.currentTarget)}
                           />
                         ) : msg.messageType === 'audio' || legacyVoiceUrl ? (
-                          <audio src={legacyVoiceUrl || msg.content} controls preload="metadata" className="max-w-full" />
+                          <audio src={legacyVoiceUrl || msg.content} controls preload="metadata" className="max-w-full" onPlay={(event) => playExclusive(event.currentTarget)} onEnded={(event) => releaseMedia(event.currentTarget)} />
                         ) : (
                           <p>{msg.content}</p>
                         )}

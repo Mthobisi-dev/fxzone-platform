@@ -7,6 +7,7 @@ export async function GET() {
     const { data: posts, error } = await supabaseAdmin
       .from('posts')
       .select('content, asset_tags')
+      .or('is_story.is.null,is_story.eq.false')
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -18,7 +19,8 @@ export async function GET() {
       posts.forEach((p: any) => {
         const text = [p.content, ...(Array.isArray(p.asset_tags) ? p.asset_tags : [])].filter(Boolean).join(' ').toUpperCase();
         ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'XAGUSD', 'AAPL', 'NVDA', 'TSLA', 'MSFT', 'GOOGL', 'AMZN'].forEach((sym) => {
-          if (text.includes(sym)) {
+          const escaped = sym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          if (new RegExp(`(^|[^A-Z0-9])${escaped}($|[^A-Z0-9])`).test(text)) {
             counts[sym] = (counts[sym] || 0) + 1;
           }
         });
@@ -33,8 +35,8 @@ export async function GET() {
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Trending symbols error:', error);
-    return NextResponse.json([]);
+    return NextResponse.json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Unable to load trending symbols.' } }, { status: 500 });
   }
 }

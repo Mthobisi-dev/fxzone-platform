@@ -12,12 +12,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (!await ensureUserProfile(db, user)) return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
     const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(targetIdentifier);
     const { data: target, error: targetError } = isUuid
-      ? await db.from('users').select('id, username').eq('id', targetIdentifier).maybeSingle()
-      : await db.from('users').select('id, username').eq('username', targetIdentifier).maybeSingle();
+      ? await db.from('users').select('id, username, role').eq('id', targetIdentifier).maybeSingle()
+      : await db.from('users').select('id, username, role').eq('username', targetIdentifier).maybeSingle();
     if (targetError) throw targetError;
     if (!target) return NextResponse.json({ detail: 'Trader not found' }, { status: 404 });
     if (target.id === user.id) return NextResponse.json({ detail: 'Cannot follow yourself' }, { status: 400 });
-    if (target.username.toLowerCase() === 'jackbot_analysis') return NextResponse.json({ detail: 'jackbot_analysis is a system account and cannot be followed.' }, { status: 403 });
+    if (['jackbot_analysis', 'fxzone_bot', 'fxzone_admin'].includes(target.username.toLowerCase()) || target.role === 'admin') {
+      return NextResponse.json({ detail: 'This is a protected system account and cannot be followed.' }, { status: 403 });
+    }
     const { data: existing, error: existingError } = await db.from('follows').select('id').eq('follower_id', user.id).eq('following_id', target.id).maybeSingle();
     if (existingError) throw existingError;
     const is_following = !existing;

@@ -512,7 +512,7 @@ export default function ProfilePage() {
             <p className="text-xs text-zinc-300 leading-relaxed my-3 font-medium">{profile.bio}</p>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-zinc-900/80">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-zinc-900/80">
             <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
               <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Followers</span>
               <span className="text-sm font-extrabold text-white block">
@@ -528,12 +528,6 @@ export default function ProfilePage() {
             <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
               <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Technical Posts</span>
               <span className="text-sm font-extrabold text-white block">{posts.length}</span>
-            </div>
-            <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Execution Broker</span>
-              <span className="text-xs font-bold text-amber-300 block truncate">
-                {profile?.preferred_broker || profile?.preferredBroker || 'Exness'}
-              </span>
             </div>
           </div>
         </div>
