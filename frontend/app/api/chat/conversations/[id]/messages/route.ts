@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
+import { apiError } from '@/lib/api-error';
 
 const MESSAGE_TYPES = new Set(['text', 'image', 'video', 'audio']);
+const MAX_MESSAGE_LENGTH = 10_000;
+const MAX_PAGE_SIZE = 100;
 
 // GET /api/chat/conversations/[id]/messages
 export async function GET(
@@ -11,7 +14,7 @@ export async function GET(
 ) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return NextResponse.json([], { status: 200 });
+    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
 
     const { id } = await context.params;
     const db = getSupabaseAdmin(request);
@@ -24,12 +27,14 @@ export async function GET(
       .maybeSingle();
 
     if (!membership) {
-      return NextResponse.json({ detail: 'Not a member of this conversation' }, { status: 403 });
+      return apiError('FORBIDDEN', 'Not a member of this conversation', 403);
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const requestedLimit = Number.parseInt(searchParams.get('limit') || '50', 10);
+    const requestedOffset = Number.parseInt(searchParams.get('offset') || '0', 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), MAX_PAGE_SIZE) : 50;
+    const offset = Number.isFinite(requestedOffset) ? Math.max(requestedOffset, 0) : 0;
 
     const { data, error } = await db
       .from('messages')
@@ -68,9 +73,9 @@ export async function GET(
     }
 
     return NextResponse.json(messages);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Messages fetch error:', error);
-    return NextResponse.json([], { status: 200 });
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to load messages', 500);
   }
 }
 
@@ -81,7 +86,7 @@ export async function POST(
 ) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
+    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
 
     const { id } = await context.params;
     const db = getSupabaseAdmin(request);
@@ -94,23 +99,29 @@ export async function POST(
       .maybeSingle();
 
     if (!membership) {
-      return NextResponse.json({ detail: 'Not a member of this conversation' }, { status: 403 });
+      return apiError('FORBIDDEN', 'Not a member of this conversation', 403);
     }
 
-    const body = await request.json();
-    const { content, message_type } = body;
+    const body: unknown = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return apiError('BAD_REQUEST', 'A JSON object is required.', 400);
+    }
+    const { content, message_type } = body as Record<string, unknown>;
     const normalizedMessageType = message_type || 'text';
 
-    if (!content?.trim()) {
-      return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
+    if (typeof content !== 'string' || !content.trim()) {
+      return apiError('UNPROCESSABLE_ENTITY', 'Content is required', 422);
+    }
+    if (content.trim().length > MAX_MESSAGE_LENGTH) {
+      return apiError('UNPROCESSABLE_ENTITY', `Messages must be at most ${MAX_MESSAGE_LENGTH} characters.`, 422);
     }
     if (typeof normalizedMessageType !== 'string' || !MESSAGE_TYPES.has(normalizedMessageType)) {
-      return NextResponse.json({ detail: 'Unsupported message type' }, { status: 400 });
+      return apiError('UNPROCESSABLE_ENTITY', 'Unsupported message type', 422);
     }
 
     // Ensure sender profile row exists before INSERT (FK: messages.sender_id → users.id)
     if (!await ensureUserProfile(db, user)) {
-      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+      return apiError('SERVICE_UNAVAILABLE', 'Your profile is still being provisioned. Please try again in a moment.', 503);
     }
 
     const { data, error } = await db
@@ -163,11 +174,8 @@ export async function POST(
         avatar_url: sender?.avatar_url || null,
       },
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Send message error:', error);
-    return NextResponse.json(
-      { error: 'Failed to send message', detail: error?.message },
-      { status: 500 }
-    );
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to send message', 500);
   }
 }

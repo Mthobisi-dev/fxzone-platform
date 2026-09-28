@@ -33,6 +33,15 @@ async function getAccessToken(): Promise<string | null> {
 
 let refreshPromise: Promise<string | null> | null = null;
 
+function getErrorMessage(body: unknown, fallback: string): string {
+  if (!body || typeof body !== 'object') return fallback;
+  const response = body as { detail?: unknown; message?: unknown; error?: { message?: unknown } };
+  if (typeof response.detail === 'string') return response.detail;
+  if (typeof response.message === 'string') return response.message;
+  if (typeof response.error?.message === 'string') return response.error.message;
+  return fallback;
+}
+
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   if (options.signal) {
     return fetch(url, { ...options, cache: options.cache ?? 'no-store' });
@@ -140,7 +149,7 @@ export async function apiRequest(
       if (retryRes.status === 204) return null;
       if (!retryRes.ok) {
         const body = await retryRes.json().catch(() => null);
-        const msg = body?.detail || body?.message || `HTTP ${retryRes.status}`;
+        const msg = getErrorMessage(body, `HTTP ${retryRes.status}`);
         const err = new Error(msg);
         Object.assign(err, body || {}, { status: retryRes.status, detail: msg });
         throw err;
@@ -154,10 +163,9 @@ export async function apiRequest(
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
-    const detailMsg =
-      errorBody?.detail ||
-      errorBody?.message ||
-      (typeof errorBody === 'string' ? errorBody : null);
+    const detailMsg = typeof errorBody === 'string'
+      ? errorBody
+      : getErrorMessage(errorBody, '');
     const message =
       detailMsg ||
       `Request failed: ${response.status} ${response.statusText || 'Server Error'}`;

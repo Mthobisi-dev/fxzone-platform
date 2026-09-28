@@ -2,8 +2,9 @@
  * FxZone WebRTC Client Manager
  * Institutional-grade peer-to-peer screen sharing and real-time audio/video streaming.
  */
+import { api } from '@/lib/api';
 
-function buildRtcConfig(): RTCConfiguration {
+function buildBaseRtcConfig(): RTCConfiguration {
   const iceServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -13,18 +14,6 @@ function buildRtcConfig(): RTCConfiguration {
     { urls: 'stun:stun.cloudflare.com:3478' },
   ];
 
-  // Configurable TURN servers for production fallback behind restrictive NATs
-  const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
-  const turnUser = process.env.NEXT_PUBLIC_TURN_USERNAME;
-  const turnCred = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
-
-  if (turnUrl) {
-    const turnServer: RTCIceServer = { urls: turnUrl };
-    if (turnUser) turnServer.username = turnUser;
-    if (turnCred) turnServer.credential = turnCred;
-    iceServers.push(turnServer);
-  }
-
   return {
     iceServers,
     iceCandidatePoolSize: 10,
@@ -33,7 +22,11 @@ function buildRtcConfig(): RTCConfiguration {
   };
 }
 
-const RTC_CONFIG: RTCConfiguration = buildRtcConfig();
+interface TurnCredentials {
+  urls: string[];
+  username: string;
+  credential: string;
+}
 
 export interface WebRTCOptions {
   sessionId?: string | number;
@@ -56,6 +49,8 @@ export class WebRTCClient {
   private onSignalCallback: ((signal: any) => void) | null = null;
   private onPeerLeftCallback: ((userId: string) => void) | null = null;
   private onPresenterStatusChangeCallback: ((isLive: boolean, presenterName?: string) => void) | null = null;
+  private rtcConfig: RTCConfiguration = buildBaseRtcConfig();
+  private turnCredentialsPromise: Promise<void> | null = null;
 
   constructor(options: WebRTCOptions | string | number, isPresenter: boolean = false) {
     if (typeof options === 'object' && options !== null) {
@@ -340,7 +335,7 @@ export class WebRTCClient {
       }
     }
 
-    pc = this.createPeerConnection(targetUserId);
+    pc = await this.createPeerConnection(targetUserId);
     this.peerConnections.set(targetUserId, pc);
 
     // Add local stream tracks
@@ -376,7 +371,7 @@ export class WebRTCClient {
       }
     }
 
-    pc = this.createPeerConnection(senderId, senderUsername);
+    pc = await this.createPeerConnection(senderId, senderUsername);
     this.peerConnections.set(senderId, pc);
 
     // If viewer also has local media tracks (e.g. 2-way voice/mic)
@@ -463,8 +458,9 @@ export class WebRTCClient {
   /**
    * Create an RTCPeerConnection with configured handlers.
    */
-  private createPeerConnection(targetUserId: string, targetUsername?: string): RTCPeerConnection {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+  private async createPeerConnection(targetUserId: string, targetUsername?: string): Promise<RTCPeerConnection> {
+    await this.loadTurnCredentials();
+    const pc = new RTCPeerConnection(this.rtcConfig);
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -493,6 +489,38 @@ export class WebRTCClient {
     };
 
     return pc;
+  }
+
+  private async loadTurnCredentials(): Promise<void> {
+    if (!this.sessionId) return;
+    if (!this.turnCredentialsPromise) {
+      this.turnCredentialsPromise = (async () => {
+        try {
+          const credentials = await api.get('/api/webrtc/credentials', {
+            params: { sessionId: this.sessionId },
+            timeoutMs: 5_000,
+          }) as TurnCredentials;
+          if (!Array.isArray(credentials?.urls) || !credentials.urls.length || !credentials.username || !credentials.credential) {
+            return;
+          }
+          this.rtcConfig = {
+            ...buildBaseRtcConfig(),
+            iceServers: [
+              ...(buildBaseRtcConfig().iceServers || []),
+              {
+                urls: credentials.urls,
+                username: credentials.username,
+                credential: credentials.credential,
+              },
+            ],
+          };
+        } catch {
+          // TURN is an optional relay fallback. STUN-only connections continue
+          // to work when the deployment has no coturn-compatible provider.
+        }
+      })();
+    }
+    await this.turnCredentialsPromise;
   }
 
   /**

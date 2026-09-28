@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
+import { apiError } from '@/lib/api-error';
+
+const MAX_CONVERSATION_MEMBERS = 50;
+const MAX_GROUP_NAME_LENGTH = 120;
 
 // GET /api/chat/conversations — list conversations for current user
 export async function GET(request: NextRequest) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return NextResponse.json([], { status: 200 });
+    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
 
     const db = getSupabaseAdmin(request);
 
@@ -72,9 +76,9 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json(enriched);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Conversations fetch error:', error);
-    return NextResponse.json([], { status: 200 });
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to load conversations', 500);
   }
 }
 
@@ -82,19 +86,25 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
+    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
 
     const db = getSupabaseAdmin(request);
-    const body = await request.json();
-    const { participant_ids, is_group, name } = body;
+    const body: unknown = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return apiError('BAD_REQUEST', 'A JSON object is required.', 400);
+    }
+    const { participant_ids, is_group, name } = body as Record<string, unknown>;
 
-    if (!Array.isArray(participant_ids) || participant_ids.length === 0 || participant_ids.some((id: unknown) => typeof id !== 'string' || !id.trim())) {
-      return NextResponse.json({ detail: 'participant_ids must contain at least one user ID.' }, { status: 400 });
+    if (!Array.isArray(participant_ids) || participant_ids.length === 0 || participant_ids.length > MAX_CONVERSATION_MEMBERS || participant_ids.some((id: unknown) => typeof id !== 'string' || !id.trim() || id.trim().length > 64)) {
+      return apiError('UNPROCESSABLE_ENTITY', `participant_ids must contain between 1 and ${MAX_CONVERSATION_MEMBERS} user IDs.`, 422);
+    }
+    if (name !== undefined && (typeof name !== 'string' || name.trim().length > MAX_GROUP_NAME_LENGTH)) {
+      return apiError('UNPROCESSABLE_ENTITY', `Conversation name must be at most ${MAX_GROUP_NAME_LENGTH} characters.`, 422);
     }
 
     // Ensure creator's profile exists for FK references.
     if (!await ensureUserProfile(db, user)) {
-      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+      return apiError('SERVICE_UNAVAILABLE', 'Your profile is still being provisioned. Please try again in a moment.', 503);
     }
 
     const allMemberIds = Array.from(new Set([user.id, ...participant_ids.filter((id: string) => id !== user.id)]));
@@ -104,7 +114,7 @@ export async function POST(request: NextRequest) {
       .in('id', allMemberIds);
     if (memberLookupError) throw memberLookupError;
     if ((registeredMembers || []).length !== allMemberIds.length) {
-      return NextResponse.json({ detail: 'One or more selected chat members no longer exist.' }, { status: 400 });
+      return apiError('UNPROCESSABLE_ENTITY', 'One or more selected chat members no longer exist.', 422);
     }
 
     // For 1-on-1 chats, check if a conversation already exists
@@ -141,8 +151,8 @@ export async function POST(request: NextRequest) {
     const { data: conv, error: convError } = await db
       .from('conversations')
       .insert({
-        name: name || null,
-        is_group: !!is_group,
+        name: typeof name === 'string' ? name.trim() || null : null,
+        is_group: is_group === true,
         creator_id: user.id,
       })
       .select()
@@ -162,11 +172,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ...conv, members: allMemberIds }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create conversation error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create conversation', detail: error?.message },
-      { status: 500 }
-    );
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to create conversation', 500);
   }
 }

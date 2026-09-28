@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin, getSupabaseServerConfig } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
+
+const noStoreHeaders = { 'Cache-Control': 'no-store, max-age=0' };
 
 export async function GET() {
   try {
@@ -7,17 +11,17 @@ export async function GET() {
     const { error } = await db.from('users').select('id', { head: true, count: 'exact' }).limit(1);
     if (error) throw error;
 
-    return NextResponse.json({ status: 'ok', backend: 'supabase' });
-  } catch (error: any) {
-    const config = getSupabaseServerConfig();
+    return NextResponse.json({ status: 'healthy', backend: 'supabase' }, { headers: noStoreHeaders });
+  } catch (error: unknown) {
+    // Keep operational details in server logs. This endpoint is public and must
+    // not disclose database errors or which deployment secrets are missing.
+    console.error('Health check failed', error);
     return NextResponse.json(
       {
-        status: 'error',
+        status: 'unhealthy',
         backend: 'supabase',
-        detail: error?.message || 'Supabase is unavailable',
-        missing_configuration: config.missing,
       },
-      { status: 503 }
+      { status: 503, headers: noStoreHeaders }
     );
   }
 }

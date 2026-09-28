@@ -1,7 +1,7 @@
 -- ============================================================================
 -- 006_backend_hardening.sql
 --
--- Schema fixes required by the FxZone FastAPI backend (backend/).
+-- Schema fixes required by FxZone Next.js route handlers.
 -- Idempotent: safe to run more than once. Compatible with the legacy Next.js
 -- API routes, so it can be applied BEFORE switching the frontend over.
 --
