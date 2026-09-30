@@ -9,6 +9,9 @@ import {
   BrainCircuit,
   CheckCircle2,
   ChevronRight,
+  Github,
+  Instagram,
+  Linkedin,
   Search,
   ShieldCheck,
   Sparkles,
@@ -25,6 +28,12 @@ type Quote = {
 };
 
 const featuredSymbols = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD'];
+
+const socialLinks = [
+  { href: 'https://www.instagram.com/', label: 'Instagram', icon: Instagram },
+  { href: 'https://github.com/Mthobisi-dev', label: 'GitHub', icon: Github },
+  { href: 'https://www.linkedin.com/', label: 'LinkedIn', icon: Linkedin },
+];
 
 const benefits = [
   {
@@ -139,14 +148,14 @@ export default function LandingPage() {
 
           <nav className="hidden items-center gap-8 text-sm font-medium text-slate-300 lg:flex" aria-label="Primary navigation">
             <a href="#home" className="text-white transition hover:text-sky-300">Home</a>
-            <Link href="/markets" className="transition hover:text-sky-300">Markets</Link>
-            <Link href="/ai" className="transition hover:text-sky-300">AI Insights</Link>
+            <Link href="/dashboard" className="transition hover:text-sky-300">Markets</Link>
+            <Link href="/dashboard" className="transition hover:text-sky-300">AI Insights</Link>
             <a href="#features" className="transition hover:text-sky-300">Features</a>
             <Link href="/dashboard" className="transition hover:text-sky-300">Performance</Link>
           </nav>
 
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-            <Link href="/markets" className="hidden rounded-xl p-2.5 text-sky-300 transition hover:bg-white/10 sm:inline-flex" aria-label="Search markets"><Search size={19} /></Link>
+            <Link href="/dashboard" className="hidden rounded-xl p-2.5 text-sky-300 transition hover:bg-white/10 sm:inline-flex" aria-label="Search markets"><Search size={19} /></Link>
             <Link href="/login" className="hidden rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/5 min-[390px]:inline-flex sm:px-5">Log in</Link>
             <Link href="/register" className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-400 sm:rounded-xl sm:px-5 sm:text-sm"><span className="sm:hidden">Join free</span><span className="hidden sm:inline">Get started</span></Link>
           </div>
@@ -171,7 +180,7 @@ export default function LandingPage() {
               <Link href="/register" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 px-5 py-3 font-bold text-white shadow-xl shadow-sky-500/20 transition hover:bg-sky-400 min-[390px]:w-auto sm:rounded-2xl sm:px-6 sm:py-3.5">
                 Get started free <ArrowRight size={18} />
               </Link>
-              <Link href="/markets" className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-5 py-3 font-semibold text-white transition hover:border-sky-300/60 hover:bg-white/5 min-[390px]:w-auto sm:rounded-2xl sm:px-6 sm:py-3.5">
+              <Link href="/dashboard" className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-5 py-3 font-semibold text-white transition hover:border-sky-300/60 hover:bg-white/5 min-[390px]:w-auto sm:rounded-2xl sm:px-6 sm:py-3.5">
                 Explore markets <ChevronRight size={18} />
               </Link>
             </div>
@@ -231,7 +240,13 @@ export default function LandingPage() {
 
         <footer className="flex flex-col gap-4 border-t border-white/10 py-7 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:py-8">
           <span>© {new Date().getFullYear()} FxZone. Market research, made clearer.</span>
-          <div className="flex flex-wrap gap-x-5 gap-y-2"><Link href="/markets" className="hover:text-white">Markets</Link><Link href="/login" className="hover:text-white">Log in</Link><Link href="/register" className="hover:text-white">Get started</Link></div>
+          <div className="flex flex-wrap items-center gap-2">
+            {socialLinks.map(({ href, label, icon: Icon }) => (
+              <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label} title={label} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition hover:border-sky-300/60 hover:bg-sky-400/10 hover:text-sky-300">
+                <Icon size={18} />
+              </a>
+            ))}
+          </div>
         </footer>
       </div>
     </main>
