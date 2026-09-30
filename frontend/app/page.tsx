@@ -127,12 +127,12 @@ export default function LandingPage() {
         : 'Unavailable';
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#07101f] text-slate-100">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_4%_0%,rgba(37,99,235,0.34),transparent_27%),radial-gradient(circle_at_95%_32%,rgba(14,165,233,0.18),transparent_30%),linear-gradient(130deg,#07101f_0%,#0b1526_53%,#07101f_100%)]" />
+    <main className="fxzone-landing relative min-h-screen overflow-hidden bg-[var(--color-background)] text-slate-100">
+      <div className="fxzone-landing-backdrop pointer-events-none absolute inset-0" />
       <div className="pointer-events-none absolute inset-x-0 top-[28rem] h-px bg-gradient-to-r from-transparent via-sky-400/40 to-transparent" />
 
       <div className="relative mx-auto max-w-7xl px-3 pb-9 pt-3 sm:px-6 sm:pb-12 sm:pt-5 lg:px-10">
-        <header className="flex min-h-16 items-center justify-between rounded-xl border border-white/10 bg-slate-950/45 px-3 shadow-2xl shadow-sky-950/25 backdrop-blur-xl sm:min-h-20 sm:rounded-2xl sm:px-7">
+        <header className="fxzone-landing-nav flex min-h-16 items-center justify-between rounded-xl border border-white/10 bg-slate-950/45 px-3 shadow-2xl shadow-sky-950/25 backdrop-blur-xl sm:min-h-20 sm:rounded-2xl sm:px-7">
           <Link href="/" className="flex items-center gap-3" aria-label="FxZone home">
             <span className="text-xl font-black tracking-tight text-white sm:text-3xl">Fx<span className="text-sky-400">Zone</span></span>
           </Link>
@@ -177,7 +177,7 @@ export default function LandingPage() {
             </div>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.08 }} className="rounded-2xl border border-sky-200/20 bg-slate-900/55 p-3 shadow-2xl shadow-sky-950/40 backdrop-blur-xl sm:rounded-3xl sm:p-6">
+          <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.08 }} className="fxzone-landing-panel rounded-2xl border border-sky-200/20 bg-slate-900/55 p-3 shadow-2xl shadow-sky-950/40 backdrop-blur-xl sm:rounded-3xl sm:p-6">
             <div className="mb-5 flex flex-col gap-3 min-[390px]:flex-row min-[390px]:items-center min-[390px]:justify-between sm:mb-6">
               <div>
                 <p className="text-lg font-bold text-white">Market overview</p>
@@ -188,7 +188,7 @@ export default function LandingPage() {
               </span>
             </div>
             <div className="grid gap-4 sm:grid-cols-[1.15fr_0.85fr]">
-              <div className="rounded-xl border border-white/10 bg-slate-950/45 p-2 sm:rounded-2xl sm:p-3">
+              <div className="fxzone-landing-subpanel rounded-xl border border-white/10 bg-slate-950/45 p-2 sm:rounded-2xl sm:p-3">
                 {marketPreview.length > 0 ? marketPreview.map((quote) => {
                   const positive = quote.change_pct >= 0;
                   return <div key={quote.symbol} className="flex items-center justify-between border-b border-white/8 px-2 py-3.5 last:border-0 sm:py-4">
@@ -197,7 +197,7 @@ export default function LandingPage() {
                   </div>;
                 }) : <div className="flex min-h-72 items-center justify-center px-5 text-center text-sm leading-6 text-slate-400">{loadingQuotes ? 'Loading current market data…' : 'Market data is temporarily unavailable. Try again from Markets.'}</div>}
               </div>
-              <div className="relative overflow-hidden rounded-xl border border-sky-300/15 bg-gradient-to-br from-sky-500/15 to-indigo-950/45 p-4 sm:rounded-2xl sm:p-5">
+              <div className="fxzone-landing-research relative overflow-hidden rounded-xl border border-sky-300/15 bg-gradient-to-br from-sky-500/15 to-indigo-950/45 p-4 sm:rounded-2xl sm:p-5">
                 <p className="text-sm font-medium text-slate-300">Research workspace</p>
                 <p className="mt-3 text-xl font-black text-white sm:text-2xl">One place to follow what matters.</p>
                 <div className="mt-7 space-y-3 sm:mt-10">
