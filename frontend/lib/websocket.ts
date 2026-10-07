@@ -21,6 +21,7 @@ export class FxZoneWebSocket {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectTimer: NodeJS.Timeout | null = null;
+  private pendingOutbound: any[] = [];
   private readonly isPrivateTopic: boolean;
   private readonly isPublicReadOnlyTopic: boolean;
 
@@ -69,8 +70,9 @@ export class FxZoneWebSocket {
         if (status === 'SUBSCRIBED') {
           this.state = 'CONNECTED';
           this.reconnectAttempts = 0;
+          this.flushPendingOutbound();
           this.emit('open', null);
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           if (this.state !== 'CLOSING' && this.state !== 'CLOSED') {
             this.handleReconnect();
           }
@@ -117,18 +119,58 @@ export class FxZoneWebSocket {
    * Broadcast message over Supabase Realtime.
    */
   public send(payload: any) {
-    if (!this.channel) return false;
     if (this.isPublicReadOnlyTopic) {
       console.warn(`Broadcasting is disabled for public ${this.channelName} data.`);
       return false;
     }
+
+    // Supabase accepts channel sends only after a successful subscription. Queue
+    // early WebRTC offers/candidates instead of silently dropping them while a
+    // private session topic is still authorizing.
+    if (!this.channel || this.state !== 'CONNECTED') {
+      this.enqueueOutbound(payload);
+      return true;
+    }
+
+    this.sendNow(payload);
+    return true;
+  }
+
+  private enqueueOutbound(payload: any) {
+    const maximumQueuedMessages = 100;
+    if (this.pendingOutbound.length >= maximumQueuedMessages) {
+      this.pendingOutbound.shift();
+    }
+    this.pendingOutbound.push(payload);
+  }
+
+  private flushPendingOutbound() {
+    const queued = this.pendingOutbound.splice(0);
+    queued.forEach((payload) => this.sendNow(payload));
+  }
+
+  private sendNow(payload: any) {
+    if (!this.channel || this.state !== 'CONNECTED') {
+      this.enqueueOutbound(payload);
+      return;
+    }
+
     const eventType = payload.type || payload.event || 'message';
     void this.channel.send({
       type: 'broadcast',
       event: eventType,
       payload: payload,
+    }).then((status) => {
+      // A message accepted before reconnect may still time out. Preserve it for
+      // the next subscription rather than dropping critical signaling data.
+      if (status !== 'ok' && this.state !== 'CLOSING' && this.state !== 'CLOSED') {
+        this.enqueueOutbound(payload);
+      }
+    }).catch(() => {
+      if (this.state !== 'CLOSING' && this.state !== 'CLOSED') {
+        this.enqueueOutbound(payload);
+      }
     });
-    return true;
   }
 
   /**

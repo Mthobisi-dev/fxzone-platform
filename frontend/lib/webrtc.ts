@@ -31,6 +31,7 @@ interface TurnCredentials {
 export interface WebRTCOptions {
   sessionId?: string | number;
   currentUserId?: string;
+  currentUsername?: string;
   isHost?: boolean;
   isPresenter?: boolean;
   onStream?: (stream: MediaStream | null, presenterInfo?: { userId: string; username?: string }) => void;
@@ -44,6 +45,7 @@ export class WebRTCClient {
   private localStream: MediaStream | null = null;
   private sessionId: string;
   private currentUserId: string = '';
+  private currentUsername: string = '';
   private isPresenter: boolean = false;
   private onStreamCallback: ((stream: MediaStream | null, presenterInfo?: { userId: string; username?: string }) => void) | null = null;
   private onSignalCallback: ((signal: any) => void) | null = null;
@@ -56,6 +58,7 @@ export class WebRTCClient {
     if (typeof options === 'object' && options !== null) {
       this.sessionId = String(options.sessionId || '');
       this.currentUserId = String(options.currentUserId || '');
+      this.currentUsername = String(options.currentUsername || '');
       this.isPresenter = !!(options.isHost || options.isPresenter);
       if (options.onStream) this.onStreamCallback = options.onStream;
       if (options.onSignal) this.onSignalCallback = options.onSignal;
@@ -222,12 +225,20 @@ export class WebRTCClient {
     // Normalization across signal wrapper payloads
     const rawData = payload.data || payload;
     const senderId = String(payload.sender_id || rawData.sender_id || payload.user_id || rawData.user_id || '');
+    const targetUserId = String(payload.target_user_id || rawData.target_user_id || '');
     const senderUsername = payload.sender_username || rawData.sender_username || rawData.username;
     const signalType = payload.type === 'rtc_signal' ? (rawData.type || 'rtc_signal') : (payload.type || rawData.type);
     const signalData = rawData.data !== undefined ? rawData.data : rawData;
 
     // Ignore self-dispatched signals to prevent self-connection loops
     if (senderId && this.currentUserId && senderId === this.currentUserId) {
+      return;
+    }
+
+    // Session signaling uses one private Broadcast topic. SDP and ICE payloads
+    // are still addressed to one peer, so every other participant must ignore
+    // a message that is not intended for them.
+    if (targetUserId && this.currentUserId && targetUserId !== this.currentUserId) {
       return;
     }
 
@@ -528,7 +539,11 @@ export class WebRTCClient {
    */
   private sendSignal(payload: any) {
     if (this.onSignalCallback) {
-      this.onSignalCallback(payload);
+      this.onSignalCallback({
+        ...payload,
+        sender_id: this.currentUserId,
+        ...(this.currentUsername ? { sender_username: this.currentUsername } : {}),
+      });
     }
   }
 

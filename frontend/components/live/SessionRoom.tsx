@@ -159,6 +159,7 @@ export function SessionRoom({
     const client = new WebRTCClient({
       sessionId,
       currentUserId: String(user.id),
+      currentUsername: user.username,
       isHost,
       isPresenter: isHost,
       onStream: (stream, presenterInfo) => {
