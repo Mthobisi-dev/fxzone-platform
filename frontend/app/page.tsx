@@ -61,8 +61,8 @@ export default function LandingPage() {
       <motion.div
         aria-hidden="true"
         className="fxzone-landing-watermark pointer-events-none absolute left-1/2 top-20 -z-0"
-        animate={reduceMotion ? undefined : { x: ['-52%', '-48%', '-52%'], y: [-20, 16, -20], rotate: [-3, 2, -3] }}
-        transition={reduceMotion ? undefined : { duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+        animate={reduceMotion ? undefined : { x: ['-52%', '-47%', '-52%'], y: [-26, 18, -26], rotate: [-4, 3, -4], scale: [0.98, 1.04, 0.98] }}
+        transition={reduceMotion ? undefined : { duration: 18, repeat: Infinity, ease: 'easeInOut' }}
       >
         <Image src="/fxzone-logo.jpg" alt="" width={560} height={560} priority className="h-auto w-[24rem] max-w-none rounded-[4.5rem] sm:w-[34rem]" />
       </motion.div>
@@ -90,7 +90,13 @@ export default function LandingPage() {
             </div>
           </motion.div>
 
-          <motion.div initial={reduceMotion ? false : { opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.55, delay: 0.08 }} className="fxzone-laptop mx-auto w-full max-w-2xl">
+          <motion.div
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.97, rotateX: 2, rotateY: -4 }}
+            animate={reduceMotion ? { opacity: 1, scale: 1 } : { opacity: 1, scale: 1, rotateX: 1.5, rotateY: -3, y: [0, -7, 0] }}
+            whileHover={reduceMotion ? undefined : { rotateX: 4, rotateY: -7, y: -10, scale: 1.015 }}
+            transition={reduceMotion ? { duration: 0.2 } : { duration: 0.7, delay: 0.08, y: { duration: 5, repeat: Infinity, ease: 'easeInOut' } }}
+            className="fxzone-laptop mx-auto w-full max-w-2xl"
+          >
             <div className="fxzone-laptop-screen rounded-[1.35rem] border border-sky-200/25 p-2 shadow-2xl shadow-sky-950/50 sm:rounded-[1.8rem] sm:p-3">
               <div className="fxzone-laptop-display overflow-hidden rounded-xl border border-white/10 p-4 sm:rounded-[1.25rem] sm:p-6">
                 <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4"><div className="flex items-center gap-2 text-sm font-bold text-white"><span className="h-2 w-2 rounded-full bg-sky-400" /> FxZone workspace</div><span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${marketStatus === 'Live' ? 'text-emerald-300' : 'text-slate-300'}`}><span className={`h-1.5 w-1.5 rounded-full ${marketStatus === 'Live' ? 'bg-emerald-400' : 'bg-slate-400'}`} /> {marketStatus}</span></div>
