@@ -43,17 +43,42 @@ export class FxZoneWebSocket {
   /**
    * Connect to Supabase Realtime Channel.
    */
-  public connect() {
-    if (this.channel && (this.state === 'CONNECTED' || this.state === 'CONNECTING')) return;
+  public async connect(): Promise<void> {
+    if (this.state === 'CONNECTED' || this.state === 'CONNECTING' || this.state === 'RECONNECTING') return;
 
     this.state = this.reconnectAttempts > 0 ? 'RECONNECTING' : 'CONNECTING';
+
+    // Private Realtime topics are authorized from the JWT available to the
+    // browser client when the channel joins. Waiting for the Auth session here
+    // prevents a session room from subscribing with the public key while Auth
+    // is still hydrating after a page navigation or token refresh.
+    if (this.isPrivateTopic) {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session?.access_token) {
+          throw error || new Error('An authenticated Supabase session is required');
+        }
+
+        // `setAuth()` reads from Supabase's access-token callback. Calling it
+        // immediately before subscribing makes the current token available to
+        // Realtime RLS rather than relying on an earlier initialization race.
+        await supabase.realtime.setAuth();
+      } catch (error) {
+        this.state = 'CLOSED';
+        this.emit('error', error);
+        this.emit('close', { reason: 'Realtime authentication is unavailable' });
+        return;
+      }
+    }
 
     this.channel = supabase.channel(this.channelName, {
       config: {
         // Private topic access is enforced by RLS policies on
         // realtime.messages. Market and news remain read-only public topics.
         private: this.isPrivateTopic,
-        broadcast: { self: true },
+        // Acknowledgements make `.send()` resolve only after Realtime accepts
+        // the message, so failed SDP/ICE messages can be queued for reconnect.
+        broadcast: { self: true, ack: true },
       },
     });
 
@@ -66,13 +91,14 @@ export class FxZoneWebSocket {
         }
         this.emit('message', data);
       })
-      .subscribe((status) => {
+      .subscribe((status, error) => {
         if (status === 'SUBSCRIBED') {
           this.state = 'CONNECTED';
           this.reconnectAttempts = 0;
           this.flushPendingOutbound();
           this.emit('open', null);
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          this.emit('error', error || { status, channel: this.channelName });
           if (this.state !== 'CLOSING' && this.state !== 'CLOSED') {
             this.handleReconnect();
           }

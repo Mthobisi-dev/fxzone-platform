@@ -1,12 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { FxZoneWebSocket } from '@/lib/websocket';
 
-export function useWebSocket(path: string, eventListeners: Record<string, (data: any) => void>) {
+export function useWebSocket(
+  path: string,
+  eventListeners: Record<string, (data: any) => void>,
+  enabled = true,
+) {
   const socketRef = useRef<FxZoneWebSocket | null>(null);
 
   useEffect(() => {
     // Only connect in browser environment and when a path is provided
-    if (typeof window === 'undefined' || !path) return;
+    if (typeof window === 'undefined' || !path || !enabled) return;
 
     // Create new WebSocket client
     const socket = new FxZoneWebSocket(path);
@@ -18,7 +22,7 @@ export function useWebSocket(path: string, eventListeners: Record<string, (data:
     });
 
     // Establish connection
-    socket.connect();
+    void socket.connect();
 
     // Clean up on unmount or path change
     return () => {
@@ -28,7 +32,7 @@ export function useWebSocket(path: string, eventListeners: Record<string, (data:
       socket.close();
       socketRef.current = null;
     };
-  }, [path]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [path, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return socketRef;
 }

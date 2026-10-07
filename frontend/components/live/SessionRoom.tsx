@@ -37,7 +37,7 @@ export function SessionRoom({
   isHost,
   onLeave,
 }: SessionRoomProps) {
-  const { user } = useAuth();
+  const { user, token, isAuthenticated } = useAuth();
 
   // ─── UI state ────────────────────────────────────────────────────────────────
   const [participantsCount, setParticipantsCount] = useState(1);
@@ -51,6 +51,7 @@ export function SessionRoom({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isRoomBeingRecorded, setIsRoomBeingRecorded] = useState(false);
+  const [signalingStatus, setSignalingStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'unavailable'>('connecting');
 
   // ─── Refs (never go stale in callbacks) ─────────────────────────────────────
   // The WebRTC client lives in a ref so it is NEVER re-created when state changes.
@@ -69,6 +70,21 @@ export function SessionRoom({
   // ─── WebSocket ────────────────────────────────────────────────────────────────
   // IMPORTANT: rtc_signal handler reads from rtcClientRef (not stale state).
   const socketRef = useWebSocket(`/ws/session/${sessionId}`, {
+    open: () => {
+      // The stream may have been selected before the signaling room finished
+      // its private authorization. FxZoneWebSocket flushes queued signals now.
+      console.info('Live session signaling connected');
+      setSignalingStatus('connected');
+    },
+    close: (details) => {
+      setSignalingStatus(details?.reason === 'Max reconnect attempts reached' || details?.reason === 'Realtime authentication is unavailable'
+        ? 'unavailable'
+        : 'reconnecting');
+    },
+    error: (error) => {
+      console.error('Live session signaling error:', error);
+      setSignalingStatus('reconnecting');
+    },
     chat_message: (payload) => {
       const msg = payload.data as SessionChatMessage;
       setChatMessages((prev) => [...prev, msg]);
@@ -102,7 +118,7 @@ export function SessionRoom({
     ai_copilot_alert: (payload) => {
       setCopilotAlerts((prev) => [payload.data.message, ...prev].slice(0, 3));
     },
-  });
+  }, Boolean(user && token && isAuthenticated));
 
   // ─── Participants ─────────────────────────────────────────────────────────────
   const fetchParticipants = useCallback(async () => {
@@ -416,6 +432,24 @@ export function SessionRoom({
         </div>
 
         <div className="flex items-center gap-3 text-xs font-semibold text-zinc-300">
+          <span
+            className={`text-[9px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-lg border ${
+              signalingStatus === 'connected'
+                ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
+                : signalingStatus === 'unavailable'
+                  ? 'text-rose-400 bg-rose-500/10 border-rose-500/20'
+                  : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+            }`}
+            title={signalingStatus === 'unavailable'
+              ? 'Secure signaling could not connect. Check your session access and try again.'
+              : undefined}
+          >
+            {signalingStatus === 'connected'
+              ? 'Signal connected'
+              : signalingStatus === 'unavailable'
+                ? 'Signal unavailable'
+                : 'Connecting signal'}
+          </span>
           {(isRecording || isRoomBeingRecorded) && (
             <div className="flex items-center gap-1.5 bg-red-500/15 border border-red-500/30 text-red-400 px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider">
               <Disc size={11} className="animate-spin text-red-500" />
