@@ -401,7 +401,7 @@
 }
 
 .fxzone-landing-watermark {
-  opacity: 0.13;
+  opacity: 0.22;
 }
 
 .fxzone-3d-mark img {
@@ -449,9 +449,10 @@
 
 .fxzone-live-candles {
   display: flex;
-  height: 14rem;
+  height: 12rem;
   align-items: center;
   gap: clamp(1.4rem, 5vw, 3rem);
+  padding-bottom: 0.4rem;
 }
 
 .fxzone-live-candle {
@@ -511,7 +512,7 @@
 }
 
 .fxzone-live-wordmark {
-  margin-top: 1.5rem;
+  margin-top: 2rem;
   color: var(--color-text);
   font-size: clamp(2.8rem, 9vw, 5rem);
   font-weight: 900;
@@ -562,6 +563,10 @@
   opacity: 0.2;
 }
 
+.theme-minimal-light .fxzone-landing-watermark {
+  opacity: 0.14;
+}
+
 .theme-minimal-light .fxzone-3d-mark-layer-front {
   opacity: 0.5;
   box-shadow: 0 24px 60px rgba(37, 99, 235, 0.14);
@@ -584,7 +589,7 @@
 }
 
 .theme-neon-cyber .fxzone-landing-watermark {
-  opacity: 0.09;
+  opacity: 0.18;
   filter: hue-rotate(28deg) saturate(1.3) blur(0.2px);
 }
 

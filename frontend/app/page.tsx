@@ -15,13 +15,13 @@ function FxZoneLiveMark({ reduceMotion }: { reduceMotion: boolean | null }) {
   return (
     <motion.div
       className="fxzone-live-mark"
-      animate={reduceMotion ? undefined : { y: [-10, 10, -10], rotate: [-1.5, 1.5, -1.5] }}
-      transition={reduceMotion ? undefined : { duration: 11, repeat: Infinity, ease: 'easeInOut' }}
+      animate={reduceMotion ? undefined : { y: [-12, 12, -12], rotate: [-1.25, 1.25, -1.25] }}
+      transition={reduceMotion ? undefined : { duration: 9, repeat: Infinity, ease: 'easeInOut' }}
     >
       <div className="fxzone-live-candles" aria-hidden="true">
-        <div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-tall"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [3, -8, 5, 3], scaleY: [0.98, 1.06, 0.96, 0.98] }} transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }} /></div>
-        <div className="fxzone-live-candle fxzone-live-candle-solid fxzone-live-candle-mid"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [-3, 7, -6, -3], scaleY: [1.02, 0.95, 1.05, 1.02] }} transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }} /></div>
-        <div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-short"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [4, -5, 8, 4], scaleY: [0.97, 1.04, 0.95, 0.97] }} transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut', delay: 1 }} /></div>
+        <div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-tall"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [5, -15, 9, 5], scaleY: [0.94, 1.1, 0.92, 0.94] }} transition={{ duration: 4.6, repeat: Infinity, ease: 'easeInOut' }} /></div>
+        <div className="fxzone-live-candle fxzone-live-candle-solid fxzone-live-candle-mid"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [-6, 13, -11, -6], scaleY: [1.08, 0.9, 1.12, 1.08] }} transition={{ duration: 4.1, repeat: Infinity, ease: 'easeInOut', delay: 0.45 }} /></div>
+        <div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-short"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [7, -10, 14, 7], scaleY: [0.92, 1.1, 0.9, 0.92] }} transition={{ duration: 4.4, repeat: Infinity, ease: 'easeInOut', delay: 0.9 }} /></div>
       </div>
       <div className="fxzone-live-wordmark">FX<span>ZONE</span></div>
       <div className="fxzone-live-rule" aria-hidden="true" />
@@ -37,7 +37,7 @@ export default function LandingPage() {
       <div className="fxzone-landing-backdrop pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"
-        className="fxzone-landing-watermark pointer-events-none absolute left-1/2 top-24 -z-0 -translate-x-1/2 sm:top-20"
+        className="fxzone-landing-watermark pointer-events-none absolute left-1/2 top-32 -z-0 -translate-x-1/2 sm:top-36"
       >
         <FxZoneLiveMark reduceMotion={reduceMotion} />
       </div>
