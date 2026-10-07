@@ -75,6 +75,20 @@ export function SessionRoom({
       // its private authorization. FxZoneWebSocket flushes queued signals now.
       console.info('Live session signaling connected');
       setSignalingStatus('connected');
+
+      // Broadcast events are not retained. Re-announce on every successful
+      // channel join so a host or viewer that reconnects can establish (or
+      // retain) the WebRTC peer relationship instead of remaining idle.
+      if (user) {
+        socketRef.current?.send({
+          type: 'rtc_signal',
+          data: {
+            type: 'peer_joined',
+            user_id: user.id,
+            username: user.username,
+          },
+        });
+      }
     },
     close: (details) => {
       setSignalingStatus(details?.reason === 'Max reconnect attempts reached' || details?.reason === 'Realtime authentication is unavailable'

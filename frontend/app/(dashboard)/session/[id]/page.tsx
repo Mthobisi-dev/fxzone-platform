@@ -10,7 +10,7 @@ import { api } from '@/lib/api';
 export default function SessionRoomPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, token, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const sessionId = params.id as string;
 
   const [session, setSession] = useState<any>(null);
@@ -18,6 +18,7 @@ export default function SessionRoomPage() {
   const [isPendingApproval, setIsPendingApproval] = useState(false);
   const [isRejected, setIsRejected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const fetchSessionDetails = async () => {
     try {
@@ -44,23 +45,45 @@ export default function SessionRoomPage() {
       const response = await api.post(`/api/sessions/${sessionId}/join`);
       if (response) {
         setParticipant(response);
-        if (response.role === 'pending') {
-          setIsPendingApproval(true);
-        } else {
-          setIsPendingApproval(false);
-        }
+        setIsPendingApproval(response.role === 'pending');
+        setIsRejected(response.role === 'rejected');
+        setJoinError(null);
       }
+      return response;
     } catch (err) {
       console.error('Error joining session:', err);
-    } finally {
-      setLoading(false);
+      const message = err instanceof Error ? err.message : 'Unable to join this live session.';
+      setJoinError(message);
+      return null;
     }
   };
 
   useEffect(() => {
-    fetchSessionDetails();
-    joinSession();
-  }, [sessionId]);
+    // Do not attempt admission with a missing bearer token while Supabase Auth
+    // restores its persisted session. A failed early join leaves no participant
+    // row, so private Realtime correctly rejects the broadcast channel.
+    if (isAuthLoading) return;
+
+    if (!isAuthenticated || !token) {
+      setJoinError('Sign in is required before joining a live session.');
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const enterSession = async () => {
+      await fetchSessionDetails();
+      if (!cancelled) {
+        await joinSession();
+      }
+      if (!cancelled) setLoading(false);
+    };
+
+    void enterSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, isAuthLoading, isAuthenticated, token]);
 
   // Pending users do not join the session signaling topic. Polling this
   // authenticated endpoint exposes only their own approval state until they
@@ -74,6 +97,7 @@ export default function SessionRoomPage() {
           if (response && response.role !== 'pending') {
             setParticipant(response);
             setIsPendingApproval(false);
+            setIsRejected(response.role === 'rejected');
             clearInterval(interval);
           }
         } catch (e) {
@@ -116,6 +140,24 @@ export default function SessionRoomPage() {
           className="text-xs font-semibold text-blue-400 hover:text-blue-300 underline"
         >
           Return to listings
+        </button>
+      </div>
+    );
+  }
+
+  if (joinError) {
+    return (
+      <div className="h-[calc(100vh-64px-32px)] flex flex-col items-center justify-center text-center p-6 select-none bg-zinc-950">
+        <div className="h-12 w-12 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-4 text-rose-500">
+          <ShieldAlert size={24} />
+        </div>
+        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Unable to Join Broadcast</h4>
+        <p className="text-[10px] text-zinc-500 max-w-[320px] mt-2 mb-6 leading-relaxed">{joinError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 transition-colors"
+        >
+          Retry Connection
         </button>
       </div>
     );

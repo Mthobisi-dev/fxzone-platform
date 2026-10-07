@@ -42,6 +42,7 @@ export interface WebRTCOptions {
 export class WebRTCClient {
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
+  private negotiatingPeers: Set<string> = new Set();
   private localStream: MediaStream | null = null;
   private sessionId: string;
   private currentUserId: string = '';
@@ -317,8 +318,13 @@ export class WebRTCClient {
   /**
    * Clean up a disconnected peer.
    */
-  private handlePeerLeft(peerId: string) {
+  private handlePeerLeft(peerId: string, closedConnection?: RTCPeerConnection) {
     const pc = this.peerConnections.get(peerId);
+    // Re-offering replaces an old connection with a new one. A delayed
+    // `closed` event from that old connection must never remove the replacement.
+    if (closedConnection && pc !== closedConnection) {
+      return;
+    }
     if (pc) {
       try {
         pc.close();
@@ -328,6 +334,7 @@ export class WebRTCClient {
       this.peerConnections.delete(peerId);
     }
     this.pendingCandidates.delete(peerId);
+    this.negotiatingPeers.delete(peerId);
     if (this.onPeerLeftCallback) {
       this.onPeerLeftCallback(peerId);
     }
@@ -337,36 +344,48 @@ export class WebRTCClient {
    * Presenter initiates connection and sends SDP offer to a specific peer.
    */
   private async initiatePeerConnection(targetUserId: string) {
-    let pc = this.peerConnections.get(targetUserId);
-    if (pc && pc.signalingState !== 'closed') {
-      try {
-        pc.close();
-      } catch (e) {
-        // Safe ignore
+    if (!this.localStream || this.negotiatingPeers.has(targetUserId)) return;
+
+    const existing = this.peerConnections.get(targetUserId);
+    // A reconnect can re-announce a peer. Keep its healthy connection rather
+    // than resetting the stream and creating competing SDP offers.
+    if (existing && existing.signalingState !== 'closed' && (
+      existing.connectionState === 'connected' || existing.connectionState === 'connecting'
+    )) {
+      return;
+    }
+
+    this.negotiatingPeers.add(targetUserId);
+    try {
+      if (existing && existing.signalingState !== 'closed') {
+        try {
+          existing.close();
+        } catch {
+          // The replacement below is still safe if the stale peer is already closed.
+        }
       }
-    }
 
-    pc = await this.createPeerConnection(targetUserId);
-    this.peerConnections.set(targetUserId, pc);
+      const pc = await this.createPeerConnection(targetUserId);
+      this.peerConnections.set(targetUserId, pc);
 
-    // Add local stream tracks
-    if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
-        pc!.addTrack(track, this.localStream!);
+        pc.addTrack(track, this.localStream!);
       });
+
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      await pc.setLocalDescription(offer);
+
+      this.sendSignal({
+        target_user_id: targetUserId,
+        type: 'offer',
+        data: offer,
+      });
+    } finally {
+      this.negotiatingPeers.delete(targetUserId);
     }
-
-    const offer = await pc.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true,
-    });
-    await pc.setLocalDescription(offer);
-
-    this.sendSignal({
-      target_user_id: targetUserId,
-      type: 'offer',
-      data: offer,
-    });
   }
 
   /**
@@ -495,7 +514,7 @@ export class WebRTCClient {
         console.warn(`WebRTC connection to ${targetUserId} failed, attempting restart...`);
         pc.restartIce();
       } else if (pc.connectionState === 'closed') {
-        this.handlePeerLeft(targetUserId);
+        this.handlePeerLeft(targetUserId, pc);
       }
     };
 
@@ -565,6 +584,7 @@ export class WebRTCClient {
     });
     this.peerConnections.clear();
     this.pendingCandidates.clear();
+    this.negotiatingPeers.clear();
   }
 
   public disconnect() {
