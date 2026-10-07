@@ -19,9 +19,9 @@ function FxZoneLiveMark({ reduceMotion }: { reduceMotion: boolean | null }) {
       transition={reduceMotion ? undefined : { duration: 11, repeat: Infinity, ease: 'easeInOut' }}
     >
       <div className="fxzone-live-candles" aria-hidden="true">
-        <motion.div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-tall" animate={reduceMotion ? undefined : { y: [2, -10, 4, 2], scaleY: [1, 1.05, 0.98, 1] }} transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}><span className="fxzone-live-wick" /><span className="fxzone-live-body" /></motion.div>
-        <motion.div className="fxzone-live-candle fxzone-live-candle-solid fxzone-live-candle-mid" animate={reduceMotion ? undefined : { y: [-2, 8, -7, -2], scaleY: [1, 0.96, 1.04, 1] }} transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}><span className="fxzone-live-wick" /><span className="fxzone-live-body" /></motion.div>
-        <motion.div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-short" animate={reduceMotion ? undefined : { y: [5, -5, 9, 5], scaleY: [1, 1.04, 0.97, 1] }} transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut', delay: 1 }}><span className="fxzone-live-wick" /><span className="fxzone-live-body" /></motion.div>
+        <div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-tall"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [3, -8, 5, 3], scaleY: [0.98, 1.06, 0.96, 0.98] }} transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }} /></div>
+        <div className="fxzone-live-candle fxzone-live-candle-solid fxzone-live-candle-mid"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [-3, 7, -6, -3], scaleY: [1.02, 0.95, 1.05, 1.02] }} transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }} /></div>
+        <div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-short"><span className="fxzone-live-wick" /><motion.span className="fxzone-live-body" animate={reduceMotion ? undefined : { y: [4, -5, 8, 4], scaleY: [0.97, 1.04, 0.95, 0.97] }} transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut', delay: 1 }} /></div>
       </div>
       <div className="fxzone-live-wordmark">FX<span>ZONE</span></div>
       <div className="fxzone-live-rule" aria-hidden="true" />
@@ -54,11 +54,10 @@ export default function LandingPage() {
           </div>
         </header>
 
-        <section className="flex min-h-[540px] items-center py-16 sm:min-h-[620px] sm:py-24 lg:min-h-[690px] lg:py-28">
+        <section className="flex min-h-[540px] items-end py-16 sm:min-h-[620px] sm:py-24 lg:min-h-[690px] lg:py-28">
           <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-xl lg:ml-10">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-100 backdrop-blur-sm"><Sparkles size={14} className="text-sky-300" /> Market intelligence, in one place</div>
-            <h1 className="max-w-lg text-4xl font-black leading-[1.04] tracking-tight text-white sm:text-6xl lg:text-[4.25rem]">Trade with a clearer view.</h1>
-            <p className="mt-6 max-w-md text-base leading-7 text-slate-300 sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
+            <p className="max-w-md text-base leading-7 text-slate-300 sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
             <div className="mt-8 flex flex-col gap-3 min-[390px]:flex-row">
               <Link href="/register" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3.5 font-bold text-white shadow-xl shadow-sky-500/20 transition hover:bg-sky-400">Get started <ArrowRight size={18} /></Link>
               <Link href="/dashboard" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/15 px-6 py-3.5 font-semibold text-white transition hover:border-sky-300/60 hover:bg-white/5">Explore markets</Link>

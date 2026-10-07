@@ -479,6 +479,8 @@
   left: 0;
   border: 0.45rem solid currentColor;
   background: var(--color-background);
+  transform-origin: center;
+  will-change: transform;
 }
 
 .fxzone-live-candle-outline {
@@ -628,6 +630,7 @@
   .fxzone-3d-mark,
   .fxzone-live-mark,
   .fxzone-live-candle,
+  .fxzone-live-body,
   .fxzone-laptop,
   .fxzone-laptop-screen,
   .fxzone-laptop-base {
