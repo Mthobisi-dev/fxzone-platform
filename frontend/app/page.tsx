@@ -75,7 +75,7 @@ export default function LandingPage() {
       <div className="fxzone-landing-backdrop pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"
-        className="fxzone-landing-watermark pointer-events-none absolute left-1/2 top-20 -z-0"
+        className="fxzone-landing-watermark pointer-events-none absolute -left-40 top-24 -z-0 sm:-left-28 sm:top-20 lg:-left-16 lg:top-28"
       >
         <FxZone3DMark reduceMotion={reduceMotion} />
       </div>
