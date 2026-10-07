@@ -390,6 +390,16 @@
   will-change: transform;
 }
 
+@media (max-width: 639px) {
+  .fxzone-3d-mark {
+    width: 20rem;
+  }
+
+  .fxzone-3d-mark img {
+    border-radius: 3rem;
+  }
+}
+
 .fxzone-landing-watermark {
   opacity: 0.13;
 }

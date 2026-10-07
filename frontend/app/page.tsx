@@ -34,7 +34,7 @@ export default function LandingPage() {
       <div className="fxzone-landing-backdrop pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"
-        className="fxzone-landing-watermark pointer-events-none absolute -left-40 top-24 -z-0 sm:-left-28 sm:top-20 lg:-left-16 lg:top-28"
+        className="fxzone-landing-watermark pointer-events-none absolute -right-40 top-28 -z-0 sm:-right-28 sm:top-24 lg:-right-16 lg:top-28"
       >
         <FxZone3DMark reduceMotion={reduceMotion} />
       </div>
@@ -52,10 +52,10 @@ export default function LandingPage() {
         </header>
 
         <section className="flex min-h-[540px] items-center py-16 sm:min-h-[620px] sm:py-24 lg:min-h-[690px] lg:py-28">
-          <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl">
+          <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-xl lg:ml-10">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-100 backdrop-blur-sm"><Sparkles size={14} className="text-sky-300" /> Market intelligence, in one place</div>
-            <h1 className="max-w-xl text-4xl font-black leading-[1.04] tracking-tight text-white sm:text-6xl lg:text-7xl">Trade with a clearer view.</h1>
-            <p className="mt-6 max-w-lg text-base leading-7 text-slate-300 sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
+            <h1 className="max-w-lg text-4xl font-black leading-[1.04] tracking-tight text-white sm:text-6xl lg:text-[4.25rem]">Trade with a clearer view.</h1>
+            <p className="mt-6 max-w-md text-base leading-7 text-slate-300 sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
             <div className="mt-8 flex flex-col gap-3 min-[390px]:flex-row">
               <Link href="/register" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3.5 font-bold text-white shadow-xl shadow-sky-500/20 transition hover:bg-sky-400">Get started <ArrowRight size={18} /></Link>
               <Link href="/dashboard" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/15 px-6 py-3.5 font-semibold text-white transition hover:border-sky-300/60 hover:bg-white/5">Explore markets</Link>
