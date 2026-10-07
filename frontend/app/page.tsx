@@ -11,7 +11,6 @@ import {
   Github,
   Instagram,
   Linkedin,
-  Search,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -99,16 +98,7 @@ export default function LandingPage() {
             <span className="text-xl font-black tracking-tight text-white sm:text-3xl">Fx<span className="text-sky-400">Zone</span></span>
           </Link>
 
-          <nav className="hidden items-center gap-8 text-sm font-medium text-slate-300 lg:flex" aria-label="Primary navigation">
-            <a href="#home" className="text-white transition hover:text-sky-300">Home</a>
-            <a href="#markets" className="transition hover:text-sky-300">Markets</a>
-            <a href="#ai" className="transition hover:text-sky-300">AI Insights</a>
-            <a href="#features" className="transition hover:text-sky-300">Features</a>
-            <a href="#stats" className="transition hover:text-sky-300">Performance</a>
-          </nav>
-
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-            <a href="#markets" className="hidden rounded-xl p-2.5 text-sky-300 transition hover:bg-white/10 sm:inline-flex" aria-label="Explore market feeds"><Search size={19} /></a>
             <Link href="/login" className="hidden rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/5 min-[390px]:inline-flex sm:px-5">Log in</Link>
             <Link href="/register" className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-400 sm:rounded-xl sm:px-5 sm:text-sm"><span className="sm:hidden">Join free</span><span className="hidden sm:inline">Get started</span></Link>
           </div>
