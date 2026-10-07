@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { TrendingUp, ExternalLink, ShieldCheck, Zap, BarChart2 } from 'lucide-react';
@@ -15,8 +16,10 @@ interface TradeActionModalProps {
 
 export function TradeActionModal({ isOpen, onClose, symbol = 'EURUSD' }: TradeActionModalProps) {
   const { user } = useAuth();
+  const router = useRouter();
+  const forexSymbols = new Set(['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'USDCHF', 'EURGBP']);
   const tradingViewUrl = symbol 
-    ? `https://www.tradingview.com/chart/?symbol=${symbol.includes('USD') && !symbol.startsWith('BTC') && !symbol.startsWith('ETH') ? 'FX:' + symbol : symbol}`
+    ? `https://www.tradingview.com/chart/?symbol=${forexSymbols.has(symbol) ? `FX:${symbol}` : symbol}`
     : 'https://www.tradingview.com';
 
   const broker = getBrokerDestination(user?.preferred_broker);
@@ -42,18 +45,18 @@ export function TradeActionModal({ isOpen, onClose, symbol = 'EURUSD' }: TradeAc
                   <Zap size={18} />
                 </div>
                 <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30">
-                  Live Broker
+                  Preferred broker
                 </span>
               </div>
               <h4 className="text-sm font-black text-white flex items-center gap-1.5 group-hover:text-emerald-300">
                 Trade on {broker.name} <ExternalLink size={14} />
               </h4>
               <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
-                Open {broker.name} to execute live Forex, Crypto, and Commodities orders.
+                Continue to {broker.name}&apos;s website to review its available products and account requirements.
               </p>
             </div>
             <div className="mt-4 pt-2 border-t border-emerald-500/20 flex items-center gap-1 text-[10px] text-emerald-400 font-semibold">
-              <ShieldCheck size={12} /> Institutional Liquidity & Instant Execution
+              <ShieldCheck size={12} /> External broker destination
             </div>
           </a>
 
@@ -94,14 +97,14 @@ export function TradeActionModal({ isOpen, onClose, symbol = 'EURUSD' }: TradeAc
             </div>
             <div>
               <span className="text-xs font-bold text-white block">FxZone AI Terminal</span>
-              <span className="text-[10px] text-zinc-400">Integrated AI analysis & order book terminal</span>
+              <span className="text-[10px] text-zinc-400">Integrated market research and AI workspace</span>
             </div>
           </div>
           <Button
             size="sm"
             onClick={() => {
               onClose();
-              window.location.href = '/dashboard';
+              router.push('/dashboard');
             }}
             className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-xs font-semibold px-4 shadow-md"
           >
