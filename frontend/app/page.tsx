@@ -14,6 +14,21 @@ const socialLinks = [
   { href: 'https://www.linkedin.com/in/mthobisi-mzimela-136835354', label: 'LinkedIn', icon: Linkedin },
 ];
 
+function FxZone3DMark({ reduceMotion }: { reduceMotion: boolean | null }) {
+  return (
+    <motion.div
+      className="fxzone-3d-mark"
+      animate={reduceMotion ? undefined : { rotateX: [7, 12, 7], rotateY: [-13, 13, -13], rotateZ: [-5, 5, -5], y: [-16, 14, -16] }}
+      transition={reduceMotion ? undefined : { duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+    >
+      <Image src="/fxzone-logo.jpg" alt="" aria-hidden="true" width={560} height={560} className="fxzone-3d-mark-shadow" />
+      <Image src="/fxzone-logo.jpg" alt="" aria-hidden="true" width={560} height={560} className="fxzone-3d-mark-layer fxzone-3d-mark-layer-back" />
+      <Image src="/fxzone-logo.jpg" alt="" aria-hidden="true" width={560} height={560} className="fxzone-3d-mark-layer fxzone-3d-mark-layer-mid" />
+      <Image src="/fxzone-logo.jpg" alt="" aria-hidden="true" width={560} height={560} className="fxzone-3d-mark-layer fxzone-3d-mark-layer-front" />
+    </motion.div>
+  );
+}
+
 export default function LandingPage() {
   const [quotes, setQuotes] = useState<LandingQuote[]>([]);
   const [loadingQuotes, setLoadingQuotes] = useState(true);
@@ -58,14 +73,12 @@ export default function LandingPage() {
     <main className="fxzone-landing relative min-h-screen overflow-hidden bg-[var(--color-background)] text-slate-100">
       <TradeActionModal isOpen={tradeModalOpen} onClose={() => setTradeModalOpen(false)} symbol={selectedSymbol} />
       <div className="fxzone-landing-backdrop pointer-events-none absolute inset-0" />
-      <motion.div
+      <div
         aria-hidden="true"
         className="fxzone-landing-watermark pointer-events-none absolute left-1/2 top-20 -z-0"
-        animate={reduceMotion ? undefined : { x: ['-52%', '-47%', '-52%'], y: [-26, 18, -26], rotate: [-4, 3, -4], scale: [0.98, 1.04, 0.98] }}
-        transition={reduceMotion ? undefined : { duration: 18, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <Image src="/fxzone-logo.jpg" alt="" width={560} height={560} priority className="h-auto w-[24rem] max-w-none rounded-[4.5rem] sm:w-[34rem]" />
-      </motion.div>
+        <FxZone3DMark reduceMotion={reduceMotion} />
+      </div>
 
       <div className="relative z-10 mx-auto max-w-7xl px-3 pb-8 pt-3 sm:px-6 sm:pb-12 sm:pt-5 lg:px-10">
         <header className="fxzone-landing-nav flex min-h-16 items-center justify-between rounded-xl border border-white/10 px-3 shadow-2xl shadow-sky-950/25 backdrop-blur-xl sm:min-h-20 sm:rounded-2xl sm:px-7">

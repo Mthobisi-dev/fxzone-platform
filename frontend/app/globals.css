@@ -381,6 +381,53 @@
   will-change: transform;
 }
 
+.fxzone-3d-mark {
+  position: relative;
+  width: min(34rem, 95vw);
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+  perspective: 1200px;
+  will-change: transform;
+}
+
+.fxzone-landing-watermark {
+  opacity: 0.13;
+}
+
+.fxzone-3d-mark img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 4.5rem;
+  object-fit: cover;
+  transform-style: preserve-3d;
+}
+
+.fxzone-3d-mark-shadow {
+  opacity: 0.42;
+  filter: blur(20px) saturate(1.4);
+  transform: translate3d(18px, 30px, -70px) scale(0.94);
+}
+
+.fxzone-3d-mark-layer-back {
+  opacity: 0.45;
+  filter: hue-rotate(18deg) saturate(1.5);
+  transform: translate3d(-18px, 13px, -38px);
+}
+
+.fxzone-3d-mark-layer-mid {
+  opacity: 0.58;
+  filter: hue-rotate(-10deg) saturate(1.25);
+  transform: translate3d(10px, -8px, -8px);
+}
+
+.fxzone-3d-mark-layer-front {
+  opacity: 0.86;
+  box-shadow: 0 24px 60px rgba(14, 165, 233, 0.2);
+  transform: translateZ(24px);
+}
+
 .fxzone-laptop {
   perspective: 1200px;
   transform-style: preserve-3d;
@@ -404,6 +451,15 @@
 
 .theme-minimal-light .fxzone-laptop-display {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.theme-minimal-light .fxzone-3d-mark-shadow {
+  opacity: 0.2;
+}
+
+.theme-minimal-light .fxzone-3d-mark-layer-front {
+  opacity: 0.5;
+  box-shadow: 0 24px 60px rgba(37, 99, 235, 0.14);
 }
 
 .theme-minimal-light .fxzone-laptop-base {
@@ -430,8 +486,17 @@
   background: linear-gradient(180deg, rgba(192, 132, 252, 0.28), rgba(38, 4, 64, 0.9));
 }
 
+.theme-neon-cyber .fxzone-3d-mark-layer-back {
+  filter: hue-rotate(120deg) saturate(1.65);
+}
+
+.theme-neon-cyber .fxzone-3d-mark-layer-mid {
+  filter: hue-rotate(74deg) saturate(1.5);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fxzone-landing-watermark,
+  .fxzone-3d-mark,
   .fxzone-laptop,
   .fxzone-laptop-screen,
   .fxzone-laptop-base {
