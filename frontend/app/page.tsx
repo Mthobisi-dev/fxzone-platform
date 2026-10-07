@@ -11,17 +11,20 @@ const socialLinks = [
   { href: 'https://www.linkedin.com/in/mthobisi-mzimela-136835354', label: 'LinkedIn', icon: Linkedin },
 ];
 
-function FxZone3DMark({ reduceMotion }: { reduceMotion: boolean | null }) {
+function FxZoneLiveMark({ reduceMotion }: { reduceMotion: boolean | null }) {
   return (
     <motion.div
-      className="fxzone-3d-mark"
-      animate={reduceMotion ? undefined : { rotateX: [7, 12, 7], rotateY: [-13, 13, -13], rotateZ: [-5, 5, -5], y: [-16, 14, -16] }}
-      transition={reduceMotion ? undefined : { duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+      className="fxzone-live-mark"
+      animate={reduceMotion ? undefined : { y: [-10, 10, -10], rotate: [-1.5, 1.5, -1.5] }}
+      transition={reduceMotion ? undefined : { duration: 11, repeat: Infinity, ease: 'easeInOut' }}
     >
-      <Image src="/fxzone-logo.jpg" alt="" aria-hidden="true" width={560} height={560} className="fxzone-3d-mark-shadow" />
-      <Image src="/fxzone-logo.jpg" alt="" aria-hidden="true" width={560} height={560} className="fxzone-3d-mark-layer fxzone-3d-mark-layer-back" />
-      <Image src="/fxzone-logo.jpg" alt="" aria-hidden="true" width={560} height={560} className="fxzone-3d-mark-layer fxzone-3d-mark-layer-mid" />
-      <Image src="/fxzone-logo.jpg" alt="" aria-hidden="true" width={560} height={560} className="fxzone-3d-mark-layer fxzone-3d-mark-layer-front" />
+      <div className="fxzone-live-candles" aria-hidden="true">
+        <motion.div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-tall" animate={reduceMotion ? undefined : { y: [2, -10, 4, 2], scaleY: [1, 1.05, 0.98, 1] }} transition={{ duration: 5.5, repeat: Infinity, ease: 'easeInOut' }}><span className="fxzone-live-wick" /><span className="fxzone-live-body" /></motion.div>
+        <motion.div className="fxzone-live-candle fxzone-live-candle-solid fxzone-live-candle-mid" animate={reduceMotion ? undefined : { y: [-2, 8, -7, -2], scaleY: [1, 0.96, 1.04, 1] }} transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}><span className="fxzone-live-wick" /><span className="fxzone-live-body" /></motion.div>
+        <motion.div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-short" animate={reduceMotion ? undefined : { y: [5, -5, 9, 5], scaleY: [1, 1.04, 0.97, 1] }} transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut', delay: 1 }}><span className="fxzone-live-wick" /><span className="fxzone-live-body" /></motion.div>
+      </div>
+      <div className="fxzone-live-wordmark">FX<span>ZONE</span></div>
+      <div className="fxzone-live-rule" aria-hidden="true" />
     </motion.div>
   );
 }
@@ -34,9 +37,9 @@ export default function LandingPage() {
       <div className="fxzone-landing-backdrop pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"
-        className="fxzone-landing-watermark pointer-events-none absolute -right-40 top-28 -z-0 sm:-right-28 sm:top-24 lg:-right-16 lg:top-28"
+        className="fxzone-landing-watermark pointer-events-none absolute left-1/2 top-24 -z-0 -translate-x-1/2 sm:top-20"
       >
-        <FxZone3DMark reduceMotion={reduceMotion} />
+        <FxZoneLiveMark reduceMotion={reduceMotion} />
       </div>
 
       <div className="relative z-10 mx-auto max-w-7xl px-3 pb-8 pt-3 sm:px-6 sm:pb-12 sm:pt-5 lg:px-10">

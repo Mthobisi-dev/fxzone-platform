@@ -438,6 +438,99 @@
   transform: translateZ(24px);
 }
 
+.fxzone-live-mark {
+  display: flex;
+  width: min(28rem, 82vw);
+  flex-direction: column;
+  align-items: center;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.fxzone-live-candles {
+  display: flex;
+  height: 14rem;
+  align-items: center;
+  gap: clamp(1.4rem, 5vw, 3rem);
+}
+
+.fxzone-live-candle {
+  position: relative;
+  width: clamp(2.75rem, 8vw, 4.25rem);
+  height: 100%;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.fxzone-live-wick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0.28rem;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.fxzone-live-body {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border: 0.45rem solid currentColor;
+  background: var(--color-background);
+}
+
+.fxzone-live-candle-outline {
+  color: #e0f2fe;
+}
+
+.fxzone-live-candle-solid {
+  color: #38bdf8;
+}
+
+.fxzone-live-candle-solid .fxzone-live-body {
+  background: currentColor;
+}
+
+.fxzone-live-candle-tall .fxzone-live-body {
+  top: 1.6rem;
+  bottom: 1.3rem;
+}
+
+.fxzone-live-candle-mid .fxzone-live-body {
+  top: 3.8rem;
+  bottom: 2.2rem;
+}
+
+.fxzone-live-candle-short .fxzone-live-body {
+  top: 5.1rem;
+  bottom: 4.1rem;
+}
+
+.fxzone-live-wordmark {
+  margin-top: 1.5rem;
+  color: var(--color-text);
+  font-size: clamp(2.8rem, 9vw, 5rem);
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  line-height: 0.9;
+  text-indent: 0.16em;
+}
+
+.fxzone-live-wordmark span {
+  color: #38bdf8;
+}
+
+.fxzone-live-rule {
+  width: 42%;
+  height: 0.34rem;
+  margin-top: 1.25rem;
+  border-radius: 999px;
+  background: #38bdf8;
+  box-shadow: 0 0 26px rgba(56, 189, 248, 0.7);
+}
+
 .fxzone-laptop {
   perspective: 1200px;
   transform-style: preserve-3d;
@@ -472,6 +565,17 @@
   box-shadow: 0 24px 60px rgba(37, 99, 235, 0.14);
 }
 
+.theme-minimal-light .fxzone-live-candle-outline {
+  color: #1e3a5f;
+}
+
+.theme-minimal-light .fxzone-live-candle-solid,
+.theme-minimal-light .fxzone-live-wordmark span,
+.theme-minimal-light .fxzone-live-rule {
+  color: #2563eb;
+  background-color: #2563eb;
+}
+
 .theme-minimal-light .fxzone-laptop-base {
   background: linear-gradient(180deg, rgba(226, 232, 240, 0.98), rgba(148, 163, 184, 0.72));
   box-shadow: 0 20px 30px rgba(15, 23, 42, 0.16);
@@ -504,12 +608,33 @@
   filter: hue-rotate(74deg) saturate(1.5);
 }
 
+.theme-neon-cyber .fxzone-live-candle-outline {
+  color: #f5d0fe;
+}
+
+.theme-neon-cyber .fxzone-live-candle-solid,
+.theme-neon-cyber .fxzone-live-wordmark span,
+.theme-neon-cyber .fxzone-live-rule {
+  color: #c084fc;
+  background-color: #c084fc;
+}
+
+.theme-neon-cyber .fxzone-live-rule {
+  box-shadow: 0 0 26px rgba(192, 132, 252, 0.72);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fxzone-landing-watermark,
   .fxzone-3d-mark,
+  .fxzone-live-mark,
+  .fxzone-live-candle,
   .fxzone-laptop,
   .fxzone-laptop-screen,
   .fxzone-laptop-base {
     transform: none !important;
+  }
+
+  .fxzone-landing-watermark {
+    transform: translateX(-50%) !important;
   }
 }
