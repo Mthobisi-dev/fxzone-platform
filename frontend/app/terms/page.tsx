@@ -21,7 +21,7 @@ export default function TermsPage() {
 
         <section className="space-y-2">
           <h2 className="text-lg font-bold text-white">1. Acceptance of Terms</h2>
-          <p>By accessing or using the FxZone platform ("Service"), you agree to be bound by these Terms of Service. FxZone provides financial market intelligence, AI technical analysis tools, and workspace utilities.</p>
+          <p>By accessing or using the FxZone platform (&quot;Service&quot;), you agree to be bound by these Terms of Service. FxZone provides financial market intelligence, AI technical analysis tools, and workspace utilities.</p>
         </section>
 
         <section className="space-y-2">

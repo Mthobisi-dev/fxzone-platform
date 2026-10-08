@@ -136,7 +136,7 @@ export function WatchlistPanel() {
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
             <Star size={20} className="text-zinc-700 mb-2" />
             <p className="text-xs font-semibold text-zinc-400">Watchlist is Empty</p>
-            <span className="text-[10px] text-zinc-600 mt-0.5">Click the "+" icon to add assets.</span>
+            <span className="text-[10px] text-zinc-600 mt-0.5">Click the &quot;+&quot; icon to add assets.</span>
           </div>
         ) : (
           !isAddingAsset &&
