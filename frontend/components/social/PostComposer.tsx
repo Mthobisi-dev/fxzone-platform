@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { isAllowedPostVideoDuration, MAX_POST_VIDEO_DURATION_SECONDS, readLocalVideoDuration } from '@/lib/postMedia';
+import { getPostMediaSizeLimit, POST_MEDIA_BUCKET, shouldUseDirectPostUpload } from '@/lib/postUpload';
+import { supabase } from '@/lib/supabase';
 
 interface PostComposerProps {
   onPostCreated?: () => void;
@@ -40,6 +42,18 @@ interface MediaFile {
   type: 'image' | 'video' | 'audio' | 'document';
   uploadedUrl?: string;
   uploading?: boolean;
+}
+
+interface SignedPostUpload {
+  path: string;
+  token: string;
+  url: string;
+}
+
+function isSignedPostUpload(value: unknown): value is SignedPostUpload {
+  if (!value || typeof value !== 'object') return false;
+  const upload = value as Partial<SignedPostUpload>;
+  return typeof upload.path === 'string' && typeof upload.token === 'string' && typeof upload.url === 'string';
 }
 
 export function PostComposer({ onPostCreated }: PostComposerProps) {
@@ -102,8 +116,9 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         firstError ||= 'Choose an image, video, audio file, or PDF supported by FxZone.';
         continue;
       }
-      if (file.size > 100 * 1024 * 1024) {
-        firstError ||= 'Attachments must be 100 MB or smaller.';
+      const sizeLimit = getPostMediaSizeLimit(file.type);
+      if (file.size > sizeLimit) {
+        firstError ||= `This ${type} is larger than the ${Math.floor(sizeLimit / (1024 * 1024))} MB limit.`;
         continue;
       }
 
@@ -195,9 +210,35 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   };
 
   const uploadFile = async (media: MediaFile): Promise<{ url: string | null; error: string | null }> => {
-    const formData = new FormData();
-    formData.append('file', media.file);
     try {
+      if (shouldUseDirectPostUpload(media.file.size)) {
+        const signedUpload = await api.post('/api/social/posts/upload-url', {
+          type: media.file.type,
+          size: media.file.size,
+        }, { timeoutMs: 15_000 });
+
+        if (!isSignedPostUpload(signedUpload)) {
+          throw new Error('The upload service returned an invalid response. Please try again.');
+        }
+
+        const { error: storageError } = await supabase.storage
+          .from(POST_MEDIA_BUCKET)
+          .uploadToSignedUrl(signedUpload.path, signedUpload.token, media.file, {
+            cacheControl: '31536000',
+            contentType: media.file.type,
+            upsert: false,
+          });
+
+        if (storageError) {
+          console.error('Direct post attachment upload failed:', storageError);
+          throw new Error('The attachment could not be uploaded. Check your connection and try again.');
+        }
+
+        return { url: signedUpload.url, error: null };
+      }
+
+      const formData = new FormData();
+      formData.append('file', media.file);
       const res = await api.post('/api/social/posts/upload', formData, { timeoutMs: 60_000 });
       return { url: typeof res?.url === 'string' ? res.url : null, error: null };
     } catch (err: unknown) {

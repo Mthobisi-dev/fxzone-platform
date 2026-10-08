@@ -65,9 +65,12 @@ The session join and leave endpoints use Supabase RPC transactions, which
 prevents concurrent requests from exceeding capacity or corrupting viewer
 counts.
 
-The post-media migration creates the public `post-media` Storage bucket used
-for social attachments. Uploads remain authenticated through the Next.js API;
-there is no client-side write policy to configure.
+The post-media migrations create the public `post-media` Storage bucket used
+for social attachments. Files up to 4 MB are validated and uploaded through
+the authenticated Next.js API. Larger attachments use a short-lived,
+server-issued Supabase Storage upload token so a 90-second video does not
+pass through Vercel's request-size limit. The bucket limits video uploads to
+100 MB and has no general browser INSERT policy; do not add one.
 
 For private Realtime authorization, disable **Allow public access** in
 **Database → Replication → Realtime** after migration 019 is applied. Clients

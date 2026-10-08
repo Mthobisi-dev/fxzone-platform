@@ -3,7 +3,14 @@ import json
 import urllib.request
 import argparse
 
-DEMO_USERNAMES = ("trader_bob", "google_trader", "bob_trader")
+DEMO_USERNAMES = (
+    "trader_bob",
+    "google_trader",
+    "bob_trader",
+    "blog_demo_taylor",
+    "blog_demo_alex",
+    "blog_demo_jamie",
+)
 
 
 def purge_unwanted_users(confirm: bool):

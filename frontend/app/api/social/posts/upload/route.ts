@@ -1,22 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 import { apiError } from '@/lib/api-error';
-
-const BUCKET = 'post-media';
-const MB = 1024 * 1024;
-const ALLOWED_TYPES: Record<string, string> = {
-  'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp',
-  'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/x-matroska': 'mkv',
-  'audio/webm': 'webm', 'audio/mp3': 'mp3', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg',
-  'application/pdf': 'pdf',
-};
-
-function sizeLimitFor(type: string): number {
-  if (type.startsWith('image/')) return 10 * MB;
-  if (type === 'application/pdf') return 20 * MB;
-  if (type.startsWith('audio/')) return 25 * MB;
-  return 100 * MB;
-}
+import { getPostMediaExtension, getPostMediaSizeLimit, POST_MEDIA_BUCKET } from '@/lib/postUpload';
 
 function startsWith(bytes: Buffer, signature: number[], offset = 0) {
   return signature.every((byte, index) => bytes[offset + index] === byte);
@@ -48,9 +33,9 @@ export async function POST(request: NextRequest) {
     if (!file || typeof file === 'string') return apiError('BAD_REQUEST', 'Choose an attachment before publishing.', 400);
     if (file.size === 0) return apiError('BAD_REQUEST', 'The selected attachment is empty.', 400);
 
-    const extension = ALLOWED_TYPES[file.type];
+    const extension = getPostMediaExtension(file.type);
     if (!extension) return NextResponse.json({ error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'This attachment type is not supported.' } }, { status: 415 });
-    if (file.size > sizeLimitFor(file.type)) return NextResponse.json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'The attachment exceeds the size limit for its media type.' } }, { status: 413 });
+    if (file.size > getPostMediaSizeLimit(file.type)) return NextResponse.json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'The attachment exceeds the size limit for its media type.' } }, { status: 413 });
 
     const fileBody = Buffer.from(await file.arrayBuffer());
     if (!matchesMediaSignature(file.type, fileBody)) {
@@ -59,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     const db = getSupabaseAdmin(request);
     const filePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
-    const { error: uploadError } = await db.storage.from(BUCKET).upload(filePath, fileBody, {
+    const { error: uploadError } = await db.storage.from(POST_MEDIA_BUCKET).upload(filePath, fileBody, {
       contentType: file.type, cacheControl: '31536000', upsert: false,
     });
     if (uploadError) {
@@ -67,7 +52,7 @@ export async function POST(request: NextRequest) {
       return apiError('SERVICE_UNAVAILABLE', 'The attachment could not be stored. Please retry in a moment.', 503);
     }
 
-    const { data: publicUrlData } = db.storage.from(BUCKET).getPublicUrl(filePath);
+    const { data: publicUrlData } = db.storage.from(POST_MEDIA_BUCKET).getPublicUrl(filePath);
     if (!publicUrlData.publicUrl) {
       return apiError('SERVICE_UNAVAILABLE', 'The attachment was stored but its URL could not be created. Please retry.', 503);
     }

@@ -428,7 +428,6 @@ CREATE POLICY "Avatar images public select" ON storage.objects FOR SELECT USING 
 CREATE POLICY "Avatar images user upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
 
 CREATE POLICY "Post media public select" ON storage.objects FOR SELECT USING (bucket_id = 'post-media');
-CREATE POLICY "Post media user upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'post-media' AND auth.role() = 'authenticated');
 
 CREATE POLICY "Chat media member select" ON storage.objects FOR SELECT USING (bucket_id = 'chat-media');
 CREATE POLICY "Chat media user upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'chat-media' AND auth.role() = 'authenticated');

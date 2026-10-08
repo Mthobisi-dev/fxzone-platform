@@ -164,6 +164,26 @@
 .fxzone-landing {
   background-color: var(--color-background);
   color: var(--color-text);
+  --fxzone-landing-accent: #0ea5e9;
+  --fxzone-landing-accent-hover: #38bdf8;
+  --fxzone-landing-accent-shadow: rgba(14, 165, 233, 0.25);
+}
+
+.fxzone-landing-primary-action {
+  background-color: var(--fxzone-landing-accent);
+  color: #ffffff !important;
+  box-shadow: 0 12px 26px var(--fxzone-landing-accent-shadow);
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.fxzone-landing-primary-action:hover {
+  background-color: var(--fxzone-landing-accent-hover);
+  box-shadow: 0 16px 30px var(--fxzone-landing-accent-shadow);
+  transform: translateY(-1px);
+}
+
+.fxzone-landing-accent {
+  color: var(--fxzone-landing-accent);
 }
 
 .fxzone-landing-backdrop {
@@ -294,6 +314,12 @@
     radial-gradient(circle at 4% 0%, rgba(168, 85, 247, 0.35), transparent 29%),
     radial-gradient(circle at 95% 32%, rgba(34, 211, 238, 0.18), transparent 30%),
     linear-gradient(130deg, #0d001a 0%, #1a0033 53%, #0d001a 100%);
+}
+
+.theme-neon-cyber .fxzone-landing {
+  --fxzone-landing-accent: #a855f7;
+  --fxzone-landing-accent-hover: #c084fc;
+  --fxzone-landing-accent-shadow: rgba(168, 85, 247, 0.3);
 }
 
 .theme-neon-cyber .fxzone-landing-nav,

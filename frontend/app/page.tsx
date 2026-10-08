@@ -53,30 +53,30 @@ export default function LandingPage() {
             <Image src="/fxzone-logo.jpg" alt="" width={36} height={36} className="h-8 w-8 rounded-lg border border-border object-cover sm:h-9 sm:w-9" />
             <span className="text-lg font-black tracking-tight text-white min-[360px]:text-xl sm:text-3xl">Fx<span className="text-sky-400">Zone</span></span>
           </Link>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-            <Link href="/login" className="hidden rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/5 min-[390px]:inline-flex sm:px-5">Log in</Link>
-            <Link href="/register" className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-lg shadow-sky-500/25 transition hover:bg-sky-400 sm:rounded-xl sm:px-5 sm:text-sm"><span className="sm:hidden">Join free</span><span className="hidden sm:inline">Get started</span></Link>
+          <div className="hidden shrink-0 items-center gap-3 sm:flex">
+            <Link href="/login" className="rounded-xl border border-white/15 px-5 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/5">Log in</Link>
+            <Link href="/register" className="fxzone-landing-primary-action rounded-xl px-5 py-2 text-sm font-bold">Get started</Link>
           </div>
         </header>
 
         <section className="flex min-h-[calc(100svh-80px)] items-end py-12 sm:min-h-[620px] sm:py-24 lg:min-h-[690px] lg:py-28">
           <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-xl pb-3 lg:ml-10">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-100 backdrop-blur-sm"><Sparkles size={14} className="text-sky-300" /> Market intelligence, in one place</div>
-            <p className="max-w-md text-sm leading-6 text-slate-300 min-[360px]:text-base min-[360px]:leading-7 sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
-            <div className="mt-8 flex flex-col gap-3 min-[390px]:flex-row">
-              <Link href="/register" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3.5 font-bold text-white shadow-xl shadow-sky-500/20 transition hover:bg-sky-400">Get started <ArrowRight size={18} /></Link>
-              <Link href="/dashboard" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/15 px-6 py-3.5 font-semibold text-white transition hover:border-sky-300/60 hover:bg-white/5">Explore markets</Link>
+            <div className="mb-6 hidden items-center gap-2 rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-100 backdrop-blur-sm sm:inline-flex"><Sparkles size={14} className="fxzone-landing-accent" /> Market intelligence, in one place</div>
+            <p className="hidden max-w-md text-lg leading-7 text-slate-300 sm:block">Follow markets, organise your research, and connect with traders on one focused platform.</p>
+            <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row">
+              <Link href="/register" className="fxzone-landing-primary-action inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-6 py-3.5 font-bold">Get started <ArrowRight size={18} /></Link>
+              <Link href="/dashboard" className="hidden min-h-12 items-center justify-center rounded-xl border border-white/15 px-6 py-3.5 font-semibold text-white transition hover:border-sky-300/60 hover:bg-white/5 sm:inline-flex">Explore markets</Link>
             </div>
           </motion.div>
         </section>
 
-        <section className="grid gap-3 border-y border-white/10 py-7 sm:grid-cols-3 sm:gap-0 sm:py-9">
+        <section className="hidden gap-3 border-y border-white/10 py-7 sm:grid sm:grid-cols-3 sm:gap-0 sm:py-9">
           {[{ icon: TrendingUp, title: 'Market context', text: 'Track the instruments you care about.' }, { icon: Sparkles, title: 'Research tools', text: 'Keep ideas and updates together.' }, { icon: ShieldCheck, title: 'Built for focus', text: 'A clean workspace for every device.' }].map(({ icon: Icon, title, text }) => <div key={title} className="flex items-center gap-3 px-2 py-3 sm:px-6 sm:first:pl-0 sm:not(:last-child):border-r sm:not(:last-child):border-white/10"><span className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-2.5 text-sky-300"><Icon size={20} /></span><div><h2 className="font-bold text-white">{title}</h2><p className="mt-0.5 text-sm text-slate-400">{text}</p></div></div>)}
         </section>
 
-        <section className="py-16 text-center sm:py-24"><h2 className="text-3xl font-black tracking-tight text-white sm:text-5xl">Your trading workspace, ready when you are.</h2><Link href="/register" className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 font-bold text-slate-950 transition hover:bg-sky-100">Create your account <ArrowRight size={18} /></Link></section>
+        <section className="hidden py-16 text-center sm:block sm:py-24"><h2 className="text-3xl font-black tracking-tight text-white sm:text-5xl">Your trading workspace, ready when you are.</h2><Link href="/register" className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 font-bold text-slate-950 transition hover:bg-sky-100">Create your account <ArrowRight size={18} /></Link></section>
 
-        <footer className="border-t border-white/10 py-8 text-center text-sm text-slate-400 sm:py-10"><div className="flex items-center justify-center gap-2"><Image src="/fxzone-logo.jpg" alt="FxZone logo" width={28} height={28} className="h-7 w-7 rounded-md border border-border object-cover" /><span className="text-lg font-black text-text">FxZone</span></div><div className="mt-4 flex flex-wrap items-center justify-center gap-2">{socialLinks.map(({ href, label, icon: Icon }) => <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label} title={label} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition hover:border-sky-300/60 hover:bg-sky-400/10 hover:text-sky-300"><Icon size={18} /></a>)}</div><div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs"><Link href="/terms" className="hover:text-text">Terms</Link><Link href="/privacy" className="hover:text-text">Privacy</Link><Link href="/risk-disclosure" className="hover:text-amber-400">Risk disclosure</Link></div><p className="mx-auto mt-4 max-w-2xl text-xs leading-5 text-text-muted">© {new Date().getFullYear()} FxZone. Market content is for research only and is not investment advice.</p></footer>
+        <footer className="border-t border-white/10 py-6 text-center text-sm text-slate-400 sm:py-10"><div className="flex items-center justify-center gap-2"><Image src="/fxzone-logo.jpg" alt="FxZone logo" width={28} height={28} className="h-7 w-7 rounded-md border border-border object-cover" /><span className="text-lg font-black text-text">FxZone</span></div><div className="mt-4 flex flex-wrap items-center justify-center gap-2">{socialLinks.map(({ href, label, icon: Icon }) => <a key={label} href={href} target="_blank" rel="noreferrer" aria-label={label} title={label} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition hover:border-sky-300/60 hover:bg-sky-400/10 hover:text-sky-300"><Icon size={18} /></a>)}</div><div className="mt-5 hidden flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs sm:flex"><Link href="/terms" className="hover:text-text">Terms</Link><Link href="/privacy" className="hover:text-text">Privacy</Link><Link href="/risk-disclosure" className="hover:text-amber-400">Risk disclosure</Link></div><p className="mx-auto mt-4 hidden max-w-2xl text-xs leading-5 text-text-muted sm:block">© {new Date().getFullYear()} FxZone. Market content is for research only and is not investment advice.</p></footer>
       </div>
     </main>
   );
