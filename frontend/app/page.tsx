@@ -38,20 +38,20 @@ export default function LandingPage() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <main className="fxzone-landing relative min-h-screen overflow-hidden bg-[var(--color-background)] text-slate-100">
+    <main className="fxzone-landing relative min-h-[100svh] overflow-x-hidden bg-[var(--color-background)] text-slate-100">
       <div className="fxzone-landing-backdrop pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"
-        className="fxzone-landing-watermark absolute left-1/2 top-32 -z-0 -translate-x-1/2 sm:top-36"
+        className="fxzone-landing-watermark absolute left-1/2 top-24 -z-0 -translate-x-1/2 sm:top-28"
       >
         <FxZoneLiveMark reduceMotion={reduceMotion} />
       </div>
 
-      <div className="relative z-10 mx-auto max-w-7xl px-3 pb-8 pt-3 sm:px-6 sm:pb-12 sm:pt-5 lg:px-10">
-        <header className="fxzone-landing-nav flex min-h-16 items-center justify-between rounded-xl border border-white/10 px-3 shadow-2xl shadow-sky-950/25 backdrop-blur-xl sm:min-h-20 sm:rounded-2xl sm:px-7">
+      <div className="relative z-10 mx-auto max-w-7xl px-4 pb-8 pt-3 sm:px-6 sm:pb-12 sm:pt-5 lg:px-10">
+        <header className="fxzone-landing-nav flex min-h-16 items-center justify-between gap-3 rounded-xl border border-white/10 px-3 shadow-2xl shadow-sky-950/25 backdrop-blur-xl sm:min-h-20 sm:rounded-2xl sm:px-7">
           <Link href="/" className="flex items-center gap-3" aria-label="FxZone home">
             <Image src="/fxzone-logo.jpg" alt="" width={36} height={36} className="h-8 w-8 rounded-lg border border-border object-cover sm:h-9 sm:w-9" />
-            <span className="text-xl font-black tracking-tight text-white sm:text-3xl">Fx<span className="text-sky-400">Zone</span></span>
+            <span className="text-lg font-black tracking-tight text-white min-[360px]:text-xl sm:text-3xl">Fx<span className="text-sky-400">Zone</span></span>
           </Link>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
             <Link href="/login" className="hidden rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/5 min-[390px]:inline-flex sm:px-5">Log in</Link>
@@ -59,10 +59,10 @@ export default function LandingPage() {
           </div>
         </header>
 
-        <section className="flex min-h-[540px] items-end py-16 sm:min-h-[620px] sm:py-24 lg:min-h-[690px] lg:py-28">
-          <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-xl lg:ml-10">
+        <section className="flex min-h-[calc(100svh-80px)] items-end py-12 sm:min-h-[620px] sm:py-24 lg:min-h-[690px] lg:py-28">
+          <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-xl pb-3 lg:ml-10">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-100 backdrop-blur-sm"><Sparkles size={14} className="text-sky-300" /> Market intelligence, in one place</div>
-            <p className="max-w-md text-base leading-7 text-slate-300 sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
+            <p className="max-w-md text-sm leading-6 text-slate-300 min-[360px]:text-base min-[360px]:leading-7 sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
             <div className="mt-8 flex flex-col gap-3 min-[390px]:flex-row">
               <Link href="/register" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3.5 font-bold text-white shadow-xl shadow-sky-500/20 transition hover:bg-sky-400">Get started <ArrowRight size={18} /></Link>
               <Link href="/dashboard" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/15 px-6 py-3.5 font-semibold text-white transition hover:border-sky-300/60 hover:bg-white/5">Explore markets</Link>

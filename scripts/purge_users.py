@@ -1,6 +1,10 @@
 import os
+import json
 import urllib.request
 import argparse
+
+DEMO_USERNAMES = ("trader_bob", "google_trader", "bob_trader")
+
 
 def purge_unwanted_users(confirm: bool):
     supabase_url = os.environ.get("SUPABASE_URL")
@@ -9,11 +13,10 @@ def purge_unwanted_users(confirm: bool):
     if not supabase_url or not service_key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.")
 
-    unwanted_usernames = ["trader_bob", "google_trader", "bob_trader"]
     print(f"Target Supabase project: {supabase_url}")
-    print(f"Target usernames: {', '.join(unwanted_usernames)}")
+    print(f"Target usernames: {', '.join(DEMO_USERNAMES)}")
     if not confirm:
-        print("Dry run only. Re-run with --confirm to delete these accounts.")
+        print("Dry run only. Re-run with --confirm to permanently delete only these Auth accounts.")
         return
 
     headers = {
@@ -23,15 +26,29 @@ def purge_unwanted_users(confirm: bool):
     }
 
     try:
-        # Delete demo users from Supabase public.users table
-        for username in unwanted_usernames:
-            req = urllib.request.Request(
-                f"{supabase_url}/rest/v1/users?username=eq.{username}",
+        for username in DEMO_USERNAMES:
+            lookup = urllib.request.Request(
+                f"{supabase_url}/rest/v1/users?select=id,username&username=eq.{username}",
                 headers=headers,
-                method="DELETE"
             )
-            urllib.request.urlopen(req)
-        print("Purged demo users from Supabase database.")
+            with urllib.request.urlopen(lookup) as response:
+                accounts = json.loads(response.read().decode())
+
+            for account in accounts:
+                user_id = account.get("id")
+                if not user_id:
+                    continue
+                # Delete the Auth identity, not only its public profile. This
+                # revokes refresh sessions and lets the profile cascade through
+                # the foreign key instead of leaving a sign-in-capable account.
+                request = urllib.request.Request(
+                    f"{supabase_url}/auth/v1/admin/users/{user_id}",
+                    headers=headers,
+                    method="DELETE"
+                )
+                urllib.request.urlopen(request)
+                print(f"Deleted demo account: {username}")
+        print("Finished removing listed demo accounts.")
     except Exception as e:
         raise RuntimeError("Unable to purge users") from e
 

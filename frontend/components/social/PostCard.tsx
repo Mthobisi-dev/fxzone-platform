@@ -597,13 +597,13 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
 
           {/* Video Attachment Player */}
           {imageUrl && isVideoUrl(imageUrl) && (
-            <div className="relative rounded-xl border border-zinc-800/80 overflow-hidden mb-3 bg-black max-h-96 flex items-center justify-center shadow-lg">
+            <div className="relative rounded-xl border border-zinc-800/80 overflow-hidden mb-3 bg-black flex items-center justify-center shadow-lg">
               <video
                 src={imageUrl}
                 controls
                 playsInline
                 preload="metadata"
-                className="w-full max-h-96 rounded-xl object-contain bg-black"
+                className="w-full max-h-[70svh] rounded-xl object-contain bg-black sm:max-h-[38rem]"
                 onClick={(e) => e.stopPropagation()}
                 onPlay={(event) => playExclusive(event.currentTarget)}
                 onEnded={(event) => releaseMedia(event.currentTarget)}
@@ -631,11 +631,11 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
 
           {/* Image Attachment (when not video/audio) */}
           {imageUrl && !isVideoUrl(imageUrl) && !isAudioUrl(imageUrl) && (
-            <div className="relative rounded-xl border border-zinc-800/60 overflow-hidden mb-3 bg-zinc-900/60 max-h-96 flex items-center justify-center">
+            <div className="relative rounded-xl border border-zinc-800/60 overflow-hidden mb-3 bg-zinc-900/60 flex items-center justify-center">
               <img
                 src={imageUrl}
                 alt="Post attachment"
-                className="w-full max-h-96 object-cover rounded-xl hover:opacity-95 transition-opacity"
+                className="w-full max-h-[70svh] object-contain rounded-xl hover:opacity-95 transition-opacity sm:max-h-[38rem]"
                 loading="lazy"
                 onError={(e) => {
                   (e.target as HTMLImageElement).parentElement!.style.display = 'none';

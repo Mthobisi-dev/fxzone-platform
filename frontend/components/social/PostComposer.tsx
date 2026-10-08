@@ -28,6 +28,7 @@ import {
   Check,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { isAllowedPostVideoDuration, MAX_POST_VIDEO_DURATION_SECONDS, readLocalVideoDuration } from '@/lib/postMedia';
 
 interface PostComposerProps {
   onPostCreated?: () => void;
@@ -52,6 +53,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -88,24 +90,43 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   };
 
   const getFileType = (file: File): 'image' | 'video' | 'audio' | 'document' | null => {
-    if (file.type.startsWith('video/')) return 'video';
-    if (file.type.startsWith('audio/')) return 'audio';
-    if (file.type.startsWith('image/')) return 'image';
     return ALLOWED_TYPES[file.type] || null;
   };
 
-  const addFiles = useCallback((files: FileList | File[]) => {
+  const addFiles = useCallback(async (files: FileList | File[]) => {
     const newMedia: MediaFile[] = [];
-    Array.from(files).forEach((file) => {
+    let firstError: string | null = null;
+    for (const file of Array.from(files)) {
       const type = getFileType(file);
-      if (!type) return;
-      if (file.size > 100 * 1024 * 1024) return; // 100MB limit
+      if (!type) {
+        firstError ||= 'Choose an image, video, audio file, or PDF supported by FxZone.';
+        continue;
+      }
+      if (file.size > 100 * 1024 * 1024) {
+        firstError ||= 'Attachments must be 100 MB or smaller.';
+        continue;
+      }
+
+      if (type === 'video') {
+        try {
+          const duration = await readLocalVideoDuration(file);
+          if (!isAllowedPostVideoDuration(duration)) {
+            firstError ||= `Videos can be up to ${Math.floor(MAX_POST_VIDEO_DURATION_SECONDS / 60)}:${String(MAX_POST_VIDEO_DURATION_SECONDS % 60).padStart(2, '0')} long.`;
+            continue;
+          }
+        } catch (error) {
+          console.warn('Unable to read selected video metadata:', error);
+          firstError ||= 'This video could not be read. Choose a valid video file and try again.';
+          continue;
+        }
+      }
 
       const previewUrl =
         type === 'document' ? '' : URL.createObjectURL(file);
 
       newMedia.push({ file, previewUrl, type });
-    });
+    }
+    setMediaError(firstError);
     if (newMedia.length > 0) {
       setMediaFiles((prev) => [...prev, ...newMedia].slice(0, 5));
       setIsExpanded(true);
@@ -278,7 +299,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files.length > 0) {
-      addFiles(e.dataTransfer.files);
+      void addFiles(e.dataTransfer.files);
     }
   };
 
@@ -338,6 +359,12 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             </p>
           )}
 
+          {mediaError && (
+            <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200" role="alert">
+              {mediaError}
+            </p>
+          )}
+
           <input
             type="text"
             value={caption}
@@ -369,7 +396,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                 accept="image/*,video/*,audio/*,.pdf"
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) {
-                    addFiles(e.target.files);
+                    void addFiles(e.target.files);
                     e.target.value = '';
                   }
                 }}
@@ -388,14 +415,14 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                         <img
                           src={media.previewUrl}
                           alt="Preview"
-                          className="w-24 h-24 object-cover"
+                          className="max-h-32 max-w-40 object-contain"
                         />
                       )}
                       {media.type === 'video' && (
                         <div className="w-32 h-24 bg-zinc-900 flex flex-col items-center justify-center relative p-1">
                           <video
                             src={media.previewUrl}
-                            className="w-full h-full object-cover rounded-lg"
+                            className="w-full h-full object-contain rounded-lg"
                           />
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                             <Film size={20} className="text-blue-400" />

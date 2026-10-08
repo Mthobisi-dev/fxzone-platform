@@ -442,7 +442,7 @@
   --fxzone-mark-outline: #e0f2fe;
   --fxzone-mark-accent: #38bdf8;
   display: flex;
-  width: min(28rem, 82vw);
+  width: min(28rem, 88vw);
   flex-direction: column;
   align-items: center;
   transform-origin: center;
@@ -456,6 +456,26 @@
   align-items: center;
   gap: clamp(1.4rem, 5vw, 3rem);
   padding-bottom: 0.4rem;
+}
+
+@media (max-width: 380px) {
+  .fxzone-live-mark {
+    width: min(20rem, 88vw);
+  }
+
+  .fxzone-live-candles {
+    height: 9rem;
+    gap: 1.35rem;
+  }
+
+  .fxzone-live-candle {
+    width: 2.25rem;
+  }
+
+  .fxzone-live-wordmark {
+    margin-top: 1.25rem;
+    font-size: 2.3rem;
+  }
 }
 
 .fxzone-live-candle {
