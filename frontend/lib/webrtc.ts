@@ -43,6 +43,9 @@ export class WebRTCClient {
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private pendingCandidates: Map<string, RTCIceCandidateInit[]> = new Map();
   private negotiatingPeers: Set<string> = new Set();
+  private signalQueues = new Map<string, Promise<void>>();
+  private restartAttempts = new Map<string, number>();
+  private closed = false;
   private localStream: MediaStream | null = null;
   private sessionId: string;
   private currentUserId: string = '';
@@ -78,6 +81,7 @@ export class WebRTCClient {
    * Set or update local MediaStream (Screen Share or Camera).
    */
   public async setLocalStream(stream: MediaStream | null) {
+    if (this.closed) return;
     this.localStream = stream;
 
     if (stream) {
@@ -221,7 +225,20 @@ export class WebRTCClient {
    * Handle incoming WebRTC signaling payload from WebSocket.
    */
   public async handleSignal(payload: any) {
-    if (!payload) return;
+    if (!payload || this.closed) return;
+    const signal = payload.type === 'rtc_signal' ? payload.data : payload;
+    const sender = String(signal?.sender_id || signal?.user_id || '');
+    // SDP and ICE handlers await browser operations. Process each peer's
+    // messages in order so two offers cannot create competing connections.
+    const queued = (this.signalQueues.get(sender) || Promise.resolve())
+      .then(() => this.closed ? undefined : this.processSignal(payload));
+    this.signalQueues.set(sender, queued);
+    try { await queued; } finally {
+      if (this.signalQueues.get(sender) === queued) this.signalQueues.delete(sender);
+    }
+  }
+
+  private async processSignal(payload: any) {
 
     // Normalization across signal wrapper payloads
     const rawData = payload.data || payload;
@@ -255,7 +272,12 @@ export class WebRTCClient {
         case 'request_stream':
           // Peer explicitly requested our stream
           if (this.localStream && senderId) {
-            await this.initiatePeerConnection(senderId);
+            const pc = this.peerConnections.get(senderId);
+            if (signalData.restart && pc && pc.signalingState === 'stable') {
+              await this.restartPeer(senderId, pc);
+            } else {
+              await this.initiatePeerConnection(senderId);
+            }
           }
           break;
 
@@ -326,15 +348,16 @@ export class WebRTCClient {
       return;
     }
     if (pc) {
+      this.peerConnections.delete(peerId);
+      pc.onconnectionstatechange = null;
       try {
         pc.close();
       } catch (e) {
         // Safe ignore
       }
-      this.peerConnections.delete(peerId);
     }
     this.pendingCandidates.delete(peerId);
-    this.negotiatingPeers.delete(peerId);
+    this.restartAttempts.delete(peerId);
     if (this.onPeerLeftCallback) {
       this.onPeerLeftCallback(peerId);
     }
@@ -344,13 +367,14 @@ export class WebRTCClient {
    * Presenter initiates connection and sends SDP offer to a specific peer.
    */
   private async initiatePeerConnection(targetUserId: string) {
-    if (!this.localStream || this.negotiatingPeers.has(targetUserId)) return;
+    if (this.closed || !this.localStream || this.negotiatingPeers.has(targetUserId)) return;
 
     const existing = this.peerConnections.get(targetUserId);
     // A reconnect can re-announce a peer. Keep its healthy connection rather
     // than resetting the stream and creating competing SDP offers.
     if (existing && existing.signalingState !== 'closed' && (
-      existing.connectionState === 'connected' || existing.connectionState === 'connecting'
+      existing.connectionState === 'connected' || existing.connectionState === 'connecting' ||
+      existing.signalingState === 'have-local-offer'
     )) {
       return;
     }
@@ -358,6 +382,8 @@ export class WebRTCClient {
     this.negotiatingPeers.add(targetUserId);
     try {
       if (existing && existing.signalingState !== 'closed') {
+        this.peerConnections.delete(targetUserId);
+        existing.onconnectionstatechange = null;
         try {
           existing.close();
         } catch {
@@ -366,6 +392,7 @@ export class WebRTCClient {
       }
 
       const pc = await this.createPeerConnection(targetUserId);
+      if (this.closed || !this.localStream) { pc.close(); return; }
       this.peerConnections.set(targetUserId, pc);
 
       this.localStream.getTracks().forEach((track) => {
@@ -393,21 +420,22 @@ export class WebRTCClient {
    */
   private async handleOffer(senderId: string, offerData: any, senderUsername?: string) {
     let pc = this.peerConnections.get(senderId);
-    if (pc && pc.signalingState !== 'closed') {
-      try {
-        pc.close();
-      } catch (e) {
-        // Safe ignore
-      }
+    if (!pc || pc.signalingState === 'closed') {
+      pc = await this.createPeerConnection(senderId, senderUsername);
+      if (this.closed) { pc.close(); return; }
+      this.peerConnections.set(senderId, pc);
+    } else if (pc.signalingState === 'have-local-offer') {
+      // Deterministic glare handling when two participants share together.
+      if (this.currentUserId < senderId) return;
+      await pc.setLocalDescription({ type: 'rollback' });
     }
-
-    pc = await this.createPeerConnection(senderId, senderUsername);
-    this.peerConnections.set(senderId, pc);
 
     // If viewer also has local media tracks (e.g. 2-way voice/mic)
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
-        pc!.addTrack(track, this.localStream!);
+        if (!pc!.getSenders().some((sender) => sender.track === track)) {
+          pc!.addTrack(track, this.localStream!);
+        }
       });
     }
 
@@ -510,15 +538,36 @@ export class WebRTCClient {
     };
 
     pc.onconnectionstatechange = () => {
+      if (this.closed || this.peerConnections.get(targetUserId) !== pc) return;
       if (pc.connectionState === 'failed') {
-        console.warn(`WebRTC connection to ${targetUserId} failed, attempting restart...`);
-        pc.restartIce();
+        if (this.localStream) {
+          void this.restartPeer(targetUserId, pc).catch((error) => console.warn('ICE recovery failed:', error));
+        } else {
+          this.sendSignal({ type: 'request_stream', target_user_id: targetUserId, data: { restart: true } });
+        }
+      } else if (pc.connectionState === 'connected') {
+        this.restartAttempts.delete(targetUserId);
       } else if (pc.connectionState === 'closed') {
         this.handlePeerLeft(targetUserId, pc);
       }
     };
 
     return pc;
+  }
+
+  private async restartPeer(peerId: string, pc: RTCPeerConnection) {
+    const attempts = this.restartAttempts.get(peerId) || 0;
+    if (this.closed || attempts >= 2 || pc.signalingState !== 'stable' || this.negotiatingPeers.has(peerId)) return;
+    this.restartAttempts.set(peerId, attempts + 1);
+    this.negotiatingPeers.add(peerId);
+    try {
+      // restartIce alone only fires negotiationneeded; no handler was sending
+      // the new SDP. Explicitly negotiate refreshed ICE credentials.
+      const offer = await pc.createOffer({ iceRestart: true });
+      if (this.closed || this.peerConnections.get(peerId) !== pc) return;
+      await pc.setLocalDescription(offer);
+      this.sendSignal({ type: 'offer', target_user_id: peerId, data: offer });
+    } finally { this.negotiatingPeers.delete(peerId); }
   }
 
   private async loadTurnCredentials(): Promise<void> {
@@ -557,7 +606,7 @@ export class WebRTCClient {
    * Send signaling message to parent or WebSocket channel.
    */
   private sendSignal(payload: any) {
-    if (this.onSignalCallback) {
+    if (!this.closed && this.onSignalCallback) {
       this.onSignalCallback({
         ...payload,
         sender_id: this.currentUserId,
@@ -570,12 +619,14 @@ export class WebRTCClient {
    * Clean up all peer connections and local media tracks.
    */
   public close() {
+    this.closed = true;
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
       this.localStream = null;
     }
 
     this.peerConnections.forEach((pc) => {
+      pc.onconnectionstatechange = null;
       try {
         pc.close();
       } catch (e) {
@@ -585,6 +636,8 @@ export class WebRTCClient {
     this.peerConnections.clear();
     this.pendingCandidates.clear();
     this.negotiatingPeers.clear();
+    this.signalQueues.clear();
+    this.restartAttempts.clear();
   }
 
   public disconnect() {

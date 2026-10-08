@@ -3,9 +3,9 @@ import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 import { getFollowCounts } from '@/lib/server/socialCounters';
 
 // Fetch a profile by UUID or username with legacy-schema compatibility.
-export async function GET(request: NextRequest, context: { params: { id: string } | Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const params = await Promise.resolve(context.params);
+    const params = await context.params;
     const userId = params.id;
     if (!userId) return NextResponse.json({ detail: 'User ID parameter missing' }, { status: 400 });
 

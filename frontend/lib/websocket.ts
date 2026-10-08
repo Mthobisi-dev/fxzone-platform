@@ -22,6 +22,7 @@ export class FxZoneWebSocket {
   private maxReconnectAttempts = 5;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private pendingOutbound: any[] = [];
+  private connectionGeneration = 0;
   private readonly isPrivateTopic: boolean;
   private readonly isPublicReadOnlyTopic: boolean;
 
@@ -47,6 +48,7 @@ export class FxZoneWebSocket {
     if (this.state === 'CONNECTED' || this.state === 'CONNECTING' || this.state === 'RECONNECTING') return;
 
     this.state = this.reconnectAttempts > 0 ? 'RECONNECTING' : 'CONNECTING';
+    const generation = ++this.connectionGeneration;
 
     // Private Realtime topics are authorized from the JWT available to the
     // browser client when the channel joins. Waiting for the Auth session here
@@ -64,12 +66,15 @@ export class FxZoneWebSocket {
         // Realtime RLS rather than relying on an earlier initialization race.
         await supabase.realtime.setAuth();
       } catch (error) {
+        if (generation !== this.connectionGeneration) return;
         this.state = 'CLOSED';
         this.emit('error', error);
         this.emit('close', { reason: 'Realtime authentication is unavailable' });
         return;
       }
     }
+
+    if (generation !== this.connectionGeneration) return;
 
     this.channel = supabase.channel(this.channelName, {
       config: {
@@ -84,14 +89,16 @@ export class FxZoneWebSocket {
 
     this.channel
       .on('broadcast', { event: '*' }, (payload) => {
+        if (generation !== this.connectionGeneration) return;
         const eventType = payload.event;
         const data = payload.payload;
         if (eventType) {
           this.emit(eventType, data);
         }
-        this.emit('message', data);
+        if (eventType !== 'message') this.emit('message', data);
       })
       .subscribe((status, error) => {
+        if (generation !== this.connectionGeneration) return;
         if (status === 'SUBSCRIBED') {
           this.state = 'CONNECTED';
           this.reconnectAttempts = 0;
@@ -119,8 +126,11 @@ export class FxZoneWebSocket {
 
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      const pending = this.pendingOutbound.splice(0);
       this.close();
-      this.connect();
+      this.pendingOutbound = pending;
+      void this.connect();
     }, delay);
   }
 
@@ -128,6 +138,7 @@ export class FxZoneWebSocket {
    * Unsubscribe and close Supabase Realtime Channel.
    */
   public close() {
+    this.connectionGeneration++;
     this.state = 'CLOSING';
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -138,6 +149,7 @@ export class FxZoneWebSocket {
       this.channel = null;
     }
     this.state = 'CLOSED';
+    this.pendingOutbound = [];
     this.emit('close', null);
   }
 
@@ -145,6 +157,7 @@ export class FxZoneWebSocket {
    * Broadcast message over Supabase Realtime.
    */
   public send(payload: any) {
+    if (this.state === 'CLOSED' || this.state === 'CLOSING') return false;
     if (this.isPublicReadOnlyTopic) {
       console.warn(`Broadcasting is disabled for public ${this.channelName} data.`);
       return false;

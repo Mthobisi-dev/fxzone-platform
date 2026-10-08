@@ -4,9 +4,9 @@ import { apiError } from '@/lib/api-error';
 
 // Fetch posts and chart analyses published by a profile. The route accepts both
 // a UUID and a username because profile URLs use either form.
-export async function GET(request: NextRequest, context: { params: { id: string } | Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id: profileIdentifier } = await Promise.resolve(context.params);
+    const { id: profileIdentifier } = await context.params;
     if (!profileIdentifier) return apiError('BAD_REQUEST', 'A profile identifier is required.', 400);
 
     const db = getSupabaseAdmin(request);

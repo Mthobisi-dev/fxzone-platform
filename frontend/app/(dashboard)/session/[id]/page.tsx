@@ -12,6 +12,8 @@ export default function SessionRoomPage() {
   const router = useRouter();
   const { user, token, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const sessionId = params.id as string;
+  const authReady = !isAuthLoading && isAuthenticated && Boolean(token);
+  const userId = user?.id;
 
   const [session, setSession] = useState<any>(null);
   const [participant, setParticipant] = useState<any>(null);
@@ -65,8 +67,6 @@ export default function SessionRoomPage() {
     if (isAuthLoading) return;
 
     if (!isAuthenticated || !token) {
-      setJoinError('Sign in is required before joining a live session.');
-      setLoading(false);
       return;
     }
 
@@ -83,32 +83,45 @@ export default function SessionRoomPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, isAuthLoading, isAuthenticated, token]);
+  // Refreshing the token must not rejoin and remount an active broadcast.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, authReady, userId]);
 
   // Pending users do not join the session signaling topic. Polling this
   // authenticated endpoint exposes only their own approval state until they
   // become an active participant and may enter the private session channel.
   useEffect(() => {
-    let interval: any;
-    if (isPendingApproval && !isRejected) {
-      interval = setInterval(async () => {
+    if (!participant?.id || isRejected || !authReady) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const checkAdmission = async () => {
         try {
-          const response = await api.post(`/api/sessions/${sessionId}/join`);
-          if (response && response.role !== 'pending') {
+          const response = await api.get(`/api/sessions/${sessionId}/join`);
+          if (cancelled) return;
+          if (response) {
             setParticipant(response);
-            setIsPendingApproval(false);
+            setIsPendingApproval(response.role === 'pending');
             setIsRejected(response.role === 'rejected');
-            clearInterval(interval);
+            if (response.session_status === 'ended' || (response.left_at && response.role !== 'rejected')) {
+              setJoinError('This broadcast has ended or your participation has expired.');
+              return;
+            }
           }
         } catch (e) {
           console.error('Error checking approval status:', e);
+          if (!cancelled && (e as { status?: number }).status === 404) {
+            setJoinError('This broadcast is no longer available.');
+            return;
+          }
         }
-      }, 2500);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
+        if (!cancelled) timer = setTimeout(checkAdmission, isPendingApproval ? 2500 : 5000);
     };
-  }, [isPendingApproval, isRejected, sessionId]);
+    timer = setTimeout(checkAdmission, 2500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isPendingApproval, isRejected, sessionId, participant?.id, authReady]);
 
   const handleLeave = async () => {
     try {
@@ -118,6 +131,10 @@ export default function SessionRoomPage() {
     }
     router.push('/sessions');
   };
+
+  if (!isAuthLoading && !authReady) {
+    return <div className="p-6 text-sm" role="alert">Sign in before joining a live session.</div>;
+  }
 
   if (loading) {
     return (

@@ -7,6 +7,9 @@ export function useWebSocket(
   enabled = true,
 ) {
   const socketRef = useRef<FxZoneWebSocket | null>(null);
+  const listenersRef = useRef(eventListeners);
+  useEffect(() => { listenersRef.current = eventListeners; });
+  const eventNames = Object.keys(eventListeners).sort().join(',');
 
   useEffect(() => {
     // Only connect in browser environment and when a path is provided
@@ -17,8 +20,10 @@ export function useWebSocket(
     socketRef.current = socket;
 
     // Register all event listeners
-    Object.entries(eventListeners).forEach(([event, callback]) => {
+    const registered = eventNames.split(',').filter(Boolean).map((event) => {
+      const callback = (data: any) => listenersRef.current[event]?.(data);
       socket.on(event, callback);
+      return { event, callback };
     });
 
     // Establish connection
@@ -26,13 +31,13 @@ export function useWebSocket(
 
     // Clean up on unmount or path change
     return () => {
-      Object.entries(eventListeners).forEach(([event, callback]) => {
+      registered.forEach(({ event, callback }) => {
         socket.off(event, callback);
       });
       socket.close();
       socketRef.current = null;
     };
-  }, [path, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [path, enabled, eventNames]);
 
   return socketRef;
 }

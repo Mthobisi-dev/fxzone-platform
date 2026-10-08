@@ -4,10 +4,10 @@ import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 // POST /api/social/posts/[id]/pin — Toggle pin status on post
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } | Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const params = await Promise.resolve(context.params);
+    const params = await context.params;
     const postId = params.id;
 
     const { user, error: authError } = await getUserFromRequest(request);

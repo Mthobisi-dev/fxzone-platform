@@ -4,10 +4,10 @@ import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 // GET /api/social/posts/[id] — Fetch single post details
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } | Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const params = await Promise.resolve(context.params);
+    const params = await context.params;
     const postId = params.id;
     const db = getSupabaseAdmin(request);
 
@@ -34,10 +34,10 @@ export async function GET(
 // DELETE /api/social/posts/[id] — Robust post deletion (Owner or Admin)
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } | Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const params = await Promise.resolve(context.params);
+    const params = await context.params;
     const postId = params.id;
 
     if (!postId) {

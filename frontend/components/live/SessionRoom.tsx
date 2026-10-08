@@ -38,6 +38,8 @@ export function SessionRoom({
   onLeave,
 }: SessionRoomProps) {
   const { user, token, isAuthenticated } = useAuth();
+  const userId = user?.id;
+  const username = user?.username;
 
   // ─── UI state ────────────────────────────────────────────────────────────────
   const [participantsCount, setParticipantsCount] = useState(1);
@@ -52,6 +54,7 @@ export function SessionRoom({
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isRoomBeingRecorded, setIsRoomBeingRecorded] = useState(false);
   const [signalingStatus, setSignalingStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'unavailable'>('connecting');
+  const [broadcastError, setBroadcastError] = useState<string | null>(null);
 
   // ─── Refs (never go stale in callbacks) ─────────────────────────────────────
   // The WebRTC client lives in a ref so it is NEVER re-created when state changes.
@@ -88,6 +91,11 @@ export function SessionRoom({
             username: user.username,
           },
         });
+        if (isSharingRef.current) {
+          socketRef.current?.send({ type: 'rtc_signal', data: {
+            type: 'presenter_stream_started', sender_id: user.id, sender_username: user.username,
+          } });
+        }
       }
     },
     close: (details) => {
@@ -116,7 +124,7 @@ export function SessionRoom({
       if (isSharingRef.current && rtcClientRef.current) {
         socketRef.current?.send({
           type: 'rtc_signal',
-          data: { type: 'presenter_stream_started', active: true },
+          data: { type: 'presenter_stream_started', active: true, sender_id: userId, sender_username: username },
         });
       }
     },
@@ -178,7 +186,7 @@ export function SessionRoom({
 
   // ─── WebRTC client — created ONCE per session mount, lives in a ref ──────────
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     // Tear down any existing client before creating a new one
     if (rtcClientRef.current) {
@@ -188,8 +196,8 @@ export function SessionRoom({
 
     const client = new WebRTCClient({
       sessionId,
-      currentUserId: String(user.id),
-      currentUsername: user.username,
+      currentUserId: String(userId),
+      currentUsername: username,
       isHost,
       isPresenter: isHost,
       onStream: (stream, presenterInfo) => {
@@ -229,23 +237,34 @@ export function SessionRoom({
         type: 'rtc_signal',
         data: {
           type: 'peer_joined',
-          user_id: user.id,
-          username: user.username,
+          user_id: userId,
+          username,
         },
       });
     }, 500);
 
     return () => {
       clearTimeout(announceTimer);
+      if (shareTimerRef.current) clearInterval(shareTimerRef.current);
       client.close();
       rtcClientRef.current = null;
     };
     // NOTE: isSharingScreen intentionally NOT in deps — that's exactly the bug we're fixing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, isHost, user]);
+  }, [sessionId, isHost, userId]);
 
   // ─── Screen Share ─────────────────────────────────────────────────────────────
   const handleStartScreenShare = async () => {
+    setBroadcastError(null);
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setBroadcastError('Screen sharing is unavailable in this browser. Use a supported desktop browser to present; you can still watch here.');
+      return;
+    }
+    if (socketRef.current?.getState() !== 'CONNECTED' || !rtcClientRef.current) {
+      setBroadcastError('Wait for the secure session connection before sharing. If it stays unavailable, reload the room.');
+      return;
+    }
+    const client = rtcClientRef.current;
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
@@ -259,6 +278,11 @@ export function SessionRoom({
           autoGainControl: true,
         },
       });
+
+      if (rtcClientRef.current !== client) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
 
       // Update refs immediately — callbacks read these, not stale state.
       isSharingRef.current = true;
@@ -293,6 +317,9 @@ export function SessionRoom({
       }
     } catch (err: any) {
       console.warn('Display media capture cancelled or rejected:', err);
+      setBroadcastError(err?.name === 'NotAllowedError'
+        ? 'Screen sharing was cancelled or denied. Click Share Screen and choose a screen, window, or tab.'
+        : 'Unable to capture your screen. Check browser permissions and try again.');
     }
   };
 
@@ -506,6 +533,7 @@ export function SessionRoom({
       <div className="flex-1 flex min-h-0 relative">
         {/* Stream Area */}
         <div className="flex-1 p-6 flex flex-col gap-4 min-w-0">
+          {broadcastError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">{broadcastError}</p>}
           {/* AI Alerts */}
           {copilotAlerts.length > 0 && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 p-2.5 rounded-lg flex items-start gap-2 text-[10px] text-yellow-500 animate-pulse">

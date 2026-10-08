@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       .select('id')
       .eq('session_id', sessionId)
       .eq('user_id', user.id)
+      .in('role', ['host', 'viewer'])
       .is('left_at', null)
       .maybeSingle();
 

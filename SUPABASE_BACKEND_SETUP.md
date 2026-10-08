@@ -32,6 +32,8 @@ In the Supabase SQL editor, run the tracked files in numerical order:
 15. `supabase/migrations/018_post_pinning.sql`
 16. `supabase/migrations/019_realtime_authorization.sql`
 17. `supabase/migrations/020_lock_down_user_pii.sql`
+18. `supabase/migrations/021_fix_idempotent_session_join.sql`
+19. `supabase/migrations/20261007213918_session_membership_realtime_access.sql`
 
 Migration 020 is mandatory privacy hardening. It applies explicit public
 profile-column grants and prevents browser clients from selecting email or
@@ -75,3 +77,41 @@ topics do not accept client broadcasts.
 
 - 013_social_interaction_reliability.sql — recalculates interaction counters and normalizes preferred-broker defaults.
 - 014_remove_jack_d9e07f.sql — removes the requested @jack_d9e07f account and revokes its Supabase sessions.
+
+## Live broadcast verification
+
+Apply 019, 021, and `20261007213918_session_membership_realtime_access.sql`
+before testing broadcasts. The last migration permits authenticated users to
+read only their own membership row. Without it, the Realtime policy's membership
+lookup is hidden by row security, even when the server confirms approval.
+Do not disable row security or make session channels public to bypass this.
+
+The waiting room now uses `GET /api/sessions/<id>/join` to read its own admission
+state. Only the initial join uses POST. Approved/rejected decisions are not
+overwritten by polling. A host ending the session is detected by this same poll.
+
+For reliable connections across mobile networks, office firewalls and different
+routers, configure these **server-only** Vercel variables for a working TURN
+provider: `TURN_URL`, `TURN_SHARED_SECRET`, and optionally `TURN_TTL_SECONDS`.
+STUN-only peer connections cannot connect across every network. A successful
+Realtime subscription does not prove the media connection works. Supabase carries
+the signaling messages; a TURN provider relays media when a direct route fails.
+
+Deploy the current commit to the Vercel production project rooted at `frontend`.
+Use two distinct accounts in separate browsers/devices:
+
+1. Create an approval-required room as host. Request access as viewer.
+2. Approve once; verify the viewer leaves the waiting room and stays approved.
+3. Verify both rooms show **Signal connected**. Choose a screen/window/tab with
+   Share Screen on a supported desktop browser. Check actual moving video in the
+   viewer browser; the host's local preview is not proof of broadcast delivery.
+4. Stop and restart sharing, then briefly disconnect/reconnect the viewer's
+   network. Confirm delivery recovers. Repeat across two different networks to
+   test TURN. Confirm `/api/webrtc/credentials?sessionId=<id>` returns 200 for an
+   active host/viewer and denies pending/nonmembers. Do not copy credentials.
+5. End the session and confirm the viewer leaves the media room within 5 seconds.
+
+If connection stays unavailable, inspect the private channel error and verify
+the migrations in the same Supabase project used by Vercel. No database migration
+has been applied automatically. Local tests cover signaling lifecycle and API
+ownership; they do not replace this two-browser media and production RLS check.
