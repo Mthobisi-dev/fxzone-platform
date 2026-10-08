@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { type, size } = body as { type?: unknown; size?: unknown };
-    if (typeof type !== 'string' || !Number.isSafeInteger(size) || !isAllowedPostMedia(type, size)) {
+    if (typeof type !== 'string' || typeof size !== 'number' || !Number.isSafeInteger(size) || !isAllowedPostMedia(type, size)) {
       return apiError('UNPROCESSABLE_ENTITY', 'The selected attachment type or size is not allowed.', 422);
     }
 
