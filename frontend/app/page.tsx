@@ -12,16 +12,16 @@ const socialLinks = [
   { href: 'https://www.linkedin.com/in/mthobisi-mzimela-136835354', label: 'LinkedIn', icon: Linkedin },
 ];
 
-function FxZoneLiveMark({ reduceMotion }: { reduceMotion: boolean | null }) {
+function FxZoneLiveMark() {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
     <motion.div
-      className={`fxzone-live-mark${isHovered ? ' is-hovered' : ''}`}
+      className={`fxzone-live-mark fxzone-live-mark--force-motion${isHovered ? ' is-hovered' : ''}`}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
-      animate={reduceMotion ? undefined : { y: [-12, 12, -12], rotate: [-1.25, 1.25, -1.25] }}
-      transition={reduceMotion ? undefined : { duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+      animate={{ y: [-12, 12, -12], rotate: [-1.25, 1.25, -1.25] }}
+      transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
     >
       <div className="fxzone-live-candles" aria-hidden="true">
         <div className="fxzone-live-candle fxzone-live-candle-outline fxzone-live-candle-tall"><span className="fxzone-live-wick" /><span className="fxzone-live-body" /></div>
@@ -44,7 +44,7 @@ export default function LandingPage() {
         aria-hidden="true"
         className="fxzone-landing-watermark absolute left-1/2 top-24 -z-0 -translate-x-1/2 sm:top-28"
       >
-        <FxZoneLiveMark reduceMotion={reduceMotion} />
+        <FxZoneLiveMark />
       </div>
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 pb-8 pt-3 sm:px-6 sm:pb-12 sm:pt-5 lg:px-10">

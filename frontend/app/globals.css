@@ -679,16 +679,16 @@
 @media (prefers-reduced-motion: reduce) {
   .fxzone-landing-watermark,
   .fxzone-3d-mark,
-  .fxzone-live-mark,
-  .fxzone-live-candle,
-  .fxzone-live-body,
+  .fxzone-live-mark:not(.fxzone-live-mark--force-motion),
+  .fxzone-live-mark:not(.fxzone-live-mark--force-motion) .fxzone-live-candle,
+  .fxzone-live-mark:not(.fxzone-live-mark--force-motion) .fxzone-live-body,
   .fxzone-laptop,
   .fxzone-laptop-screen,
   .fxzone-laptop-base {
     transform: none !important;
   }
 
-  .fxzone-live-body {
+  .fxzone-live-mark:not(.fxzone-live-mark--force-motion) .fxzone-live-body {
     animation: none !important;
   }
 
