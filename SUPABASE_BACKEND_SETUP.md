@@ -85,6 +85,8 @@ before testing broadcasts. The last migration permits authenticated users to
 read only their own membership row. Without it, the Realtime policy's membership
 lookup is hidden by row security, even when the server confirms approval.
 Do not disable row security or make session channels public to bypass this.
+It also recreates the approval RPC when an older project missed migration 009,
+so host approval/rejection works before the client joins the private topic.
 
 The waiting room now uses `GET /api/sessions/<id>/join` to read its own admission
 state. Only the initial join uses POST. Approved/rejected decisions are not
