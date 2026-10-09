@@ -11,6 +11,7 @@ export interface MarketScreenerQuote {
   price: number;
   change: number;
   change_pct: number;
+  volume?: number | null;
   timestamp: string;
   data_source?: string;
   freshness?: 'live' | 'delayed' | 'cached' | 'stale';

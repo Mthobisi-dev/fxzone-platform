@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search, Wifi, WifiOff } from 'lucide-react';
+import { Grid2X2, RefreshCw, Search, Settings2, Wifi, WifiOff } from 'lucide-react';
 import { filterMarketDashboardRows, type DashboardChangeFilter, type DashboardPriceFilter } from '@/lib/marketDashboard';
+import { groupMarketHeatmapRows, marketHeatTileSize, marketHeatTone, type MarketHeatTone } from '@/lib/marketHeatmap';
 import { buildMarketScreenerRows } from '@/lib/marketScreener';
 import { useMarketStore } from '@/stores/marketStore';
 import { cn } from '@/lib/utils';
@@ -16,6 +17,14 @@ const FILTERS: Array<{ value: MarketFilter; label: string }> = [
   { value: 'forex', label: 'Forex' },
   { value: 'commodity', label: 'Metals' },
 ];
+
+const TONE_CLASSES: Record<MarketHeatTone, string> = {
+  'gain-strong': 'fxzone-heatmap-tile--gain-strong',
+  gain: 'fxzone-heatmap-tile--gain',
+  loss: 'fxzone-heatmap-tile--loss',
+  'loss-strong': 'fxzone-heatmap-tile--loss-strong',
+  unavailable: 'fxzone-heatmap-tile--unavailable',
+};
 
 function formatPrice(price: number): string {
   if (price >= 1_000) return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -41,7 +50,7 @@ function providerLabel(source?: string): string {
 
 export function LiveMarketScreener() {
   const { assets, prices, error, isLoading, selectedAssetId, fetchAssets, fetchPrices, setSelectedAsset } = useMarketStore();
-  const [filter, setFilter] = useState<MarketFilter>('all');
+  const [filter, setFilter] = useState<MarketFilter>('stock');
   const [priceFilter, setPriceFilter] = useState<DashboardPriceFilter>('all');
   const [changeFilter, setChangeFilter] = useState<DashboardChangeFilter>('all');
   const [search, setSearch] = useState('');
@@ -62,15 +71,19 @@ export function LiveMarketScreener() {
     };
   }, [assets.length, fetchAssets, fetchPrices]);
 
-  const rows = useMemo(() => {
-    return filterMarketDashboardRows(buildMarketScreenerRows(assets, prices), {
-      market: filter,
-      price: priceFilter,
-      change: changeFilter,
-      search,
-    });
-  }, [assets, changeFilter, filter, priceFilter, prices, search]);
+  const rows = useMemo(() => filterMarketDashboardRows(buildMarketScreenerRows(assets, prices), {
+    market: filter,
+    price: priceFilter,
+    change: changeFilter,
+    search,
+  }), [assets, changeFilter, filter, priceFilter, prices, search]);
 
+  const groups = useMemo(() => groupMarketHeatmapRows(rows), [rows]);
+  const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+  const largestComparableVolume = useMemo(
+    () => Math.max(0, ...rows.map((row) => row.quote?.volume ?? 0).filter((volume) => Number.isFinite(volume))),
+    [rows]
+  );
   const liveCount = rows.filter((row) => row.quote?.is_live).length;
   const delayedCount = rows.filter((row) => row.quote?.freshness === 'delayed').length;
   const unavailableCount = rows.filter((row) => !row.quote).length;
@@ -83,158 +96,157 @@ export function LiveMarketScreener() {
   };
 
   const resetFilters = () => {
-    setFilter('all');
+    setFilter('stock');
     setPriceFilter('all');
     setChangeFilter('all');
     setSearch('');
   };
 
-  const hasActiveFilters = filter !== 'all' || priceFilter !== 'all' || changeFilter !== 'all' || Boolean(search.trim());
+  const hasActiveFilters = filter !== 'stock' || priceFilter !== 'all' || changeFilter !== 'all' || Boolean(search.trim());
 
   return (
-    <section className="fxzone-screener overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_20px_60px_rgba(4,11,23,0.16)]">
-      <header className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_92%,#020617)] px-3 py-3 sm:px-5 sm:py-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-blue-400 shadow-[0_0_12px_rgba(96,165,250,0.9)]" />
-              <h1 className="text-sm font-semibold tracking-tight text-[var(--color-text)] sm:text-base">Stock screener</h1>
-              <span className="hidden text-xs text-[var(--color-text-muted)] sm:inline">Provider-verified quotes</span>
-            </div>
-            <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-              {liveCount} live · {delayedCount} delayed · {unavailableCount} unavailable
-              {selectedSymbol ? ` · selected ${selectedSymbol}` : ''}
-            </p>
+    <section className="fxzone-screener fxzone-heatmap overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_22px_60px_rgba(2,6,23,0.2)]">
+      <header className="fxzone-heatmap-toolbar border-b border-[var(--color-border)] px-3 py-2.5 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2 pr-1">
+            <Grid2X2 size={15} className="shrink-0 text-cyan-400" />
+            <h1 className="truncate text-xs font-semibold tracking-tight text-[var(--color-text)] sm:text-sm">Stock screener</h1>
           </div>
-
-          <div className="flex w-full items-center gap-2 lg:w-auto">
-            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-2 lg:w-60 lg:flex-none">
-              <Search size={14} className="shrink-0 text-[var(--color-text-muted)]" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search symbol"
-                className="min-w-0 w-full bg-transparent text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void refreshNow()}
-              aria-label="Refresh market data"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:border-blue-400 hover:text-blue-500"
-            >
-              <RefreshCw size={15} className={cn(isRefreshing && 'animate-spin')} />
-            </button>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+            {FILTERS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setFilter(item.value)}
+                className={cn(
+                  'shrink-0 rounded border px-2 py-1 text-[10px] font-medium transition',
+                  filter === item.value
+                    ? 'border-cyan-400/65 bg-cyan-400/15 text-cyan-700 dark:text-cyan-200'
+                    : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-cyan-400/45 hover:text-[var(--color-text)]'
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
+          <button
+            type="button"
+            onClick={() => void refreshNow()}
+            aria-label="Refresh market data"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded border border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:border-cyan-400 hover:text-cyan-500"
+          >
+            <RefreshCw size={13} className={cn(isRefreshing && 'animate-spin')} />
+          </button>
         </div>
 
-        <div className="mt-3 flex gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none]">
-          {FILTERS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => setFilter(item.value)}
-              className={cn(
-                'shrink-0 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition',
-                filter === item.value
-                  ? 'bg-blue-500 text-white shadow-sm'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
-          <label className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] font-medium text-[var(--color-text-muted)]">
-            <span>Price: </span>
-            <select value={priceFilter} onChange={(event) => setPriceFilter(event.target.value as DashboardPriceFilter)} className="bg-transparent text-[var(--color-text)] outline-none">
+        <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+          <label className="fxzone-heatmap-filter">
+            <span>Price:</span>
+            <select value={priceFilter} onChange={(event) => setPriceFilter(event.target.value as DashboardPriceFilter)}>
               <option value="all">All</option>
               <option value="under_50">Under 50</option>
               <option value="from_50_to_200">50–200</option>
               <option value="over_200">Over 200</option>
             </select>
           </label>
-          <label className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] font-medium text-[var(--color-text-muted)]">
-            <span>Chg %: </span>
-            <select value={changeFilter} onChange={(event) => setChangeFilter(event.target.value as DashboardChangeFilter)} className="bg-transparent text-[var(--color-text)] outline-none">
+          <label className="fxzone-heatmap-filter">
+            <span>Chg %:</span>
+            <select value={changeFilter} onChange={(event) => setChangeFilter(event.target.value as DashboardChangeFilter)}>
               <option value="all">All</option>
               <option value="gainers">Gainers</option>
               <option value="losers">Losers</option>
             </select>
           </label>
-          <span title="A verified company-fundamentals provider is required." className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]">Mkt cap: feed required</span>
-          <span title="A verified company-fundamentals provider is required." className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]">Sector: feed required</span>
-          <span className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]">Size: Equal tiles</span>
-          <span className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]">Color: 1D % change</span>
-          {hasActiveFilters && <button type="button" onClick={resetFilters} className="shrink-0 rounded-md px-2 py-1.5 text-[10px] font-medium text-blue-600 hover:bg-blue-500/10 dark:text-blue-400">Reset</button>}
+          <span className="fxzone-heatmap-filter" title="Market-cap data is not available from the current verified providers.">Mkt cap: unavailable</span>
+          <span className="fxzone-heatmap-filter" title="Sector data is not available from the current verified providers.">Sector: asset class</span>
+          <span className="fxzone-heatmap-filter">Size: provider volume</span>
+          <span className="fxzone-heatmap-filter">Color: 1D % change</span>
+          {hasActiveFilters && <button type="button" onClick={resetFilters} className="shrink-0 px-1 text-[10px] font-medium text-cyan-600 hover:underline dark:text-cyan-400">Reset</button>}
+        </div>
+
+        <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-[var(--color-text-muted)]">
+          <span className="truncate">{liveCount} live · {delayedCount} delayed · {unavailableCount} unavailable{selectedSymbol ? ` · selected ${selectedSymbol}` : ''}</span>
+          <label className="flex min-w-0 w-36 shrink-0 items-center gap-1.5 rounded border border-[var(--color-border)] px-2 py-1 sm:w-48">
+            <Search size={11} className="shrink-0" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search"
+              className="min-w-0 w-full bg-transparent text-[10px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
+            />
+          </label>
+          <Settings2 size={13} className="hidden shrink-0 text-[var(--color-text-muted)] sm:block" aria-hidden="true" />
         </div>
       </header>
 
       {error && (
-        <div role="status" className="border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 sm:px-5">
+        <div role="status" className="border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 sm:px-4">
           {error} Values are hidden until a provider responds.
         </div>
       )}
 
       <div className="p-2 sm:p-3">
         {isLoading && assets.length === 0 ? (
-          <div className="grid min-h-72 place-items-center text-sm text-[var(--color-text-muted)]">Loading market catalogue…</div>
-        ) : rows.length === 0 ? (
-          <div className="grid min-h-72 place-items-center text-sm text-[var(--color-text-muted)]">No instruments match this filter.</div>
+          <div className="grid min-h-[26rem] place-items-center text-sm text-[var(--color-text-muted)]">Loading market catalogue…</div>
+        ) : groups.length === 0 ? (
+          <div className="grid min-h-[26rem] place-items-center text-sm text-[var(--color-text-muted)]">No instruments match this filter.</div>
         ) : (
-          <div className="grid auto-rows-[106px] grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2 lg:grid-cols-5 xl:grid-cols-6">
-            {rows.map((row) => {
-              const quote = row.quote;
-              const change = quote?.change_pct ?? null;
-              const positive = change !== null && change >= 0;
-              const asset = assets.find((item) => item.id === row.id);
-              const isDelayed = quote?.freshness === 'delayed';
-              const isSelected = selectedAssetId === row.id;
-              return (
-                <button
-                  key={row.id}
-                  type="button"
-                  onClick={() => asset && setSelectedAsset(asset)}
-                  aria-pressed={isSelected}
-                  title={quote ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · updated ${quote.timestamp ? new Date(quote.timestamp).toLocaleString() : 'time unavailable'}` : `${row.symbol} is unavailable`}
-                  className={cn(
-                    'group relative overflow-hidden rounded-lg border p-2.5 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/70',
-                    isSelected && 'ring-1 ring-blue-400/80',
-                    quote
-                      ? positive
-                        ? 'border-emerald-500/25 bg-emerald-500/[0.11] hover:border-emerald-400/60 hover:bg-emerald-500/[0.16]'
-                        : 'border-rose-500/25 bg-rose-500/[0.11] hover:border-rose-400/60 hover:bg-rose-500/[0.16]'
-                      : 'border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]'
-                  )}
-                >
-                  <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-white/35 to-transparent opacity-0 transition group-hover:opacity-100" />
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold tracking-wide text-[var(--color-text)]">{row.symbol}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">{row.name}</p>
-                    </div>
-                    {quote ? <Wifi size={13} className={isDelayed ? 'text-amber-500' : positive ? 'text-emerald-500' : 'text-rose-500'} /> : <WifiOff size={13} className="text-[var(--color-text-muted)]" />}
-                  </div>
-                  <div className="mt-3.5">
-                    {quote ? (
-                      <>
-                        <p className="text-sm font-semibold tabular-nums text-[var(--color-text)]">{formatPrice(quote.price)}</p>
-                        <p className={cn('mt-0.5 text-xs font-medium tabular-nums', positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
-                          {positive ? '+' : ''}{quote.change_pct.toFixed(2)}%
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-sm font-medium text-[var(--color-text-muted)]">Unavailable</p>
-                    )}
-                  </div>
-                  <p className={cn('absolute bottom-2 right-2 text-[9px] font-medium uppercase tracking-wide', isDelayed ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--color-text-muted)]')}>
-                    {quote ? `${quoteQuality(quote)} · ${providerLabel(quote.data_source)}` : quoteQuality(quote)}
-                  </p>
-                </button>
-              );
-            })}
+          <div className={cn('grid gap-2', groups.length > 1 && 'lg:grid-cols-2')}>
+            {groups.map((group) => (
+              <section key={group.id} className="fxzone-heatmap-group rounded-lg border border-[var(--color-border)] p-1.5">
+                <div className="px-1 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">{group.label}</div>
+                <div className="grid auto-rows-[88px] grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
+                  {group.rows.map((row) => {
+                    const quote = row.quote;
+                    const asset = assetById.get(row.id);
+                    const tone = marketHeatTone(quote?.change_pct);
+                    const featured = marketHeatTileSize(row, largestComparableVolume) === 'feature';
+                    const isSelected = selectedAssetId === row.id;
+                    const positive = (quote?.change_pct ?? 0) >= 0;
+                    const title = quote
+                      ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · updated ${quote.timestamp ? new Date(quote.timestamp).toLocaleString() : 'time unavailable'}`
+                      : `${row.symbol} is unavailable`;
+
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => asset && setSelectedAsset(asset)}
+                        aria-pressed={isSelected}
+                        title={title}
+                        className={cn(
+                          'fxzone-heatmap-tile group relative min-w-0 overflow-hidden rounded p-2 text-left transition focus:outline-none focus:ring-2 focus:ring-cyan-400/80',
+                          TONE_CLASSES[tone],
+                          featured && 'col-span-2 row-span-2',
+                          isSelected && 'ring-1 ring-cyan-300'
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={cn('truncate font-semibold tracking-tight text-white', featured ? 'text-sm sm:text-base' : 'text-[11px]')}>
+                            {row.symbol}
+                          </p>
+                          {quote ? <Wifi size={featured ? 14 : 11} className="shrink-0 text-white/65" /> : <WifiOff size={featured ? 14 : 11} className="shrink-0 text-white/45" />}
+                        </div>
+                        <p className={cn('mt-0.5 truncate text-white/70', featured ? 'text-[11px]' : 'text-[9px]')}>{row.name}</p>
+                        {quote ? (
+                          <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
+                            <p className={cn('tabular-nums font-medium text-white', featured ? 'text-base' : 'text-[11px]')}>{formatPrice(quote.price)}</p>
+                            <p className={cn('tabular-nums font-semibold text-white', featured ? 'text-sm' : 'text-[10px]')}>
+                              {positive ? '+' : ''}{quote.change_pct.toFixed(2)}%
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="absolute bottom-2 left-2 text-[10px] font-medium text-white/65">Unavailable</p>
+                        )}
+                        <span className="absolute right-1.5 top-1.5 rounded bg-black/15 px-1 py-0.5 text-[8px] font-medium uppercase tracking-wide text-white/75 opacity-0 transition group-hover:opacity-100">
+                          {quote ? `${quoteQuality(quote)} · ${providerLabel(quote.data_source)}` : 'No quote'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </div>

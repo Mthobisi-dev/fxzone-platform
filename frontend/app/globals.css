@@ -400,6 +400,70 @@
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
+/* Provider-backed heat map: colors communicate only the real daily percentage
+   move. Structural surfaces inherit the active FxZone theme. */
+.fxzone-heatmap-toolbar {
+  background: color-mix(in srgb, var(--color-card) 94%, #020617);
+}
+
+.theme-dark-terminal .fxzone-heatmap,
+:root .fxzone-heatmap {
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.16), 0 22px 60px rgba(2, 6, 23, 0.35), 0 0 38px rgba(8, 145, 178, 0.1);
+}
+
+.fxzone-heatmap-filter {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  padding: 0.24rem 0.4rem;
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.fxzone-heatmap-filter select {
+  max-width: 7.5rem;
+  background: transparent;
+  color: var(--color-text);
+  outline: none;
+}
+
+.fxzone-heatmap-group {
+  background: color-mix(in srgb, var(--color-background) 72%, var(--color-card));
+}
+
+.fxzone-heatmap-tile--gain-strong { background: #0f7d46; }
+.fxzone-heatmap-tile--gain { background: #176244; }
+.fxzone-heatmap-tile--loss { background: #8a2635; }
+.fxzone-heatmap-tile--loss-strong { background: #ad1f32; }
+.fxzone-heatmap-tile--unavailable { background: #334155; }
+
+.fxzone-heatmap-tile--gain-strong:hover { background: #15945a; }
+.fxzone-heatmap-tile--gain:hover { background: #207554; }
+.fxzone-heatmap-tile--loss:hover { background: #a33143; }
+.fxzone-heatmap-tile--loss-strong:hover { background: #c5283d; }
+.fxzone-heatmap-tile--unavailable:hover { background: #475569; }
+
+.theme-minimal-light .fxzone-heatmap-toolbar {
+  background: color-mix(in srgb, #ffffff 92%, #dbeafe);
+}
+
+.theme-minimal-light .fxzone-heatmap-group {
+  background: #f8fafc;
+}
+
+.theme-minimal-light .fxzone-heatmap {
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
+}
+
+.theme-neon-cyber .fxzone-heatmap-toolbar {
+  background: color-mix(in srgb, var(--color-card) 90%, #18002e);
+}
+
 /* Subtle depth for the landing workspace. All colours inherit the active
    application theme, while motion is disabled by the OS accessibility setting. */
 .fxzone-landing-watermark {
