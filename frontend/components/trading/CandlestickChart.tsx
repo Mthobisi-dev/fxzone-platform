@@ -60,6 +60,7 @@ export function CandlestickChart() {
   
   const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1h' | '1d'>('1h');
   const [isLoading, setIsLoading] = useState(false);
+  const [historyUnavailable, setHistoryUnavailable] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
 
@@ -184,6 +185,7 @@ export function CandlestickChart() {
     // Load data
     const loadData = async () => {
       setIsLoading(true);
+      setHistoryUnavailable(null);
       try {
         const history = await api.get(`/api/market/prices/${selectedAsset.symbol}/history`, {
           params: { timeframe },
@@ -215,7 +217,10 @@ export function CandlestickChart() {
           }
         }
       } catch (err) {
-        if (isMounted) console.error('Chart history fetch failed:', err);
+        if (isMounted) {
+          console.error('Chart history fetch failed:', err);
+          setHistoryUnavailable('Verified historical data is temporarily unavailable.');
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -318,6 +323,12 @@ export function CandlestickChart() {
 
     const liveData = prices[selectedAsset.symbol.toUpperCase()];
     if (!liveData) return;
+    if (
+      liveData.open === null ||
+      liveData.high === null ||
+      liveData.low === null ||
+      liveData.volume === null
+    ) return;
 
     let timestamp = Math.floor(new Date(liveData.timestamp).getTime() / 1000);
     let bucketTimestamp = getBucketTimestamp(timestamp, timeframe);
@@ -521,6 +532,11 @@ export function CandlestickChart() {
           {isLoading && (
             <div className="absolute inset-0 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center z-10 rounded-lg">
               <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {historyUnavailable && !isLoading && (
+            <div className="absolute inset-0 z-10 grid place-items-center bg-[var(--color-card)]/80 px-6 text-center text-sm text-[var(--color-text-muted)]">
+              {historyUnavailable}
             </div>
           )}
           <div ref={chartContainerRef} className="w-full h-full" />

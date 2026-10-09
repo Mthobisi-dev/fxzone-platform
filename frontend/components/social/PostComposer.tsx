@@ -33,7 +33,8 @@ import { getPostMediaSizeLimit, POST_MEDIA_BUCKET, shouldUseDirectPostUpload } f
 import { supabase } from '@/lib/supabase';
 
 interface PostComposerProps {
-  onPostCreated?: () => void;
+  /** The API-created post is returned so the feed can update without another round trip. */
+  onPostCreated?: (post: unknown) => void;
 }
 
 interface MediaFile {
@@ -255,13 +256,11 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
     try {
       // Upload all attached media files
-      const uploadedUrls: string[] = [];
-      const uploadErrors: string[] = [];
-      for (const media of mediaFiles) {
-        const result = await uploadFile(media);
-        if (result.url) uploadedUrls.push(result.url);
-        if (result.error) uploadErrors.push(result.error);
-      }
+      // Each upload is independently authorized. Starting them together avoids
+      // serially waiting for five network uploads before creating the post.
+      const uploadResults = await Promise.all(mediaFiles.map((media) => uploadFile(media)));
+      const uploadedUrls = uploadResults.flatMap((result) => result.url ? [result.url] : []);
+      const uploadErrors = uploadResults.flatMap((result) => result.error ? [result.error] : []);
 
       if (mediaFiles.length > 0 && uploadedUrls.length === 0) {
         if (!content.trim()) {
@@ -280,7 +279,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         finalContent += '\n\n' + extraUrls.map((u) => `📎 ${u}`).join('\n');
       }
 
-      await api.post('/api/social/posts', {
+      const createdPost = await api.post('/api/social/posts', {
         content: finalContent,
         image_url: primaryUrl,
         caption: caption || undefined,
@@ -307,7 +306,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         setSubmitNotice('Your text post was published, but one or more attachments could not be uploaded.');
       }
 
-      onPostCreated?.();
+      onPostCreated?.(createdPost);
     } catch (err) {
       console.error('Failed to create post:', err);
       setSubmitError(err instanceof Error ? err.message : 'Unable to publish this post. Please try again.');

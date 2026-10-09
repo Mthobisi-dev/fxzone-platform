@@ -1,0 +1,188 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { RefreshCw, Search, Wifi, WifiOff } from 'lucide-react';
+import { buildMarketScreenerRows } from '@/lib/marketScreener';
+import { useMarketStore } from '@/stores/marketStore';
+import { cn } from '@/lib/utils';
+
+type MarketFilter = 'all' | 'stock' | 'crypto' | 'forex' | 'commodity';
+
+const FILTERS: Array<{ value: MarketFilter; label: string }> = [
+  { value: 'all', label: 'All markets' },
+  { value: 'stock', label: 'Stocks' },
+  { value: 'crypto', label: 'Crypto' },
+  { value: 'forex', label: 'Forex' },
+  { value: 'commodity', label: 'Metals' },
+];
+
+function formatPrice(price: number): string {
+  if (price >= 1_000) return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (price >= 10) return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (price >= 1) return price.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 4 });
+  return price.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+}
+
+function quoteQuality(quote: { freshness?: string; is_live?: boolean; is_stale?: boolean } | null): string {
+  if (!quote) return 'Unavailable';
+  if (quote.is_stale || quote.freshness === 'stale') return 'Stale';
+  if (quote.is_live || quote.freshness === 'live') return 'Live';
+  return 'Cached';
+}
+
+export function LiveMarketScreener() {
+  const { assets, prices, error, isLoading, fetchAssets, fetchPrices, setSelectedAsset } = useMarketStore();
+  const [filter, setFilter] = useState<MarketFilter>('all');
+  const [search, setSearch] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void fetchPrices();
+    };
+
+    if (assets.length === 0) void fetchAssets();
+    refresh();
+    const intervalId = window.setInterval(refresh, 30_000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [assets.length, fetchAssets, fetchPrices]);
+
+  const rows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return buildMarketScreenerRows(assets, prices)
+      .filter((row) => filter === 'all' || row.assetType === filter)
+      .filter((row) => !term || row.symbol.toLowerCase().includes(term) || row.name.toLowerCase().includes(term));
+  }, [assets, filter, prices, search]);
+
+  const liveCount = rows.filter((row) => row.quote?.is_live).length;
+  const unavailableCount = rows.filter((row) => !row.quote).length;
+
+  const refreshNow = async () => {
+    setIsRefreshing(true);
+    await fetchPrices();
+    setIsRefreshing(false);
+  };
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_20px_60px_rgba(4,11,23,0.16)]">
+      <header className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_92%,#020617)] px-3 py-3 sm:px-5 sm:py-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
+              <h1 className="text-sm font-semibold tracking-tight text-[var(--color-text)] sm:text-base">Market screener</h1>
+              <span className="hidden text-xs text-[var(--color-text-muted)] sm:inline">Verified provider quotes only</span>
+            </div>
+            <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+              {liveCount} live {liveCount === 1 ? 'quote' : 'quotes'} · {unavailableCount} unavailable
+            </p>
+          </div>
+
+          <div className="flex w-full items-center gap-2 lg:w-auto">
+            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-2 lg:w-60 lg:flex-none">
+              <Search size={14} className="shrink-0 text-[var(--color-text-muted)]" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search symbol"
+                className="min-w-0 w-full bg-transparent text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void refreshNow()}
+              aria-label="Refresh market data"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:border-blue-400 hover:text-blue-500"
+            >
+              <RefreshCw size={15} className={cn(isRefreshing && 'animate-spin')} />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex gap-1 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+          {FILTERS.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => setFilter(item.value)}
+              className={cn(
+                'shrink-0 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition',
+                filter === item.value
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text)]'
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {error && (
+        <div role="status" className="border-b border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 sm:px-5">
+          {error} Values are hidden until a provider responds.
+        </div>
+      )}
+
+      <div className="p-2 sm:p-3">
+        {isLoading && assets.length === 0 ? (
+          <div className="grid min-h-72 place-items-center text-sm text-[var(--color-text-muted)]">Loading market catalogue…</div>
+        ) : rows.length === 0 ? (
+          <div className="grid min-h-72 place-items-center text-sm text-[var(--color-text-muted)]">No instruments match this filter.</div>
+        ) : (
+          <div className="grid auto-rows-[112px] grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+            {rows.map((row, index) => {
+              const quote = row.quote;
+              const change = quote?.change_pct ?? null;
+              const positive = change !== null && change >= 0;
+              const asset = assets.find((item) => item.id === row.id);
+              const isFeatureTile = index % 11 === 0;
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={() => asset && setSelectedAsset(asset)}
+                  className={cn(
+                    'group relative overflow-hidden rounded-xl border p-3 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/70',
+                    isFeatureTile && 'sm:col-span-2',
+                    quote
+                      ? positive
+                        ? 'border-emerald-500/25 bg-emerald-500/[0.11] hover:border-emerald-400/60 hover:bg-emerald-500/[0.16]'
+                        : 'border-rose-500/25 bg-rose-500/[0.11] hover:border-rose-400/60 hover:bg-rose-500/[0.16]'
+                      : 'border-[var(--color-border)] bg-[var(--color-bg)] hover:border-[var(--color-text-muted)]'
+                  )}
+                >
+                  <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-white/35 to-transparent opacity-0 transition group-hover:opacity-100" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold tracking-wide text-[var(--color-text)]">{row.symbol}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">{row.name}</p>
+                    </div>
+                    {quote ? <Wifi size={13} className={positive ? 'text-emerald-500' : 'text-rose-500'} /> : <WifiOff size={13} className="text-[var(--color-text-muted)]" />}
+                  </div>
+                  <div className="mt-4">
+                    {quote ? (
+                      <>
+                        <p className="text-sm font-semibold tabular-nums text-[var(--color-text)]">{formatPrice(quote.price)}</p>
+                        <p className={cn('mt-0.5 text-xs font-medium tabular-nums', positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                          {positive ? '+' : ''}{quote.change_pct.toFixed(2)}%
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm font-medium text-[var(--color-text-muted)]">Unavailable</p>
+                    )}
+                  </div>
+                  <p className="absolute bottom-2 right-2 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{quoteQuality(quote)}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}

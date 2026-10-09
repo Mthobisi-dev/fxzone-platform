@@ -15,13 +15,17 @@ export interface PriceData {
   price: number;
   change: number;
   change_pct: number;
-  bid: number;
-  ask: number;
-  high: number;
-  low: number;
-  volume: number;
-  open: number;
+  bid: number | null;
+  ask: number | null;
+  high: number | null;
+  low: number | null;
+  volume: number | null;
+  open: number | null;
   timestamp: string;
+  data_source?: 'coingecko' | 'twelve_data';
+  freshness?: 'live' | 'cached' | 'stale';
+  is_stale?: boolean;
+  is_live?: boolean;
   version?: number;
 }
 
@@ -108,10 +112,16 @@ export const useMarketStore = create<MarketState>((set, get) => ({
             pricesMap[p.symbol.toUpperCase()] = p;
           }
         });
-        get().updateBulkPrices(pricesMap);
+        // The API supplies every currently-valid quote, including explicitly
+        // stale cache entries. Replace the snapshot so a quote that vanished
+        // from the provider cannot remain painted as live in the dashboard.
+        set({ prices: pricesMap, error: null });
+      } else {
+        set({ prices: {}, error: 'Live market data is temporarily unavailable.' });
       }
-    } catch (err: any) {
-      console.error('Failed to fetch market prices:', err);
+    } catch (error) {
+      console.error('Failed to fetch market prices:', error);
+      set({ prices: {}, error: 'Live market data is temporarily unavailable.' });
     }
   },
 

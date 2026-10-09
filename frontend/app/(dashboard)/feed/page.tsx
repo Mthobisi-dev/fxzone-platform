@@ -37,31 +37,30 @@ export default function SocialFeedPage() {
       ]);
 
       const quotesMap = new Map<string, any>();
-      if (quotesRes.status === 'fulfilled' && Array.isArray(quotesRes.value)) {
-        quotesRes.value.forEach((q: any) => quotesMap.set(q.symbol, q));
+      if (quotesRes.status === 'fulfilled') {
+        const quoteRows = Array.isArray(quotesRes.value)
+          ? quotesRes.value
+          : Object.values(quotesRes.value || {});
+        quoteRows.forEach((q: any) => {
+          if (q?.symbol) quotesMap.set(q.symbol, q);
+        });
       }
 
       if (trendRes.status === 'fulfilled' && Array.isArray(trendRes.value)) {
         setTrendingSymbols(
           trendRes.value.map((t: any) => {
             const q = quotesMap.get(t.symbol);
-            const changePercent = q?.change_percent ?? q?.changePercent;
+            const changePercent = q?.change_pct ?? q?.change_percent ?? q?.changePercent;
             return {
               symbol: t.symbol,
               posts: t.posts ?? 0,
-              change: changePercent !== undefined ? `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%` : '0.00%',
+              change: typeof changePercent === 'number' ? `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%` : 'Unavailable',
               price: q?.price ?? null,
             };
           })
         );
       } else {
-        // Default standard active pairs if none
-        setTrendingSymbols([
-          { symbol: 'BTCUSD', posts: 0, change: '+0.00%' },
-          { symbol: 'EURUSD', posts: 0, change: '+0.00%' },
-          { symbol: 'AAPL', posts: 0, change: '+0.00%' },
-          { symbol: 'SOLUSD', posts: 0, change: '+0.00%' },
-        ]);
+        setTrendingSymbols([]);
       }
     } catch (e) {
       console.error('Failed to load sidebar data:', e);
@@ -164,9 +163,40 @@ export default function SocialFeedPage() {
         <StoryBar />
 
         {/* Composer */}
-        <PostComposer onPostCreated={() => {
-          fetchFeed();
-          fetchSidebarData();
+        <PostComposer onPostCreated={(createdPost) => {
+          if (createdPost && typeof createdPost === 'object') {
+            const post = createdPost as any;
+            const mappedPost: Post = {
+              id: String(post.id),
+              userId: String(post.user_id || post.userId || post.user?.id),
+              user: {
+                id: String(post.user?.id || post.user_id || post.userId),
+                username: post.user?.username || '',
+                displayName: post.user?.display_name || post.user?.displayName || post.user?.username || '',
+                avatarUrl: post.user?.avatar_url || post.user?.avatarUrl,
+                role: post.user?.role || 'trader',
+              },
+              content: post.content || '',
+              imageUrl: post.image_url || post.imageUrl,
+              caption: post.caption || null,
+              assetTags: post.asset_tags || post.assetTags || [],
+              likesCount: post.likes_count ?? post.likesCount ?? 0,
+              commentsCount: post.comments_count ?? post.commentsCount ?? 0,
+              repostsCount: post.reposts_count ?? post.repostsCount ?? 0,
+              showCommentsCount: post.show_comments_count ?? post.showCommentsCount ?? true,
+              showLikesCount: post.show_likes_count ?? post.showLikesCount ?? true,
+              allowReshare: post.allow_reshare ?? post.allowReshare ?? true,
+              allowSave: post.allow_save ?? post.allowSave ?? true,
+              allowShare: post.allow_share ?? post.allowShare ?? true,
+              isLikedByUser: false,
+              isRepostedByUser: false,
+              isBookmarkedByUser: false,
+              isPinned: post.is_pinned ?? post.isPinned ?? false,
+              createdAt: post.created_at || post.createdAt || new Date().toISOString(),
+            };
+            setPosts((current) => [mappedPost, ...current.filter((item) => item.id !== mappedPost.id)]);
+          }
+          void fetchSidebarData();
         }} />
 
         {/* Refresh Feed & Start Fresh Action */}

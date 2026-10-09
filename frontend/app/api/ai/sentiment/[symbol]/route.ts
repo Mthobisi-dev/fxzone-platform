@@ -52,7 +52,13 @@ export async function GET(
     const resolvedParams = await params;
     const symbol = (resolvedParams.symbol || 'NVDA').toUpperCase();
     const pricesMap = await fetchLivePrices();
-    const live = pricesMap[symbol] || { price: 100, change_pct: 0, volume: 1000000, open: 98, high: 102, low: 97 };
+    const live = pricesMap[symbol];
+    if (!live) {
+      return NextResponse.json(
+        { error: 'Verified market data is temporarily unavailable for this instrument.' },
+        { status: 503 }
+      );
+    }
 
     const isUp = live.change_pct >= 0;
     const sentiment = isUp ? (live.change_pct > 2.0 ? 'Strongly Bullish' : 'Bullish') : (live.change_pct < -2.0 ? 'Strongly Bearish' : 'Bearish');
@@ -60,13 +66,21 @@ export async function GET(
     const tech = calculateTechnicalIndicators(live.price, live.change_pct);
     const fmt = (val: number) => symbol.length === 6 && !symbol.startsWith('X') ? (val < 2 ? val.toFixed(5) : val.toFixed(3)) : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
+    const volumeLabel = live.volume === null ? 'Unavailable' : `${live.volume.toLocaleString()} units`;
+    const rangeLabel = live.low === null || live.high === null
+      ? 'Unavailable'
+      : `$${fmt(live.low)} — $${fmt(live.high)}`;
+    const liquidityNote = live.high === null
+      ? '3. **Liquidity Sweep Target**: Unavailable because the provider did not supply a session high.'
+      : `3. **Liquidity Sweep Target**: External liquidity resting above **$${fmt(live.high * 1.008)}**.`;
+
     const markdownAnalysis = `### 📊 Google AI Institutional Intelligence Report: **${symbol}**
 
 #### 🎯 Executive Market Stance & Rating
 - **Current Live Quote**: **$${fmt(live.price)}** (${live.change_pct > 0 ? '+' : ''}${live.change_pct}%)
 - **Market Bias Rating**: **${sentiment.toUpperCase()}** (${tech.confidencePct}% Statistical Model Confidence)
-- **24h Trading Volume**: **${live.volume.toLocaleString()} units**
-- **Session Range**: **$${fmt(live.low)}** — **$${fmt(live.high)}**
+- **24h Trading Volume**: **${volumeLabel}**
+- **Session Range**: **${rangeLabel}**
 
 ---
 
@@ -84,7 +98,7 @@ export async function GET(
 #### 🏛️ Smart Money Concepts (SMC) & Liquidity Dynamics
 1. **Order Block Demand Zone**: **$${fmt(live.price * 0.978)} — $${fmt(live.price * 0.985)}** (High institutional order density).
 2. **Fair Value Gap (FVG)**: Imbalance detected between **$${fmt(live.price * 0.991)}** and **$${fmt(live.price * 0.996)}**.
-3. **Liquidity Sweep Target**: External liquidity resting above **$${fmt(live.high * 1.008)}**.
+${liquidityNote}
 
 ---
 

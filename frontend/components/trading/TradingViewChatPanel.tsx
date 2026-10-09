@@ -253,11 +253,13 @@ export function TradingViewChatPanel({
           }
 
           if (activeIndicators.volume && volumeSeriesRef.current) {
-            const volumeData = res.map((h: any) => ({
-              time: h.time,
-              value: h.volume || Math.floor(Math.random() * 5000 + 1000),
-              color: h.close >= h.open ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
-            }));
+            const volumeData = res
+              .filter((h: any) => Number.isFinite(h.volume))
+              .map((h: any) => ({
+                time: h.time,
+                value: h.volume,
+                color: h.close >= h.open ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
+              }));
             volumeSeriesRef.current.setData(volumeData);
           }
 

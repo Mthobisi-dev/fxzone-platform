@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, syncAuthProfiles } from '@/lib/supabase';
 
+// These were seeded as blog demonstrations and must not be suggested as live
+// community accounts while the deliberate maintenance script removes them.
+const LEGACY_DEMO_USERNAMES = new Set([
+  'blog_demo_taylor',
+  'blog_demo_alex',
+  'blog_demo_jamie',
+]);
+
 // GET /api/social/users — list all registered accounts from public.users with follow state
 export async function GET(request: NextRequest) {
   try {
@@ -19,7 +27,9 @@ export async function GET(request: NextRequest) {
         .from('users')
         .select('id, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at')
         .order('created_at', { ascending: false })
-        .limit(limit);
+        // Overscan lets us hide legacy demonstrations without returning a
+        // short Discover page when they are newest records.
+        .limit(Math.min(limit + LEGACY_DEMO_USERNAMES.size, 100));
 
       if (q.trim()) {
         const safeQuery = q.trim().replace(/[^\w .-]/g, '').slice(0, 80);
@@ -45,12 +55,15 @@ export async function GET(request: NextRequest) {
     }
     if (error) throw error;
 
-    let users = (usersData || []).map((account: any) => ({
+    let users = (usersData || [])
+      .filter((account: any) => !LEGACY_DEMO_USERNAMES.has(String(account.username || '').toLowerCase()))
+      .slice(0, limit)
+      .map((account: any) => ({
       ...account,
       is_following: false,
       is_follower: false,
       is_mutual: false,
-    }));
+      }));
 
     // 2. If authenticated user, annotate with follow status
     if (currentUser && users.length > 0) {

@@ -83,7 +83,7 @@ export function useMarketData(symbols: string[] = [], options: MarketDataOptions
           high: data.high,
           low: data.low,
           volume: data.volume,
-          open: data.open || data.price,
+          open: Number.isFinite(data.open) ? data.open : null,
           timestamp: data.timestamp || new Date().toISOString(),
         });
       }
