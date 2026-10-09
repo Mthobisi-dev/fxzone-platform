@@ -59,11 +59,11 @@ export default function LandingPage() {
           </div>
         </header>
 
-        <section className="flex min-h-[calc(100svh-80px)] items-end py-12 sm:min-h-[620px] sm:py-24 lg:min-h-[690px] lg:py-28">
-          <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-xl pb-3 lg:ml-10">
+        <section className="flex min-h-[calc(100svh-80px)] items-center py-12 sm:min-h-[620px] sm:items-end sm:py-24 lg:min-h-[690px] lg:py-28">
+          <motion.div initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full max-w-xl pb-3 text-center sm:w-auto sm:text-left lg:ml-10">
             <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-sky-300/20 bg-sky-400/10 px-2.5 py-1.5 text-[11px] font-semibold leading-4 text-sky-100 backdrop-blur-sm min-[360px]:gap-2 min-[360px]:px-3 sm:mb-6 sm:py-2 sm:text-xs"><Sparkles size={13} className="fxzone-landing-accent shrink-0 sm:h-3.5 sm:w-3.5" /> Market intelligence, in one place</div>
-            <p className="max-w-[19rem] text-sm leading-6 text-slate-300 min-[360px]:text-base min-[360px]:leading-7 sm:max-w-md sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
-            <div className="mt-6 flex flex-col items-center gap-3 min-[390px]:flex-row sm:mt-8">
+            <p className="mx-auto max-w-[19rem] text-sm leading-6 text-slate-300 min-[360px]:text-base min-[360px]:leading-7 sm:mx-0 sm:max-w-md sm:text-lg">Follow markets, organise your research, and connect with traders on one focused platform.</p>
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 min-[390px]:flex-row sm:mt-8 sm:justify-start">
               <Link href="/register" className="fxzone-landing-primary-action inline-flex min-h-11 w-full max-w-56 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold sm:min-h-12 sm:w-auto sm:max-w-none sm:px-6 sm:py-3.5 sm:text-base">Get started <ArrowRight size={17} /></Link>
               <Link href="/dashboard" className="inline-flex min-h-11 w-full max-w-56 items-center justify-center rounded-xl border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:border-sky-300/60 hover:bg-white/5 sm:min-h-12 sm:w-auto sm:max-w-none sm:px-6 sm:py-3.5 sm:text-base">Explore markets</Link>
             </div>
