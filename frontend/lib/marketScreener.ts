@@ -13,7 +13,7 @@ export interface MarketScreenerQuote {
   change_pct: number;
   timestamp: string;
   data_source?: string;
-  freshness?: 'live' | 'cached' | 'stale';
+  freshness?: 'live' | 'delayed' | 'cached' | 'stale';
   is_stale?: boolean;
   is_live?: boolean;
 }

@@ -22,8 +22,8 @@ export interface PriceData {
   volume: number | null;
   open: number | null;
   timestamp: string;
-  data_source?: 'coingecko' | 'twelve_data';
-  freshness?: 'live' | 'cached' | 'stale';
+  data_source?: 'coingecko' | 'twelve_data' | 'frankfurter';
+  freshness?: 'live' | 'delayed' | 'cached' | 'stale';
   is_stale?: boolean;
   is_live?: boolean;
   version?: number;

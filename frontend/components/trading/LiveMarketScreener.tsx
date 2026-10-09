@@ -26,12 +26,20 @@ function formatPrice(price: number): string {
 function quoteQuality(quote: { freshness?: string; is_live?: boolean; is_stale?: boolean } | null): string {
   if (!quote) return 'Unavailable';
   if (quote.is_stale || quote.freshness === 'stale') return 'Stale';
+  if (quote.freshness === 'delayed') return 'Delayed';
   if (quote.is_live || quote.freshness === 'live') return 'Live';
   return 'Cached';
 }
 
+function providerLabel(source?: string): string {
+  if (source === 'coingecko') return 'CoinGecko';
+  if (source === 'twelve_data') return 'Twelve Data';
+  if (source === 'frankfurter') return 'Frankfurter';
+  return 'Provider';
+}
+
 export function LiveMarketScreener() {
-  const { assets, prices, error, isLoading, fetchAssets, fetchPrices, setSelectedAsset } = useMarketStore();
+  const { assets, prices, error, isLoading, selectedAssetId, fetchAssets, fetchPrices, setSelectedAsset } = useMarketStore();
   const [filter, setFilter] = useState<MarketFilter>('all');
   const [search, setSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -59,7 +67,9 @@ export function LiveMarketScreener() {
   }, [assets, filter, prices, search]);
 
   const liveCount = rows.filter((row) => row.quote?.is_live).length;
+  const delayedCount = rows.filter((row) => row.quote?.freshness === 'delayed').length;
   const unavailableCount = rows.filter((row) => !row.quote).length;
+  const selectedSymbol = assets.find((asset) => asset.id === selectedAssetId)?.symbol;
 
   const refreshNow = async () => {
     setIsRefreshing(true);
@@ -68,17 +78,18 @@ export function LiveMarketScreener() {
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_20px_60px_rgba(4,11,23,0.16)]">
+    <section className="fxzone-screener overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_20px_60px_rgba(4,11,23,0.16)]">
       <header className="border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_92%,#020617)] px-3 py-3 sm:px-5 sm:py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]" />
-              <h1 className="text-sm font-semibold tracking-tight text-[var(--color-text)] sm:text-base">Market screener</h1>
-              <span className="hidden text-xs text-[var(--color-text-muted)] sm:inline">Verified provider quotes only</span>
+              <span className="h-2 w-2 rounded-full bg-blue-400 shadow-[0_0_12px_rgba(96,165,250,0.9)]" />
+              <h1 className="text-sm font-semibold tracking-tight text-[var(--color-text)] sm:text-base">Stock screener</h1>
+              <span className="hidden text-xs text-[var(--color-text-muted)] sm:inline">Provider-verified quotes</span>
             </div>
             <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
-              {liveCount} live {liveCount === 1 ? 'quote' : 'quotes'} · {unavailableCount} unavailable
+              {liveCount} live · {delayedCount} delayed · {unavailableCount} unavailable
+              {selectedSymbol ? ` · selected ${selectedSymbol}` : ''}
             </p>
           </div>
 
@@ -134,21 +145,24 @@ export function LiveMarketScreener() {
         ) : rows.length === 0 ? (
           <div className="grid min-h-72 place-items-center text-sm text-[var(--color-text-muted)]">No instruments match this filter.</div>
         ) : (
-          <div className="grid auto-rows-[112px] grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-            {rows.map((row, index) => {
+          <div className="grid auto-rows-[106px] grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2 lg:grid-cols-5 xl:grid-cols-6">
+            {rows.map((row) => {
               const quote = row.quote;
               const change = quote?.change_pct ?? null;
               const positive = change !== null && change >= 0;
               const asset = assets.find((item) => item.id === row.id);
-              const isFeatureTile = index % 11 === 0;
+              const isDelayed = quote?.freshness === 'delayed';
+              const isSelected = selectedAssetId === row.id;
               return (
                 <button
                   key={row.id}
                   type="button"
                   onClick={() => asset && setSelectedAsset(asset)}
+                  aria-pressed={isSelected}
+                  title={quote ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · updated ${new Date(quote.timestamp).toLocaleString()}` : `${row.symbol} is unavailable`}
                   className={cn(
-                    'group relative overflow-hidden rounded-xl border p-3 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/70',
-                    isFeatureTile && 'sm:col-span-2',
+                    'group relative overflow-hidden rounded-lg border p-2.5 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/70',
+                    isSelected && 'ring-1 ring-blue-400/80',
                     quote
                       ? positive
                         ? 'border-emerald-500/25 bg-emerald-500/[0.11] hover:border-emerald-400/60 hover:bg-emerald-500/[0.16]'
@@ -162,9 +176,9 @@ export function LiveMarketScreener() {
                       <p className="truncate text-xs font-semibold tracking-wide text-[var(--color-text)]">{row.symbol}</p>
                       <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">{row.name}</p>
                     </div>
-                    {quote ? <Wifi size={13} className={positive ? 'text-emerald-500' : 'text-rose-500'} /> : <WifiOff size={13} className="text-[var(--color-text-muted)]" />}
+                    {quote ? <Wifi size={13} className={isDelayed ? 'text-amber-500' : positive ? 'text-emerald-500' : 'text-rose-500'} /> : <WifiOff size={13} className="text-[var(--color-text-muted)]" />}
                   </div>
-                  <div className="mt-4">
+                  <div className="mt-3.5">
                     {quote ? (
                       <>
                         <p className="text-sm font-semibold tabular-nums text-[var(--color-text)]">{formatPrice(quote.price)}</p>
@@ -176,7 +190,9 @@ export function LiveMarketScreener() {
                       <p className="text-sm font-medium text-[var(--color-text-muted)]">Unavailable</p>
                     )}
                   </div>
-                  <p className="absolute bottom-2 right-2 text-[9px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{quoteQuality(quote)}</p>
+                  <p className={cn('absolute bottom-2 right-2 text-[9px] font-medium uppercase tracking-wide', isDelayed ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--color-text-muted)]')}>
+                    {quote ? `${quoteQuality(quote)} · ${providerLabel(quote.data_source)}` : quoteQuality(quote)}
+                  </p>
                 </button>
               );
             })}

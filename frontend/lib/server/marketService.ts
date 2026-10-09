@@ -4,7 +4,8 @@
  * Quotes are only returned when they came from a provider. The cache retains a
  * recent provider quote as explicitly stale data; it never substitutes a
  * hard-coded or generated price. Twelve Data powers listed markets, forex and
- * metals. CoinGecko powers the cryptocurrency catalogue.
+ * metals. CoinGecko powers the cryptocurrency catalogue. Frankfurter provides
+ * daily official forex reference rates when no real-time forex key is set.
  */
 
 export interface MarketAsset {
@@ -30,8 +31,8 @@ export interface PriceData {
   /** Original provider timestamp where available. */
   timestamp: string;
   is_indicative: boolean;
-  data_source: 'coingecko' | 'twelve_data';
-  freshness: 'live' | 'cached' | 'stale';
+  data_source: 'coingecko' | 'twelve_data' | 'frankfurter';
+  freshness: 'live' | 'delayed' | 'cached' | 'stale';
   is_stale: boolean;
   is_live: boolean;
 }
@@ -103,6 +104,8 @@ const TWELVE_DATA_MAP: Record<string, string> = {
   NZDUSD: 'NZD/USD', USDCHF: 'USD/CHF', EURGBP: 'EUR/GBP', XAUUSD: 'XAU/USD', XAGUSD: 'XAG/USD',
 };
 
+const FRANKFURTER_CURRENCIES = ['USD', 'GBP', 'JPY', 'AUD', 'CAD', 'NZD', 'CHF'] as const;
+
 let priceCache: Record<string, PriceData> = {};
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 15_000;
@@ -132,7 +135,9 @@ function cachedPrices(freshness: 'cached' | 'stale'): Record<string, PriceData> 
     .filter(([, quote]) => Date.now() - Date.parse(quote.timestamp) <= STALE_CACHE_TTL_MS)
     .map(([symbol, quote]) => [symbol, {
       ...quote,
-      freshness,
+      // A fresh cache of a daily reference rate remains delayed. If it grows
+      // too old, stale is the stronger warning and replaces that label.
+      freshness: freshness === 'stale' ? 'stale' : quote.freshness === 'delayed' ? 'delayed' : 'cached',
       is_stale: freshness === 'stale',
       is_live: false,
     }]));
@@ -238,6 +243,78 @@ async function fetchTwelveDataQuotes(): Promise<Record<string, PriceData>> {
   return quotes;
 }
 
+type FrankfurterPayload = {
+  rates?: Record<string, Record<string, unknown>>;
+};
+
+function getCrossRate(rates: Record<string, unknown>, numerator: string, denominator: string): number | null {
+  const numeratorRate = numerator === 'EUR' ? 1 : asFiniteNumber(rates[numerator]);
+  const denominatorRate = denominator === 'EUR' ? 1 : asFiniteNumber(rates[denominator]);
+  if (numeratorRate === null || denominatorRate === null || denominatorRate === 0) return null;
+  return numeratorRate / denominatorRate;
+}
+
+/**
+ * Converts two official EUR reference-rate snapshots into FxZone pair quotes.
+ * These rates update daily, so they are explicitly labelled delayed rather
+ * than live. Crosses are calculated directly from the two provider values.
+ */
+export function buildFrankfurterForexQuotes(payload: FrankfurterPayload): Record<string, PriceData> {
+  const datedRates = Object.entries(payload.rates || {})
+    .filter((entry): entry is [string, Record<string, unknown>] => Boolean(entry[1]) && typeof entry[1] === 'object')
+    .sort(([leftDate], [rightDate]) => leftDate.localeCompare(rightDate));
+  if (datedRates.length < 2) return {};
+
+  const [, previousRates] = datedRates[datedRates.length - 2];
+  const [currentDate, currentRates] = datedRates[datedRates.length - 1];
+  const pairs: Array<{ symbol: string; base: string; quote: string }> = [
+    { symbol: 'EURUSD', base: 'EUR', quote: 'USD' },
+    { symbol: 'GBPUSD', base: 'GBP', quote: 'USD' },
+    { symbol: 'USDJPY', base: 'USD', quote: 'JPY' },
+    { symbol: 'AUDUSD', base: 'AUD', quote: 'USD' },
+    { symbol: 'USDCAD', base: 'USD', quote: 'CAD' },
+    { symbol: 'NZDUSD', base: 'NZD', quote: 'USD' },
+    { symbol: 'USDCHF', base: 'USD', quote: 'CHF' },
+    { symbol: 'EURGBP', base: 'EUR', quote: 'GBP' },
+  ];
+
+  const quotes: Record<string, PriceData> = {};
+  for (const pair of pairs) {
+    const price = getCrossRate(currentRates, pair.quote, pair.base);
+    const previousPrice = getCrossRate(previousRates, pair.quote, pair.base);
+    if (price === null || previousPrice === null || previousPrice === 0) continue;
+    const change = price - previousPrice;
+    quotes[pair.symbol] = {
+      symbol: pair.symbol,
+      price,
+      change,
+      change_pct: (change / previousPrice) * 100,
+      bid: null,
+      ask: null,
+      high: null,
+      low: null,
+      open: null,
+      volume: null,
+      timestamp: new Date(`${currentDate}T00:00:00.000Z`).toISOString(),
+      is_indicative: true,
+      data_source: 'frankfurter',
+      freshness: 'delayed',
+      is_stale: false,
+      is_live: false,
+    };
+  }
+  return quotes;
+}
+
+async function fetchFrankfurterForexQuotes(): Promise<Record<string, PriceData>> {
+  const startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+  const symbols = FRANKFURTER_CURRENCIES.join(',');
+  const url = `https://api.frankfurter.dev/v1/${startDate}..?base=EUR&symbols=${symbols}`;
+  const response = await fetch(url, { next: { revalidate: 60 * 60 }, signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+  if (!response.ok) throw new MarketDataUnavailableError(`Frankfurter returned ${response.status}.`);
+  return buildFrankfurterForexQuotes(await response.json() as FrankfurterPayload);
+}
+
 /** Returns live or explicitly cached/stale provider quotes. */
 export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
   const now = Date.now();
@@ -245,11 +322,20 @@ export async function fetchLivePrices(): Promise<Record<string, PriceData>> {
     return cachedPrices('cached');
   }
 
-  const [cryptoResult, listedResult] = await Promise.allSettled([fetchCoinGeckoQuotes(), fetchTwelveDataQuotes()]);
+  const [cryptoResult, listedResult, forexResult] = await Promise.allSettled([
+    fetchCoinGeckoQuotes(),
+    fetchTwelveDataQuotes(),
+    fetchFrankfurterForexQuotes(),
+  ]);
   if (cryptoResult.status === 'rejected') console.warn('CoinGecko quote fetch failed:', cryptoResult.reason);
   if (listedResult.status === 'rejected') console.warn('Twelve Data quote fetch failed:', listedResult.reason);
+  if (forexResult.status === 'rejected') console.warn('Frankfurter forex fetch failed:', forexResult.reason);
 
+  // Twelve Data is the live Forex source when it is configured. Apply it
+  // after Frankfurter so a delayed daily reference can never overwrite a
+  // provider's live pair quote.
   const liveQuotes = {
+    ...(forexResult.status === 'fulfilled' ? forexResult.value : {}),
     ...(cryptoResult.status === 'fulfilled' ? cryptoResult.value : {}),
     ...(listedResult.status === 'fulfilled' ? listedResult.value : {}),
   };
