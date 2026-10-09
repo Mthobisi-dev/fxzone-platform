@@ -32,3 +32,21 @@ test('maps stored provider news without manufacturing a sentiment claim', async 
   assert.equal('sentiment_score' in article, false);
   assert.deepEqual(article.asset_tags, ['NVDA']);
 });
+
+test('parses Yahoo Finance RSS entries as source-linked provider articles', async () => {
+  const { parseYahooFinanceRss } = await loadNewsFeed();
+  const articles = parseYahooFinanceRss(`<?xml version="1.0"?><rss><channel><item>
+    <guid>https://finance.example/article</guid>
+    <title><![CDATA[Markets react to provider-reported results]]></title>
+    <link>https://finance.example/article</link>
+    <pubDate>Fri, 09 Oct 2026 12:00:00 GMT</pubDate>
+    <source url="https://finance.example">Example Finance</source>
+  </item></channel></rss>`);
+
+  assert.equal(articles.length, 1);
+  assert.equal(articles[0].id, 'https://finance.example/article');
+  assert.equal(articles[0].title, 'Markets react to provider-reported results');
+  assert.equal(articles[0].source, 'Example Finance');
+  assert.equal(articles[0].url, 'https://finance.example/article');
+  assert.equal(articles[0].content, '');
+});

@@ -16,10 +16,10 @@ async function buildFeaturedInsight(symbol: string, prices: Awaited<ReturnType<t
   const quote = prices[symbol] ?? null;
   let technical: TechnicalAnalysis = { status: 'insufficient_data' };
 
-  // Technical calculations are only attempted when a real candle provider is
-  // configured. A quote alone is insufficient evidence for an RSI, MACD, or
-  // support/resistance claim.
-  if (quote && process.env.TWELVE_DATA_API_KEY) {
+  // A quote alone is insufficient evidence for an RSI, MACD, or
+  // support/resistance claim. fetchHistoricalCandles only resolves with
+  // provider-supplied OHLCV from Twelve Data or the delayed Yahoo fallback.
+  if (quote) {
     try {
       technical = calculateTechnicalAnalysis(await fetchHistoricalCandles(symbol, '1d'));
     } catch (error) {

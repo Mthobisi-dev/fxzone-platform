@@ -26,3 +26,75 @@ test('does not create forex quotes when two provider dates are unavailable', asy
   const { buildFrankfurterForexQuotes } = await loadMarketService();
   assert.deepEqual(buildFrankfurterForexQuotes({ rates: { '2026-10-09': { USD: 1.17 } } }), {});
 });
+
+test('maps Yahoo Finance fallback data as explicitly delayed provider data', async () => {
+  const { buildYahooFinanceQuotes } = await loadMarketService();
+  const quotes = buildYahooFinanceQuotes({
+    spark: {
+      result: [{
+        symbol: 'NVDA',
+        response: [{
+          meta: {
+            regularMarketPrice: 229.86,
+            regularMarketChangePercent: -0.267,
+            regularMarketChange: -0.615,
+            regularMarketTime: 1_791_573_529,
+            regularMarketDayHigh: 233.89,
+            regularMarketDayLow: 229.11,
+            regularMarketOpen: 233.875,
+            regularMarketVolume: 59_800_587,
+          },
+          timestamp: [1_791_462_600, 1_791_552_600],
+          indicators: { quote: [{ close: [230.48, 229.86] }] },
+        }],
+      }],
+    },
+  });
+
+  assert.equal(quotes.NVDA.data_source, 'yahoo_finance');
+  assert.equal(quotes.NVDA.freshness, 'delayed');
+  assert.equal(quotes.NVDA.is_live, false);
+  assert.equal(quotes.NVDA.price, 229.86);
+  assert.equal(quotes.NVDA.change_pct, -0.267);
+  assert.equal(quotes.NVDA.volume, 59_800_587);
+});
+
+test('parses complete Yahoo Finance candles without generating missing values', async () => {
+  const { parseYahooFinanceCandles } = await loadMarketService();
+  const candles = parseYahooFinanceCandles({
+    chart: {
+      result: [{
+        timestamp: [1_791_462_600, 1_791_552_600],
+        indicators: {
+          quote: [{
+            open: [230, null],
+            high: [232, 234],
+            low: [229, 228],
+            close: [231, 230],
+            volume: [100, 200],
+          }],
+        },
+      }],
+    },
+  });
+
+  assert.deepEqual(candles, [{
+    time: 1_791_462_600,
+    open: 230,
+    high: 232,
+    low: 229,
+    close: 231,
+    volume: 100,
+  }]);
+});
+
+test('splits Yahoo Finance symbol requests into provider-safe batches', async () => {
+  const { splitYahooFinanceSymbols } = await loadMarketService();
+  const batches = splitYahooFinanceSymbols(['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN'], 2);
+
+  assert.deepEqual(batches, [
+    ['NVDA', 'AAPL'],
+    ['MSFT', 'GOOGL'],
+    ['AMZN'],
+  ]);
+});

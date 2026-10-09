@@ -22,7 +22,7 @@ export interface PriceData {
   volume: number | null;
   open: number | null;
   timestamp: string;
-  data_source?: 'coingecko' | 'twelve_data' | 'frankfurter';
+  data_source?: 'coingecko' | 'twelve_data' | 'frankfurter' | 'yahoo_finance';
   freshness?: 'live' | 'delayed' | 'cached' | 'stale';
   is_stale?: boolean;
   is_live?: boolean;

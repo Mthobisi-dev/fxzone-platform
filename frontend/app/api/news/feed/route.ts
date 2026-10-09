@@ -1,11 +1,27 @@
 import { NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { parseNewsLimit, toPublicNewsArticle, type StoredNewsArticle } from '@/lib/server/newsFeed';
+import {
+  fetchYahooFinanceNews,
+  parseNewsLimit,
+  toPublicNewsArticle,
+  type StoredNewsArticle,
+} from '@/lib/server/newsFeed';
 import { getSupabaseAdmin } from '@/lib/server/supabaseServer';
 
-/** Returns only articles stored by a configured, trusted news ingestion path. */
+function respond(articles: StoredNewsArticle[]) {
+  return NextResponse.json(articles.map((article) => toPublicNewsArticle(article)), {
+    headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
+  });
+}
+
+/**
+ * Returns stored trusted articles first. If ingestion or its database access is
+ * unavailable, use the Yahoo Finance provider RSS feed rather than showing a
+ * permanent empty error panel to users.
+ */
 export async function GET(request: Request) {
   const limit = parseNewsLimit(new URL(request.url).searchParams.get('limit'));
+  let storedArticles: StoredNewsArticle[] = [];
 
   try {
     const admin = getSupabaseAdmin();
@@ -32,14 +48,21 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error('News feed query failed:', error);
-      return apiError('SERVICE_UNAVAILABLE', 'Verified market news is temporarily unavailable.', 503);
+    } else {
+      storedArticles = (data ?? []) as StoredNewsArticle[];
     }
-
-    return NextResponse.json((data ?? []).map((article) => toPublicNewsArticle(article as StoredNewsArticle)), {
-      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
-    });
   } catch (error) {
     console.error('News feed route error:', error);
-    return apiError('SERVICE_UNAVAILABLE', 'Verified market news is temporarily unavailable.', 503);
   }
+
+  if (storedArticles.length > 0) return respond(storedArticles);
+
+  try {
+    const providerArticles = await fetchYahooFinanceNews(limit);
+    if (providerArticles.length > 0) return respond(providerArticles);
+  } catch (error) {
+    console.error('Yahoo Finance news fallback failed:', error);
+  }
+
+  return apiError('SERVICE_UNAVAILABLE', 'Verified market news is temporarily unavailable.', 503);
 }

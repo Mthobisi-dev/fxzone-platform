@@ -60,7 +60,7 @@ Server-only values:
 - `SUPABASE_SERVICE_ROLE_KEY` — required by existing trusted route handlers; never expose it to the browser.
 - `GEMINI_API_KEY` — only when AI features are enabled.
 - `TURN_URL`, `TURN_SHARED_SECRET`, and optionally `TURN_TTL_SECONDS` — only for a coturn-compatible TURN REST deployment.
-- `TWELVE_DATA_API_KEY` — required for live stock/metal data and verified intraday or historical candles. It also upgrades Forex from daily reference rates to live quotes.
+- `TWELVE_DATA_API_KEY` — optional but recommended for live stock/metal data and verified intraday or historical candles. It also upgrades Forex from delayed quotes to live quotes.
 - `COINGECKO_DEMO_API_KEY` — optional; increases CoinGecko crypto-quote quota.
 
 The client receives short-lived TURN credentials from `/api/webrtc/credentials` only after it has authenticated and joined the requested live session. Do not add permanent TURN credentials under a `NEXT_PUBLIC_` name.
@@ -111,7 +111,7 @@ If a signed-in action reports a missing Supabase server key, add `SUPABASE_SERVI
 
 For live-session relay failures, verify that the TURN provider supports the TURN REST shared-secret scheme and that `TURN_URL` uses `turn:` or `turns:` URLs. WebRTC still attempts direct/STUN connections when TURN is deliberately not configured.
 
-Market tiles only display values received from a provider: CoinGecko for crypto, Twelve Data for live listed-market data and historical candles, and [Frankfurter](https://frankfurter.dev/) for no-key daily Forex reference rates. Frankfurter-derived crosses are labelled **Delayed** and are never described as live. A provider outage is shown as **Unavailable**; a recent cached provider quote is marked **Stale**. The dashboard does not generate fallback prices, percent changes, or candles. Configure `TWELVE_DATA_API_KEY` in Vercel before expecting live stocks/metals or historical charts.
+Market tiles only display values received from a provider: CoinGecko for live crypto, Twelve Data for configured live listed-market data and historical candles, [Yahoo Finance](https://finance.yahoo.com/) for delayed stock, commodity, Forex, and historical-data fallback, and [Frankfurter](https://frankfurter.dev/) for no-key daily Forex reference rates. Yahoo Finance and Frankfurter values are labelled **Delayed** and are never described as live. A provider outage is shown as **Unavailable**; a recent cached provider quote is marked **Stale**. The dashboard does not generate fallback prices, percent changes, or candles. Configure `TWELVE_DATA_API_KEY` in Vercel to upgrade listed markets and Forex from delayed fallback data to live quotes.
 
 ## Financial disclaimer
 

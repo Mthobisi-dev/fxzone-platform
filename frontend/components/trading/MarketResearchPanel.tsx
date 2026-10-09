@@ -36,6 +36,7 @@ function providerLabel(source: string | null): string {
   if (source === 'coingecko') return 'CoinGecko';
   if (source === 'twelve_data') return 'Twelve Data';
   if (source === 'frankfurter') return 'Frankfurter';
+  if (source === 'yahoo_finance') return 'Yahoo Finance';
   return 'Provider unavailable';
 }
 
