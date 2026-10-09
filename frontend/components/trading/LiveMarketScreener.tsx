@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search, Wifi, WifiOff } from 'lucide-react';
+import { filterMarketDashboardRows, type DashboardChangeFilter, type DashboardPriceFilter } from '@/lib/marketDashboard';
 import { buildMarketScreenerRows } from '@/lib/marketScreener';
 import { useMarketStore } from '@/stores/marketStore';
 import { cn } from '@/lib/utils';
@@ -10,7 +11,7 @@ type MarketFilter = 'all' | 'stock' | 'crypto' | 'forex' | 'commodity';
 
 const FILTERS: Array<{ value: MarketFilter; label: string }> = [
   { value: 'all', label: 'All markets' },
-  { value: 'stock', label: 'Stocks' },
+  { value: 'stock', label: 'US equities' },
   { value: 'crypto', label: 'Crypto' },
   { value: 'forex', label: 'Forex' },
   { value: 'commodity', label: 'Metals' },
@@ -41,6 +42,8 @@ function providerLabel(source?: string): string {
 export function LiveMarketScreener() {
   const { assets, prices, error, isLoading, selectedAssetId, fetchAssets, fetchPrices, setSelectedAsset } = useMarketStore();
   const [filter, setFilter] = useState<MarketFilter>('all');
+  const [priceFilter, setPriceFilter] = useState<DashboardPriceFilter>('all');
+  const [changeFilter, setChangeFilter] = useState<DashboardChangeFilter>('all');
   const [search, setSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -60,11 +63,13 @@ export function LiveMarketScreener() {
   }, [assets.length, fetchAssets, fetchPrices]);
 
   const rows = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return buildMarketScreenerRows(assets, prices)
-      .filter((row) => filter === 'all' || row.assetType === filter)
-      .filter((row) => !term || row.symbol.toLowerCase().includes(term) || row.name.toLowerCase().includes(term));
-  }, [assets, filter, prices, search]);
+    return filterMarketDashboardRows(buildMarketScreenerRows(assets, prices), {
+      market: filter,
+      price: priceFilter,
+      change: changeFilter,
+      search,
+    });
+  }, [assets, changeFilter, filter, priceFilter, prices, search]);
 
   const liveCount = rows.filter((row) => row.quote?.is_live).length;
   const delayedCount = rows.filter((row) => row.quote?.freshness === 'delayed').length;
@@ -76,6 +81,15 @@ export function LiveMarketScreener() {
     await fetchPrices();
     setIsRefreshing(false);
   };
+
+  const resetFilters = () => {
+    setFilter('all');
+    setPriceFilter('all');
+    setChangeFilter('all');
+    setSearch('');
+  };
+
+  const hasActiveFilters = filter !== 'all' || priceFilter !== 'all' || changeFilter !== 'all' || Boolean(search.trim());
 
   return (
     <section className="fxzone-screener overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_20px_60px_rgba(4,11,23,0.16)]">
@@ -131,6 +145,31 @@ export function LiveMarketScreener() {
             </button>
           ))}
         </div>
+
+        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+          <label className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] font-medium text-[var(--color-text-muted)]">
+            <span>Price: </span>
+            <select value={priceFilter} onChange={(event) => setPriceFilter(event.target.value as DashboardPriceFilter)} className="bg-transparent text-[var(--color-text)] outline-none">
+              <option value="all">All</option>
+              <option value="under_50">Under 50</option>
+              <option value="from_50_to_200">50–200</option>
+              <option value="over_200">Over 200</option>
+            </select>
+          </label>
+          <label className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] font-medium text-[var(--color-text-muted)]">
+            <span>Chg %: </span>
+            <select value={changeFilter} onChange={(event) => setChangeFilter(event.target.value as DashboardChangeFilter)} className="bg-transparent text-[var(--color-text)] outline-none">
+              <option value="all">All</option>
+              <option value="gainers">Gainers</option>
+              <option value="losers">Losers</option>
+            </select>
+          </label>
+          <span title="A verified company-fundamentals provider is required." className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]">Mkt cap: feed required</span>
+          <span title="A verified company-fundamentals provider is required." className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]">Sector: feed required</span>
+          <span className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]">Size: Equal tiles</span>
+          <span className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]">Color: 1D % change</span>
+          {hasActiveFilters && <button type="button" onClick={resetFilters} className="shrink-0 rounded-md px-2 py-1.5 text-[10px] font-medium text-blue-600 hover:bg-blue-500/10 dark:text-blue-400">Reset</button>}
+        </div>
       </header>
 
       {error && (
@@ -159,7 +198,7 @@ export function LiveMarketScreener() {
                   type="button"
                   onClick={() => asset && setSelectedAsset(asset)}
                   aria-pressed={isSelected}
-                  title={quote ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · updated ${new Date(quote.timestamp).toLocaleString()}` : `${row.symbol} is unavailable`}
+                  title={quote ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · updated ${quote.timestamp ? new Date(quote.timestamp).toLocaleString() : 'time unavailable'}` : `${row.symbol} is unavailable`}
                   className={cn(
                     'group relative overflow-hidden rounded-lg border p-2.5 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/70',
                     isSelected && 'ring-1 ring-blue-400/80',
