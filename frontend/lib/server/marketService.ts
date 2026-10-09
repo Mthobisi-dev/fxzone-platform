@@ -302,7 +302,7 @@ export function splitYahooFinanceSymbols(symbols: string[], size = 10): string[]
 }
 
 async function fetchYahooFinanceQuotes(): Promise<Record<string, PriceData>> {
-  const providerSymbols = [...new Set(Object.values(YAHOO_FINANCE_MAP))];
+  const providerSymbols = Array.from(new Set(Object.values(YAHOO_FINANCE_MAP)));
   const payloads = await Promise.all(splitYahooFinanceSymbols(providerSymbols).map(async (symbols) => {
     const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(symbols.join(','))}&range=5d&interval=1d`;
     const response = await fetch(url, {
