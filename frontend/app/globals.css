@@ -13,7 +13,16 @@
     --color-card: #182232;
     --color-border: #1f2937;
     --color-text: #f3f4f6;
-    --color-text-muted: #9ca3af;
+    --color-text-muted: #b7c2d4;
+    --fxzone-surface-strong: #111827;
+    --fxzone-surface-soft: #182232;
+    --fxzone-text-strong: #f8fafc;
+    --fxzone-text-body: #e2e8f0;
+    --fxzone-text-muted: #b7c2d4;
+    --fxzone-text-subtle: #94a3b8;
+    --fxzone-accent: #38bdf8;
+    --fxzone-focus: #38bdf8;
+    color-scheme: dark;
   }
 
   /* ==========================================
@@ -25,7 +34,16 @@
     --color-card: #28004d;
     --color-border: #3b0066;
     --color-text: #fdfaee;
-    --color-text-muted: #c084fc;
+    --color-text-muted: #e9d5ff;
+    --fxzone-surface-strong: #1a0033;
+    --fxzone-surface-soft: #28004d;
+    --fxzone-text-strong: #fff7ff;
+    --fxzone-text-body: #f5e8ff;
+    --fxzone-text-muted: #e9d5ff;
+    --fxzone-text-subtle: #d8b4fe;
+    --fxzone-accent: #c084fc;
+    --fxzone-focus: #67e8f9;
+    color-scheme: dark;
   }
 
   /* ==========================================
@@ -37,7 +55,16 @@
     --color-card: #ffffff;
     --color-border: #e2e8f0;
     --color-text: #0f172a;
-    --color-text-muted: #64748b;
+    --color-text-muted: #475569;
+    --fxzone-surface-strong: #ffffff;
+    --fxzone-surface-soft: #eef2f7;
+    --fxzone-text-strong: #0f172a;
+    --fxzone-text-body: #1e293b;
+    --fxzone-text-muted: #475569;
+    --fxzone-text-subtle: #52647a;
+    --fxzone-accent: #2563eb;
+    --fxzone-focus: #1d4ed8;
+    color-scheme: light;
   }
 
   html {
@@ -108,43 +135,123 @@
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
-/* Most dashboard surfaces use Tailwind's zinc utilities. Override those
-   concrete values so the Settings light theme changes the whole application,
-   not only components that happen to use the CSS variables above. */
-.theme-minimal-light body,
-.theme-minimal-light .bg-zinc-950,
-.theme-minimal-light [class*="bg-zinc-950/"],
-.theme-minimal-light .bg-zinc-900,
-.theme-minimal-light [class*="bg-zinc-900/"],
-.theme-minimal-light .bg-zinc-800,
-.theme-minimal-light [class*="bg-zinc-800/"] {
-  background-color: #f8fafc !important;
+/*
+ * Application theme compatibility layer
+ *
+ * Older views use Tailwind zinc utilities while newer views use the shared
+ * theme variables above. Keeping this translation in one place makes every
+ * application route, modal, panel, input, sidebar and chat surface follow the
+ * active theme without weakening text contrast. Market gain/loss colours are
+ * intentionally excluded because they communicate price direction.
+ */
+html[class*="theme-"] body {
+  background-color: var(--color-background) !important;
+  color: var(--fxzone-text-body);
 }
 
-.theme-minimal-light .bg-zinc-700,
-.theme-minimal-light [class*="bg-zinc-700/"] {
-  background-color: #e2e8f0 !important;
+html[class*="theme-"] .bg-zinc-950,
+html[class*="theme-"] [class*="bg-zinc-950/"],
+html[class*="theme-"] [class*="bg-[#0"] {
+  background-color: var(--color-background) !important;
 }
 
-.theme-minimal-light .text-white,
-.theme-minimal-light .text-zinc-100,
-.theme-minimal-light .text-zinc-200,
-.theme-minimal-light .text-zinc-300 {
-  color: #0f172a !important;
+html[class*="theme-"] .bg-zinc-900,
+html[class*="theme-"] [class*="bg-zinc-900/"] {
+  background-color: var(--fxzone-surface-strong) !important;
 }
 
-.theme-minimal-light .text-zinc-400,
-.theme-minimal-light .text-zinc-500,
-.theme-minimal-light .text-zinc-600 {
-  color: #475569 !important;
+html[class*="theme-"] .bg-zinc-800,
+html[class*="theme-"] [class*="bg-zinc-800/"],
+html[class*="theme-"] .bg-zinc-850,
+html[class*="theme-"] [class*="bg-zinc-850/"],
+html[class*="theme-"] .bg-zinc-750,
+html[class*="theme-"] [class*="bg-zinc-750/"] {
+  background-color: var(--fxzone-surface-soft) !important;
 }
 
-.theme-minimal-light .border-zinc-950,
-.theme-minimal-light .border-zinc-900,
-.theme-minimal-light .border-zinc-850,
-.theme-minimal-light .border-zinc-800,
-.theme-minimal-light .border-zinc-700 {
-  border-color: #cbd5e1 !important;
+html[class*="theme-"] .bg-zinc-700,
+html[class*="theme-"] [class*="bg-zinc-700/"] {
+  background-color: color-mix(in srgb, var(--fxzone-surface-soft) 82%, var(--color-border)) !important;
+}
+
+html[class*="theme-"] .text-white,
+html[class*="theme-"] .text-zinc-100,
+html[class*="theme-"] .text-zinc-200,
+html[class*="theme-"] .text-zinc-300 {
+  color: var(--fxzone-text-strong) !important;
+}
+
+html[class*="theme-"] .text-zinc-400 {
+  color: var(--fxzone-text-muted) !important;
+}
+
+html[class*="theme-"] .text-zinc-500,
+html[class*="theme-"] .text-zinc-600,
+html[class*="theme-"] .text-zinc-550,
+html[class*="theme-"] .text-zinc-650,
+html[class*="theme-"] [class*="text-zinc-500/"],
+html[class*="theme-"] [class*="text-zinc-550/"],
+html[class*="theme-"] [class*="text-zinc-600/"],
+html[class*="theme-"] [class*="text-zinc-650/"] {
+  color: var(--fxzone-text-subtle) !important;
+}
+
+/* Keep deliberate white labels on high-saturation actions readable. */
+html[class*="theme-"] :is([class^="bg-blue-"], [class*=" bg-blue-"]) .text-white,
+html[class*="theme-"] :is([class^="bg-purple-"], [class*=" bg-purple-"]) .text-white,
+html[class*="theme-"] :is([class^="bg-rose-"], [class*=" bg-rose-"]) .text-white,
+html[class*="theme-"] :is([class^="bg-red-"], [class*=" bg-red-"]) .text-white,
+html[class*="theme-"] :is([class^="bg-emerald-"], [class*=" bg-emerald-"]) .text-white,
+html[class*="theme-"] :is([class^="bg-sky-"], [class*=" bg-sky-"]) .text-white,
+html[class*="theme-"] :is([class^="bg-indigo-"], [class*=" bg-indigo-"]) .text-white,
+html[class*="theme-"] :is([class^="bg-gradient"], [class*=" bg-gradient"]) .text-white,
+html[class*="theme-"] :is([class^="bg-blue-"], [class*=" bg-blue-"]).text-white,
+html[class*="theme-"] :is([class^="bg-purple-"], [class*=" bg-purple-"]).text-white,
+html[class*="theme-"] :is([class^="bg-rose-"], [class*=" bg-rose-"]).text-white,
+html[class*="theme-"] :is([class^="bg-red-"], [class*=" bg-red-"]).text-white,
+html[class*="theme-"] :is([class^="bg-emerald-"], [class*=" bg-emerald-"]).text-white,
+html[class*="theme-"] :is([class^="bg-sky-"], [class*=" bg-sky-"]).text-white,
+html[class*="theme-"] :is([class^="bg-indigo-"], [class*=" bg-indigo-"]).text-white,
+html[class*="theme-"] :is([class^="bg-gradient"], [class*=" bg-gradient"]).text-white {
+  color: #ffffff !important;
+}
+
+html[class*="theme-"] [class*="placeholder-zinc-"]::placeholder {
+  color: var(--fxzone-text-subtle) !important;
+  opacity: 1;
+}
+
+html[class*="theme-"] [class*="border-zinc-"],
+html[class*="theme-"] [class*="divide-zinc-"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--color-border) !important;
+}
+
+html[class*="theme-"] .ring-zinc-950,
+html[class*="theme-"] .ring-zinc-900,
+html[class*="theme-"] .ring-zinc-800,
+html[class*="theme-"] .ring-zinc-700 {
+  --tw-ring-color: var(--color-border) !important;
+}
+
+html[class*="theme-"] input,
+html[class*="theme-"] textarea,
+html[class*="theme-"] select {
+  background-color: var(--fxzone-surface-strong);
+  color: var(--fxzone-text-strong);
+  border-color: var(--color-border);
+}
+
+html[class*="theme-"] :focus-visible {
+  outline: 2px solid var(--fxzone-focus);
+  outline-offset: 2px;
+}
+
+.theme-minimal-light [class*="hover:bg-white/"]:hover {
+  background-color: #e8eef7 !important;
+}
+
+.theme-minimal-light [class*="hover:text-white"]:hover {
+  color: var(--fxzone-text-strong) !important;
 }
 
 .theme-minimal-light ::-webkit-scrollbar-thumb {
