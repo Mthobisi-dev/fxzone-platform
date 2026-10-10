@@ -13,7 +13,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test lib/server/notifications.test.js lib/server/turnCredentials.test.js lib/live-session.test.js lib/postMedia.test.js lib/postUpload.test.js lib/marketScreener.test.js lib/marketDashboard.test.js lib/marketHeatmap.test.js lib/server/marketService.test.js lib/server/technicalAnalysis.test.js lib/server/marketInsights.test.js lib/server/newsFeed.test.js app/landingMotion.test.js"
+    "test": "node --test lib/server/notifications.test.js lib/server/turnCredentials.test.js lib/live-session.test.js lib/postMedia.test.js lib/postUpload.test.js lib/marketScreener.test.js lib/marketDashboard.test.js lib/marketHeatmap.test.js lib/marketContext.test.js lib/marketScreenerView.test.js lib/server/marketService.test.js lib/server/technicalAnalysis.test.js lib/server/marketInsights.test.js lib/server/newsFeed.test.js app/landingMotion.test.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

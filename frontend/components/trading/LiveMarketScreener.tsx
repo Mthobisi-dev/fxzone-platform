@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Grid2X2, RefreshCw, Search, Settings2, Wifi, WifiOff } from 'lucide-react';
+import { Grid2X2, List as ListIcon, RefreshCw, Search, Settings2, Wifi, WifiOff } from 'lucide-react';
 import { filterMarketDashboardRows, type DashboardChangeFilter, type DashboardPriceFilter } from '@/lib/marketDashboard';
 import { groupMarketHeatmapRows, marketHeatTileSize, marketHeatTone, type MarketHeatTone } from '@/lib/marketHeatmap';
 import { buildMarketScreenerRows } from '@/lib/marketScreener';
+import { groupScreenerListRows } from '@/lib/marketScreenerView';
 import { useMarketStore } from '@/stores/marketStore';
 import { cn } from '@/lib/utils';
 
 type MarketFilter = 'all' | 'stock' | 'crypto' | 'forex' | 'commodity';
+type ScreenerView = 'heatmap' | 'list';
 
 const FILTERS: Array<{ value: MarketFilter; label: string }> = [
   { value: 'all', label: 'All markets' },
@@ -56,6 +58,7 @@ export function LiveMarketScreener() {
   const [changeFilter, setChangeFilter] = useState<DashboardChangeFilter>('all');
   const [search, setSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [view, setView] = useState<ScreenerView>('heatmap');
 
   useEffect(() => {
     const refresh = () => {
@@ -80,6 +83,7 @@ export function LiveMarketScreener() {
   }), [assets, changeFilter, filter, priceFilter, prices, search]);
 
   const groups = useMemo(() => groupMarketHeatmapRows(rows), [rows]);
+  const listGroups = useMemo(() => groupScreenerListRows(rows), [rows]);
   const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
   const largestComparableVolume = useMemo(
     () => Math.max(0, ...rows.map((row) => row.quote?.volume ?? 0).filter((volume) => Number.isFinite(volume))),
@@ -129,6 +133,28 @@ export function LiveMarketScreener() {
                 {item.label}
               </button>
             ))}
+          </div>
+          <div className="flex shrink-0 rounded border border-[var(--color-border)] p-0.5" role="group" aria-label="Screener layout">
+            <button
+              type="button"
+              onClick={() => setView('heatmap')}
+              aria-label="Show heat map"
+              aria-pressed={view === 'heatmap'}
+              title="Heat map"
+              className={cn('grid h-6 w-6 place-items-center rounded transition', view === 'heatmap' ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-200' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]')}
+            >
+              <Grid2X2 size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              aria-label="Show list"
+              aria-pressed={view === 'list'}
+              title="List"
+              className={cn('grid h-6 w-6 place-items-center rounded transition', view === 'list' ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-200' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]')}
+            >
+              <ListIcon size={13} />
+            </button>
           </div>
           <button
             type="button"
@@ -191,7 +217,7 @@ export function LiveMarketScreener() {
           <div className="grid min-h-[26rem] place-items-center text-sm text-[var(--color-text-muted)]">Loading market catalogue…</div>
         ) : groups.length === 0 ? (
           <div className="grid min-h-[26rem] place-items-center text-sm text-[var(--color-text-muted)]">No instruments match this filter.</div>
-        ) : (
+        ) : view === 'heatmap' ? (
           <div className={cn('grid gap-2', groups.length > 1 && 'lg:grid-cols-2')}>
             {groups.map((group) => (
               <section key={group.id} className="fxzone-heatmap-group rounded-lg border border-[var(--color-border)] p-1.5">
@@ -241,6 +267,43 @@ export function LiveMarketScreener() {
                         )}
                         <span className="absolute right-1.5 top-1.5 rounded bg-black/15 px-1 py-0.5 text-[8px] font-medium uppercase tracking-wide text-white/75 opacity-0 transition group-hover:opacity-100">
                           {quote ? `${quoteQuality(quote)} · ${providerLabel(quote.data_source)}` : 'No quote'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {listGroups.map((group) => (
+              <section key={group.id} className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+                <div className="border-b border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+                  {group.label}
+                </div>
+                <div className="divide-y divide-[var(--color-border)]">
+                  {group.rows.map((row) => {
+                    const quote = row.quote;
+                    const asset = assetById.get(row.id);
+                    const isSelected = selectedAssetId === row.id;
+                    const positive = (quote?.change_pct ?? 0) >= 0;
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => asset && setSelectedAsset(asset)}
+                        aria-pressed={isSelected}
+                        className={cn('grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-2.5 text-left transition hover:bg-cyan-500/5 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-cyan-400/70 sm:grid-cols-[minmax(0,1fr)_7rem_5.5rem_5rem]', isSelected && 'bg-cyan-500/10')}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-semibold text-[var(--color-text)]">{row.symbol}</span>
+                          <span className="block truncate text-[10px] text-[var(--color-text-muted)]">{row.name}</span>
+                        </span>
+                        <span className="hidden truncate text-right text-[10px] text-[var(--color-text-muted)] sm:block">{quote ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)}` : 'Unavailable'}</span>
+                        <span className="text-right text-xs font-medium tabular-nums text-[var(--color-text)]">{quote ? formatPrice(quote.price) : 'Unavailable'}</span>
+                        <span className={cn('text-right text-[11px] font-semibold tabular-nums', quote ? positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' : 'text-[var(--color-text-muted)]')}>
+                          {quote ? `${quote.change_pct > 0 ? '+' : ''}${quote.change_pct.toFixed(2)}%` : '—'}
                         </span>
                       </button>
                     );
