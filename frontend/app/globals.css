@@ -151,7 +151,20 @@ html[class*="theme-"] body {
 
 html[class*="theme-"] .bg-zinc-950,
 html[class*="theme-"] [class*="bg-zinc-950/"],
-html[class*="theme-"] [class*="bg-[#0"] {
+html[class*="theme-"] [class*="bg-[#05070c]"],
+html[class*="theme-"] [class*="bg-[#05070d]"],
+html[class*="theme-"] [class*="bg-[#05070e]"],
+html[class*="theme-"] [class*="bg-[#060911]"],
+html[class*="theme-"] [class*="bg-[#060912]"],
+html[class*="theme-"] [class*="bg-[#070a11]"],
+html[class*="theme-"] [class*="bg-[#070a13]"],
+html[class*="theme-"] [class*="bg-[#070b13]"],
+html[class*="theme-"] [class*="bg-[#080c16]"],
+html[class*="theme-"] [class*="bg-[#090d16]"],
+html[class*="theme-"] [class*="bg-[#090d18]"],
+html[class*="theme-"] [class*="bg-[#0a0f1d]"],
+html[class*="theme-"] [class*="bg-[#0b0f19]"],
+html[class*="theme-"] [class*="bg-[#0f1523]"] {
   background-color: var(--color-background) !important;
 }
 
@@ -499,7 +512,20 @@ html[class*="theme-"] :focus-visible {
 .theme-minimal-light .fxzone-screener {
   background-image: linear-gradient(to bottom, rgba(37, 99, 235, 0.14), transparent) !important;
 }
-.theme-minimal-light .fxzone-screener [class*="bg-[#0"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#05070c]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#05070d]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#05070e]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#060911]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#060912]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#070a11]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#070a13]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#070b13]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#080c16]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#090d16]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#090d18]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#0a0f1d]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#0b0f19]"],
+.theme-minimal-light .fxzone-screener [class*="bg-[#0f1523]"],
 .theme-minimal-light .fxzone-screener [class*="bg-black/"] {
   background-color: #ffffff !important;
 }
