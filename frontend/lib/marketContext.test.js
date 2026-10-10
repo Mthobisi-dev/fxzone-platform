@@ -63,3 +63,19 @@ test('marks a selected catalogue asset unavailable when no provider quote exists
   assert.equal(detail.freshness, null);
   assert.equal(detail.volume, null);
 });
+
+test('builds a preferred-asset selector without inactive catalogue entries', async () => {
+  const { buildPreferredAssetOptions } = await loadMarketContext();
+
+  const options = buildPreferredAssetOptions([
+    ...assets,
+    { id: 'inactive', symbol: 'OLD', name: 'Retired instrument', asset_type: 'stock', is_active: false },
+  ]);
+
+  assert.deepEqual(options.map((group) => [group.id, group.options.map((option) => option.symbol)]), [
+    ['stock', ['NVDA']],
+    ['crypto', ['BTCUSD']],
+    ['forex', ['EURUSD']],
+    ['commodity', ['XAUUSD']],
+  ]);
+});

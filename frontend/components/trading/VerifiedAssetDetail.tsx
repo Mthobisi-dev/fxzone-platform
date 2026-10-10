@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Clock3, Database, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
-import { buildVerifiedAssetDetail } from '@/lib/marketContext';
+import { buildPreferredAssetOptions, buildVerifiedAssetDetail } from '@/lib/marketContext';
 import type { Asset, PriceData } from '@/stores/marketStore';
 import { cn } from '@/lib/utils';
 
@@ -73,12 +73,23 @@ function historyPath(candles: HistoricalCandle[]): string | null {
   }).join(' ');
 }
 
-export function VerifiedAssetDetail({ asset, quote }: { asset: Asset; quote: PriceData | null }) {
+export function VerifiedAssetDetail({
+  asset,
+  quote,
+  assets,
+  onSelectAsset,
+}: {
+  asset: Asset;
+  quote: PriceData | null;
+  assets: Asset[];
+  onSelectAsset: (assetId: string) => void;
+}) {
   const [timeframe, setTimeframe] = useState<Timeframe>('1d');
   const [candles, setCandles] = useState<HistoricalCandle[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const detail = buildVerifiedAssetDetail(asset, quote);
+  const preferredAssetOptions = useMemo(() => buildPreferredAssetOptions(assets), [assets]);
 
   useEffect(() => {
     let active = true;
@@ -113,12 +124,29 @@ export function VerifiedAssetDetail({ asset, quote }: { asset: Asset; quote: Pri
   return (
     <section className="overflow-hidden rounded-xl border border-cyan-500/25 bg-[var(--color-card)] shadow-sm">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--color-border)] px-3.5 py-3 sm:px-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-600 dark:text-cyan-300">Selected instrument</p>
           <div className="mt-1 flex min-w-0 items-baseline gap-2">
             <h3 className="truncate text-base font-semibold text-[var(--color-text)]">{detail.symbol}</h3>
             <span className="truncate text-xs text-[var(--color-text-muted)]">{detail.name}</span>
           </div>
+          <label className="mt-2 block max-w-md">
+            <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Choose preferred asset</span>
+            <select
+              value={asset.id}
+              onChange={(event) => onSelectAsset(event.target.value)}
+              aria-label="Choose preferred market asset"
+              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-xs text-[var(--color-text)] outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+            >
+              {preferredAssetOptions.map((group) => (
+                <optgroup key={group.id} label={group.label}>
+                  {group.options.map((option) => (
+                    <option key={option.id} value={option.id}>{option.symbol} — {option.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className={cn(

@@ -181,7 +181,14 @@ export function MarketResearchPanel() {
         </div>
       )}
 
-      {activeAsset && <VerifiedAssetDetail asset={activeAsset} quote={activeQuote} />}
+      {activeAsset && (
+        <VerifiedAssetDetail
+          asset={activeAsset}
+          quote={activeQuote}
+          assets={assets}
+          onSelectAsset={setSelectedAsset}
+        />
+      )}
 
       <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-3.5 sm:p-4">
         <div className="flex items-center gap-2">

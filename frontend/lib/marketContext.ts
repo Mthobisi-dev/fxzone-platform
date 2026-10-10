@@ -34,6 +34,18 @@ export interface VerifiedMarketContextGroup {
   availableCount: number;
 }
 
+export interface PreferredAssetOption {
+  id: string;
+  symbol: string;
+  name: string;
+}
+
+export interface PreferredAssetOptionGroup {
+  id: VerifiedMarketCategory;
+  label: string;
+  options: PreferredAssetOption[];
+}
+
 export interface VerifiedAssetDetail {
   symbol: string;
   name: string;
@@ -55,6 +67,22 @@ const CATEGORIES: Array<{ id: VerifiedMarketCategory; label: string }> = [
   { id: 'forex', label: 'Forex' },
   { id: 'commodity', label: 'Metals' },
 ];
+
+/**
+ * Lists active catalogue instruments in the same category order as the market
+ * context. The selector is catalogue-backed, so it cannot select retired or
+ * client-invented assets.
+ */
+export function buildPreferredAssetOptions(
+  assets: MarketContextAsset[]
+): PreferredAssetOptionGroup[] {
+  return CATEGORIES.map((category) => ({
+    ...category,
+    options: assets
+      .filter((asset) => asset.is_active && asset.asset_type === category.id)
+      .map(({ id, symbol, name }) => ({ id, symbol, name })),
+  })).filter((category) => category.options.length > 0);
+}
 
 /**
  * Joins the public asset catalogue with provider quotes in category order.
