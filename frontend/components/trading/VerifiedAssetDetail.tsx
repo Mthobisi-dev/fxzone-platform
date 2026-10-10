@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Clock3, Database, RefreshCw } from 'lucide-react';
+import { BarChart3, Clock3, Database, RefreshCw, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
 import { buildPreferredAssetOptions, buildVerifiedAssetDetail } from '@/lib/marketContext';
 import type { Asset, PriceData } from '@/stores/marketStore';
@@ -16,6 +16,16 @@ interface HistoricalCandle {
   low: number;
   close: number;
   volume: number | null;
+}
+
+interface AssetExplanationResponse {
+  source: 'ai_gateway' | 'verified_data';
+  isAiGenerated: boolean;
+  explanation: string;
+  evidence: string[];
+  insight: {
+    status: 'available' | 'insufficient_data' | 'unavailable';
+  };
 }
 
 function providerLabel(source: string | null): string {
@@ -58,6 +68,19 @@ function isCandle(value: unknown): value is HistoricalCandle {
     .every((field) => typeof field === 'number' && Number.isFinite(field));
 }
 
+function isAssetExplanation(value: unknown): value is AssetExplanationResponse {
+  if (!value || typeof value !== 'object') return false;
+  const response = value as Partial<AssetExplanationResponse>;
+  return (
+    (response.source === 'ai_gateway' || response.source === 'verified_data')
+    && typeof response.isAiGenerated === 'boolean'
+    && typeof response.explanation === 'string'
+    && Array.isArray(response.evidence)
+    && !!response.insight
+    && ['available', 'insufficient_data', 'unavailable'].includes(response.insight.status)
+  );
+}
+
 function historyPath(candles: HistoricalCandle[]): string | null {
   const closes = candles.map((candle) => candle.close).filter((value) => Number.isFinite(value));
   if (closes.length < 2) return null;
@@ -88,6 +111,10 @@ export function VerifiedAssetDetail({
   const [candles, setCandles] = useState<HistoricalCandle[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [explanation, setExplanation] = useState<AssetExplanationResponse | null>(null);
+  const [isLoadingExplanation, setIsLoadingExplanation] = useState(true);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+  const [explanationRefreshKey, setExplanationRefreshKey] = useState(0);
   const detail = buildVerifiedAssetDetail(asset, quote);
   const preferredAssetOptions = useMemo(() => buildPreferredAssetOptions(assets), [assets]);
 
@@ -117,6 +144,38 @@ export function VerifiedAssetDetail({
     void loadHistory();
     return () => { active = false; };
   }, [asset.symbol, timeframe]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadExplanation = async () => {
+      setIsLoadingExplanation(true);
+      setExplanationError(null);
+      setExplanation(null);
+
+      try {
+        const response = await api.get(`/api/market/explanation/${asset.symbol}`, {
+          signal: controller.signal,
+          timeoutMs: 10_000,
+        });
+        if (controller.signal.aborted) return;
+        if (!isAssetExplanation(response)) throw new Error('Unexpected explanation response');
+        setExplanation(response);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setExplanationError(
+          error instanceof Error && /authentication|required|sign in/i.test(error.message)
+            ? 'Sign in to load an AI research explanation for this instrument.'
+            : 'An explanation is temporarily unavailable. The verified quote remains above.',
+        );
+      } finally {
+        if (!controller.signal.aborted) setIsLoadingExplanation(false);
+      }
+    };
+
+    void loadExplanation();
+    return () => controller.abort();
+  }, [asset.symbol, explanationRefreshKey]);
 
   const path = useMemo(() => historyPath(candles), [candles]);
   const isPositive = (detail.changePct ?? 0) >= 0;
@@ -225,6 +284,53 @@ export function VerifiedAssetDetail({
           </div>
           {!isLoadingHistory && !historyError && candles.length > 0 && <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">{candles.length} verified OHLC candles · {timeframe.toUpperCase()} interval</p>}
         </div>
+      </div>
+
+      <div className="border-t border-[var(--color-border)] bg-[var(--color-bg)]/60 p-3.5 sm:p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <Sparkles size={15} className="shrink-0 text-cyan-600 dark:text-cyan-300" aria-hidden="true" />
+            <div className="min-w-0">
+              <h4 className="text-sm font-semibold text-[var(--color-text)]">AI research explanation</h4>
+              <p className="mt-0.5 text-[11px] leading-4 text-[var(--color-text-muted)]">Grounded in the selected instrument&apos;s provider quote and calculated indicators.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              'rounded-full px-2 py-1 text-[10px] font-semibold',
+              explanation?.isAiGenerated
+                ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300'
+                : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300',
+            )}>
+              {explanation?.isAiGenerated ? 'AI-generated explanation' : 'Verified-data briefing'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setExplanationRefreshKey((key) => key + 1)}
+              disabled={isLoadingExplanation}
+              aria-label="Refresh selected instrument explanation"
+              className="grid size-7 place-items-center rounded-md border border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:border-cyan-400 hover:text-cyan-700 disabled:cursor-wait disabled:opacity-60 dark:hover:text-cyan-300"
+            >
+              <RefreshCw size={13} className={isLoadingExplanation ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2.5">
+          {isLoadingExplanation ? (
+            <p className="text-xs leading-5 text-[var(--color-text-muted)]">Preparing the latest verified-data briefing…</p>
+          ) : explanationError ? (
+            <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">{explanationError}</p>
+          ) : (
+            <>
+              <p className="text-xs leading-5 text-[var(--color-text)]">{explanation?.explanation}</p>
+              {explanation && explanation.evidence.length > 0 && (
+                <p className="mt-2 text-[11px] leading-4 text-[var(--color-text-muted)]">Evidence used: {explanation.evidence.join(' ')}</p>
+              )}
+            </>
+          )}
+        </div>
+        <p className="mt-2 text-[10px] leading-4 text-[var(--color-text-muted)]">AI wording is optional and never replaces provider data or calculated indicators. It is research context, not investment advice.</p>
       </div>
     </section>
   );

@@ -58,12 +58,16 @@ Public values:
 Server-only values:
 
 - `SUPABASE_SERVICE_ROLE_KEY` — required by existing trusted route handlers; never expose it to the browser.
-- `GEMINI_API_KEY` — only when AI features are enabled.
+- `GEMINI_API_KEY` — only for legacy server-side AI routes when they remain enabled.
+- `AI_GATEWAY_MODEL` — optional explicit Vercel AI Gateway model identifier for the selected-instrument explanation.
+- `AI_GATEWAY_API_KEY` — optional server-only Gateway credential for local or non-Vercel environments. On Vercel, use its server-issued `VERCEL_OIDC_TOKEN` instead of storing a token in the project.
 - `TURN_URL`, `TURN_SHARED_SECRET`, and optionally `TURN_TTL_SECONDS` — only for a coturn-compatible TURN REST deployment.
 - `TWELVE_DATA_API_KEY` — optional but recommended for live stock/metal data and verified intraday or historical candles. It also upgrades Forex from delayed quotes to live quotes.
 - `COINGECKO_DEMO_API_KEY` — optional; increases CoinGecko crypto-quote quota.
 
 The client receives short-lived TURN credentials from `/api/webrtc/credentials` only after it has authenticated and joined the requested live session. Do not add permanent TURN credentials under a `NEXT_PUBLIC_` name.
+
+The selected-instrument explanation always starts with provider data and deterministic indicators. When the optional AI Gateway configuration is absent or unavailable, it remains a labelled verified-data briefing. Gateway wording is limited to qualitative research context and is never a source of prices, confidence scores, targets, or recommendations.
 
 ## Supabase setup and migrations
 
