@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '@/lib/api';
+import { resolveMarketAssetSelection } from '@/lib/marketContext';
 
 export interface Asset {
   id: string;
@@ -262,7 +263,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
 
   setSelectedAsset: (asset) => {
     if (typeof asset === 'string') {
-      const found = get().assets.find((a) => a.symbol.toUpperCase() === asset.toUpperCase());
+      const found = resolveMarketAssetSelection(get().assets, asset);
       if (found) {
         set({ selectedAssetId: found.id, selectedAsset: found });
       }

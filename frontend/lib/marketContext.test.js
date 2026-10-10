@@ -79,3 +79,11 @@ test('builds a preferred-asset selector without inactive catalogue entries', asy
     ['commodity', ['XAUUSD']],
   ]);
 });
+
+test('resolves a selected catalogue asset by id', async () => {
+  const { resolveMarketAssetSelection } = await loadMarketContext();
+
+  const selected = resolveMarketAssetSelection(assets, 'btc');
+
+  assert.equal(selected?.symbol, 'BTCUSD');
+});

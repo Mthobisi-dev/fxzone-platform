@@ -85,6 +85,21 @@ export function buildPreferredAssetOptions(
 }
 
 /**
+ * Resolves a selection emitted by UI controls. Catalogue IDs are the primary
+ * identifier; symbol support remains for existing links and chat actions.
+ */
+export function resolveMarketAssetSelection<T extends MarketContextAsset>(
+  assets: T[],
+  identifier: string
+): T | undefined {
+  const value = identifier.trim();
+  if (!value) return undefined;
+
+  return assets.find((asset) => asset.id === value)
+    ?? assets.find((asset) => asset.symbol.toUpperCase() === value.toUpperCase());
+}
+
+/**
  * Joins the public asset catalogue with provider quotes in category order.
  * A missing quote remains null, so the UI can state that data is unavailable
  * rather than inventing a price or performance value.
