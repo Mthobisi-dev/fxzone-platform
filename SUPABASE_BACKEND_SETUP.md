@@ -34,6 +34,7 @@ In the Supabase SQL editor, run the tracked files in numerical order:
 17. `supabase/migrations/020_lock_down_user_pii.sql`
 18. `supabase/migrations/021_fix_idempotent_session_join.sql`
 19. `supabase/migrations/20261007213918_session_membership_realtime_access.sql`
+20. `supabase/migrations/20261011191252_repair_live_session_realtime_authorization.sql`
 
 Migration 020 is mandatory privacy hardening. It applies explicit public
 profile-column grants and prevents browser clients from selecting email or
@@ -83,13 +84,18 @@ topics do not accept client broadcasts.
 
 ## Live broadcast verification
 
-Apply 019, 021, and `20261007213918_session_membership_realtime_access.sql`
-before testing broadcasts. The last migration permits authenticated users to
-read only their own membership row. Without it, the Realtime policy's membership
-lookup is hidden by row security, even when the server confirms approval.
+Apply `20261011191252_repair_live_session_realtime_authorization.sql` after
+the existing migrations before testing broadcasts. It safely restores the
+private Realtime policies, the authenticated user's own membership-read policy,
+and the approval/join RPCs when an earlier partial migration left a project in
+an inconsistent state. Without the membership-read policy, Realtime evaluates
+the membership lookup as false even when the trusted server confirms approval.
 Do not disable row security or make session channels public to bypass this.
-It also recreates the approval RPC when an older project missed migration 009,
-so host approval/rejection works before the client joins the private topic.
+
+In **Database → Replication → Realtime**, confirm **Allow public access** is
+disabled. Supabase only enforces `realtime.messages` policies for private
+channels when that setting is disabled. The browser must then show **Signal
+connected** for both the host and an approved viewer before sharing starts.
 
 The waiting room now uses `GET /api/sessions/<id>/join` to read its own admission
 state. Only the initial join uses POST. Approved/rejected decisions are not
