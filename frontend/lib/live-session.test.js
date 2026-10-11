@@ -163,3 +163,34 @@ test('unauthenticated admission polling cannot query private memberships', async
   });
   assert.equal((await GET({}, { params: Promise.resolve({ id: 'session' }) })).status, 401);
 });
+
+test('the session list reports an unapplied live-session schema migration safely', async () => {
+  let selectedFields = '';
+  const db = {
+    from() {
+      return {
+        select(fields) { selectedFields = fields; return this; },
+        neq() { return this; },
+        order() { return this; },
+        async limit() {
+          return {
+            data: null,
+            error: { code: '42703', message: 'column live_sessions.requires_approval does not exist' },
+          };
+        },
+      };
+    },
+  };
+  const json = (body, options = {}) => ({ body, status: options.status || 200, headers: options.headers });
+  const { GET } = load('../app/api/sessions/route.ts', {
+    'next/server': { NextResponse: { json } },
+    '@/lib/supabase': { supabaseAdmin: db },
+    '@/lib/api-error': { apiError: (code, message, status) => json({ error: { code, message } }, { status }) },
+  });
+
+  const response = await GET();
+  assert.match(selectedFields, /requires_approval/);
+  assert.equal(response.status, 503);
+  assert.equal(response.body.error.code, 'LIVE_SESSIONS_SCHEMA_OUTDATED');
+  assert.doesNotMatch(JSON.stringify(response.body), /requires_approval|column live_sessions/i);
+});

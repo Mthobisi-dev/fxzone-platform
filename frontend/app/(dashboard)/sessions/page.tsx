@@ -42,9 +42,10 @@ interface LiveSession {
 
 export default function SessionsPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [cuttingOff, setCuttingOff] = useState<string | null>(null);
@@ -55,11 +56,13 @@ export default function SessionsPage() {
   const [newDesc, setNewDesc] = useState('');
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'admin';
 
   const fetchSessions = async () => {
     setLoading(true);
+    setSessionsError(null);
     try {
       const response = await api.get('/api/sessions');
       if (Array.isArray(response)) {
@@ -84,6 +87,7 @@ export default function SessionsPage() {
       }
     } catch (err) {
       console.error(err);
+      setSessionsError(err instanceof Error ? err.message : 'Unable to load live broadcasts.');
     } finally {
       setLoading(false);
     }
@@ -96,7 +100,13 @@ export default function SessionsPage() {
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || creating) return;
+    if (!isAuthenticated || !user) {
+      setCreateError('Sign in before starting a live broadcast.');
+      return;
+    }
+
     setCreating(true);
+    setCreateError(null);
 
     try {
       const response = await api.post('/api/sessions', {
@@ -112,6 +122,7 @@ export default function SessionsPage() {
       }
     } catch (err) {
       console.error(err);
+      setCreateError(err instanceof Error ? err.message : 'Unable to start the broadcast. Please try again.');
     } finally {
       setCreating(false);
     }
@@ -231,8 +242,12 @@ export default function SessionsPage() {
           </button>
 
           <Button
-            onClick={() => setCreateOpen(true)}
+            onClick={() => {
+              setCreateError(null);
+              setCreateOpen(true);
+            }}
             size="sm"
+            disabled={isAuthLoading}
             className="h-8 text-xs font-bold px-3.5 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 shrink-0"
           >
             <Plus size={14} />
@@ -240,6 +255,12 @@ export default function SessionsPage() {
           </Button>
         </div>
       </div>
+
+      {sessionsError && (
+        <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {sessionsError}
+        </p>
+      )}
 
       {/* Active Broadcasts Grid */}
       <div className="space-y-4">
@@ -478,6 +499,11 @@ export default function SessionsPage() {
           title="Setup Live Broadcast Room"
         >
           <form onSubmit={handleCreateSession} className="space-y-4">
+            {createError && (
+              <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                {createError}
+              </p>
+            )}
             <div>
               <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">
                 Webinar / Broadcast Title

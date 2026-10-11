@@ -35,6 +35,7 @@ In the Supabase SQL editor, run the tracked files in numerical order:
 18. `supabase/migrations/021_fix_idempotent_session_join.sql`
 19. `supabase/migrations/20261007213918_session_membership_realtime_access.sql`
 20. `supabase/migrations/20261011191252_repair_live_session_realtime_authorization.sql`
+21. `supabase/migrations/20261011205854_restore_live_session_approval_schema.sql`
 
 Migration 020 is mandatory privacy hardening. It applies explicit public
 profile-column grants and prevents browser clients from selecting email or
@@ -84,13 +85,14 @@ topics do not accept client broadcasts.
 
 ## Live broadcast verification
 
-Apply `20261011191252_repair_live_session_realtime_authorization.sql` after
-the existing migrations before testing broadcasts. It safely restores the
-private Realtime policies, the authenticated user's own membership-read policy,
-and the approval/join RPCs when an earlier partial migration left a project in
-an inconsistent state. Without the membership-read policy, Realtime evaluates
-the membership lookup as false even when the trusted server confirms approval.
-Do not disable row security or make session channels public to bypass this.
+Apply `20261011191252_repair_live_session_realtime_authorization.sql` and then
+`20261011205854_restore_live_session_approval_schema.sql` after the existing
+migrations before testing broadcasts. The first safely restores the private
+Realtime policies, the authenticated user's own membership-read policy, and
+the approval/join RPCs. The second restores `live_sessions.requires_approval`
+for projects where an earlier backend-hardening migration was missed; without
+it, the session list and Start Broadcast action return an error. Do not disable
+row security or make session channels public to bypass this.
 
 In **Database → Replication → Realtime**, confirm **Allow public access** is
 disabled. Supabase only enforces `realtime.messages` policies for private

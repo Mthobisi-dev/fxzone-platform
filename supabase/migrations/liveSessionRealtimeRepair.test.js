@@ -20,3 +20,16 @@ test('live-session Realtime repair restores active-member access without public 
   assert.doesNotMatch(statements, /ALTER TABLE realtime\.messages/i);
   assert.doesNotMatch(statements, /USING \(true\)/i);
 });
+
+test('broadcast schema compatibility migration restores the approval column', () => {
+  const compatibilityPath = path.join(__dirname, '20261011205854_restore_live_session_approval_schema.sql');
+  assert.ok(fs.existsSync(compatibilityPath), 'the production schema repair migration must exist');
+  const migration = fs.readFileSync(compatibilityPath, 'utf8');
+  const statements = migration.replace(/^--.*$/gm, '');
+
+  assert.match(migration, /ALTER TABLE public\.live_sessions\s+ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN/i);
+  assert.match(migration, /ALTER COLUMN requires_approval SET DEFAULT true/i);
+  assert.match(migration, /SET requires_approval = true\s+WHERE requires_approval IS NULL/i);
+  assert.match(migration, /ALTER COLUMN requires_approval SET NOT NULL/i);
+  assert.doesNotMatch(statements, /DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
+});

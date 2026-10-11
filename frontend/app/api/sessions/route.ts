@@ -1,5 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin, getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/supabase';
+import { apiError } from '@/lib/api-error';
+
+function isMissingApprovalColumn(error: unknown): boolean {
+  const candidate = error as { code?: unknown; message?: unknown } | null;
+  return candidate?.code === '42703'
+    && typeof candidate.message === 'string'
+    && /live_sessions\.requires_approval/i.test(candidate.message);
+}
+
+function liveSessionSchemaError() {
+  return apiError(
+    'LIVE_SESSIONS_SCHEMA_OUTDATED',
+    'Live broadcasts are being configured. Please retry shortly.',
+    503,
+  );
+}
 
 // GET /api/sessions — list all live sessions with host info
 export async function GET() {
@@ -16,7 +32,10 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(50);
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingApprovalColumn(error)) return liveSessionSchemaError();
+      throw error;
+    }
 
     const sessions = (data || []).map((s: any) => ({
       id: s.id,
@@ -42,9 +61,10 @@ export async function GET() {
     }));
 
     return NextResponse.json(sessions);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Sessions list error:', error);
-    return NextResponse.json({ error: 'Failed to fetch sessions', detail: error?.message }, { status: 500 });
+    if (isMissingApprovalColumn(error)) return liveSessionSchemaError();
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to load live broadcasts.', 500);
   }
 }
 
@@ -58,14 +78,14 @@ export async function POST(request: NextRequest) {
 
     const db = getSupabaseAdmin(request);
     if (!await ensureUserProfile(db, user)) {
-      return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
+      return apiError('PROFILE_UNAVAILABLE', 'Your profile is still being provisioned. Please try again in a moment.', 503);
     }
 
     const body = await request.json();
     const { title, description, session_type, max_participants, requires_approval } = body;
 
     if (!title?.trim()) {
-      return NextResponse.json({ detail: 'Title is required' }, { status: 400 });
+      return apiError('VALIDATION_ERROR', 'A broadcast title is required.', 422);
     }
 
     const insertPayload: Record<string, any> = {
@@ -86,7 +106,10 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (isMissingApprovalColumn(error)) return liveSessionSchemaError();
+      throw error;
+    }
 
     // The host must be a participant before this endpoint reports a live session.
     const { error: participantError } = await db.from('session_participants').insert({
@@ -100,12 +123,10 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ id: data.id, ...data }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create session error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create session', detail: error?.message },
-      { status: 500 }
-    );
+    if (isMissingApprovalColumn(error)) return liveSessionSchemaError();
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to start the broadcast. Please try again.', 500);
   }
 }
 
