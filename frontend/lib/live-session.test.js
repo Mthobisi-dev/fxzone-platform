@@ -191,6 +191,6 @@ test('the session list reports an unapplied live-session schema migration safely
   const response = await GET();
   assert.match(selectedFields, /requires_approval/);
   assert.equal(response.status, 503);
-  assert.equal(response.body.error.code, 'LIVE_SESSIONS_SCHEMA_OUTDATED');
+  assert.equal(response.body.error.code, 'SERVICE_UNAVAILABLE');
   assert.doesNotMatch(JSON.stringify(response.body), /requires_approval|column live_sessions/i);
 });

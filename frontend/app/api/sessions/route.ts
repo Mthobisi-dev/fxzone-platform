@@ -11,7 +11,7 @@ function isMissingApprovalColumn(error: unknown): boolean {
 
 function liveSessionSchemaError() {
   return apiError(
-    'LIVE_SESSIONS_SCHEMA_OUTDATED',
+    'SERVICE_UNAVAILABLE',
     'Live broadcasts are being configured. Please retry shortly.',
     503,
   );
@@ -78,14 +78,14 @@ export async function POST(request: NextRequest) {
 
     const db = getSupabaseAdmin(request);
     if (!await ensureUserProfile(db, user)) {
-      return apiError('PROFILE_UNAVAILABLE', 'Your profile is still being provisioned. Please try again in a moment.', 503);
+      return apiError('SERVICE_UNAVAILABLE', 'Your profile is still being provisioned. Please try again in a moment.', 503);
     }
 
     const body = await request.json();
     const { title, description, session_type, max_participants, requires_approval } = body;
 
     if (!title?.trim()) {
-      return apiError('VALIDATION_ERROR', 'A broadcast title is required.', 422);
+      return apiError('UNPROCESSABLE_ENTITY', 'A broadcast title is required.', 422);
     }
 
     const insertPayload: Record<string, any> = {
