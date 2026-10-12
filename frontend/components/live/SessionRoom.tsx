@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { WebRTCClient } from '@/lib/webrtc';
 import { api } from '@/lib/api';
+import { canControlLiveBroadcastMedia, canEndLiveBroadcast } from '@/lib/liveSessionPermissions';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
 
@@ -57,6 +58,7 @@ export function SessionRoom({
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [reviewingParticipantId, setReviewingParticipantId] = useState<string | null>(null);
+  const [isEndingBroadcast, setIsEndingBroadcast] = useState(false);
 
   // ─── Refs (never go stale in callbacks) ─────────────────────────────────────
   // The WebRTC client lives in a ref so it is NEVER re-created when state changes.
@@ -71,6 +73,8 @@ export function SessionRoom({
 
   // Admin override detection
   const isAdmin = user?.role === 'admin';
+  const canControlBroadcast = canControlLiveBroadcastMedia(isHost);
+  const canEndBroadcast = canEndLiveBroadcast({ isHost, isAdmin });
 
   // ─── WebSocket ────────────────────────────────────────────────────────────────
   // IMPORTANT: rtc_signal handler reads from rtcClientRef (not stale state).
@@ -280,7 +284,7 @@ export function SessionRoom({
   // ─── Screen Share ─────────────────────────────────────────────────────────────
   const handleStartScreenShare = async () => {
     setBroadcastError(null);
-    if (!isHost) {
+    if (!canControlBroadcast) {
       setBroadcastError('Only the broadcast host can share a screen.');
       return;
     }
@@ -378,12 +382,14 @@ export function SessionRoom({
   };
 
   const handleShareToggle = (enabled: boolean) => {
+    if (!canControlBroadcast) return;
     if (enabled) void handleStartScreenShare();
     else void handleStopScreenShare();
   };
 
   // ─── Recording ───────────────────────────────────────────────────────────────
   const startRecording = async () => {
+    if (!canControlBroadcast) return;
     try {
       let recordStream: MediaStream;
       if (activeStreamRef.current && activeStreamRef.current.active) {
@@ -442,6 +448,7 @@ export function SessionRoom({
   };
 
   const handleToggleRecord = () => {
+    if (!canControlBroadcast) return;
     if (isRecording) stopRecording();
     else startRecording();
   };
@@ -470,18 +477,28 @@ export function SessionRoom({
   };
 
   // Audio/video mute toggles — always use the ref.
-  const handleMicToggle = (enabled: boolean) => rtcClientRef.current?.toggleAudio(enabled);
-  const handleCamToggle = (enabled: boolean) => rtcClientRef.current?.toggleVideo(enabled);
+  const handleMicToggle = (enabled: boolean) => {
+    if (canControlBroadcast) rtcClientRef.current?.toggleAudio(enabled);
+  };
+  const handleCamToggle = (enabled: boolean) => {
+    if (canControlBroadcast) rtcClientRef.current?.toggleVideo(enabled);
+  };
 
-  const handleEndSessionAdmin = async () => {
-    if (!isAdmin) return;
-    if (!confirm('Terminate this live broadcast session? All participants will be disconnected.')) return;
+  const handleEndBroadcast = async () => {
+    if (!canEndBroadcast || isEndingBroadcast) return;
+    const confirmation = isHost
+      ? 'End this live broadcast for every participant?'
+      : 'Terminate this live broadcast session? All participants will be disconnected.';
+    if (!confirm(confirmation)) return;
+    setIsEndingBroadcast(true);
     try {
       await api.post(`/api/sessions/${sessionId}/end`, {});
       onLeave();
     } catch (e) {
-      console.error('Admin cutoff failed:', e);
-      alert('Failed to end session. Verify administrator permissions.');
+      console.error('Live broadcast end failed:', e);
+      alert('Failed to end the broadcast. Check your connection and try again.');
+    } finally {
+      setIsEndingBroadcast(false);
     }
   };
 
@@ -529,10 +546,11 @@ export function SessionRoom({
             </div>
           )}
 
-          {isAdmin && (
+          {isAdmin && !isHost && (
             <button
-              onClick={handleEndSessionAdmin}
-              className="flex items-center gap-1 text-[9px] bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg transition-colors shadow-lg"
+              onClick={handleEndBroadcast}
+              disabled={isEndingBroadcast}
+              className="flex items-center gap-1 text-[9px] bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg transition-colors shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
               title="Cut off live stream (Admin Override)"
             >
               <X size={11} /> End Session (Admin)
@@ -591,14 +609,16 @@ export function SessionRoom({
 
           {/* Controls Bar */}
           <SessionControls
-            isHost={isHost}
+            isHost={canControlBroadcast}
             isSharing={isSharingScreen}
             isRecording={isRecording}
             recordingDuration={formatRecordTime(recordingSeconds)}
             onToggleMic={handleMicToggle}
             onToggleCamera={handleCamToggle}
             onToggleShare={handleShareToggle}
-            onToggleRecord={handleToggleRecord}
+            onToggleRecord={canControlBroadcast ? handleToggleRecord : undefined}
+            onEndBroadcast={isHost ? handleEndBroadcast : undefined}
+            isEndingBroadcast={isEndingBroadcast}
             onLeave={() => {
               if (isRecording) stopRecording();
               onLeave();

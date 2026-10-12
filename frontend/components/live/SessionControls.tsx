@@ -12,8 +12,6 @@ import {
   Radio,
   Square,
   Disc,
-  Settings,
-  Download,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 
@@ -26,6 +24,8 @@ interface SessionControlsProps {
   onToggleCamera: (enabled: boolean) => void;
   onToggleShare: (enabled: boolean) => void;
   onToggleRecord?: () => void;
+  onEndBroadcast?: () => void;
+  isEndingBroadcast?: boolean;
   onLeave: () => void;
   startTime?: string | Date;
 }
@@ -39,6 +39,8 @@ export function SessionControls({
   onToggleCamera,
   onToggleShare,
   onToggleRecord,
+  onEndBroadcast,
+  isEndingBroadcast = false,
   onLeave,
   startTime = new Date(),
 }: SessionControlsProps) {
@@ -100,66 +102,75 @@ export function SessionControls({
 
       {/* Interactive Controls */}
       <div className="flex items-center gap-2.5">
-        {/* Microphone */}
-        <button
-          onClick={handleMic}
-          className={`p-2.5 rounded-lg border transition-all ${
-            micOn
-              ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-850'
-              : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
-          }`}
-          title={micOn ? 'Mute Microphone' : 'Unmute Microphone'}
-        >
-          {micOn ? <Mic size={15} /> : <MicOff size={15} />}
-        </button>
-
-        {/* Camera (Presenters only) */}
         {isHost && (
-          <button
-            onClick={handleCam}
-            className={`p-2.5 rounded-lg border transition-all ${
-              camOn
-                ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 hover:bg-blue-600/30'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-850 hover:text-white'
-            }`}
-            title={camOn ? 'Stop Camera' : 'Start Camera'}
-          >
-            {camOn ? <Video size={15} /> : <VideoOff size={15} />}
-          </button>
+          <>
+            <button
+              onClick={handleMic}
+              className={`p-2.5 rounded-lg border transition-all ${
+                micOn
+                  ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-850'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+              }`}
+              title={micOn ? 'Mute broadcast microphone' : 'Unmute broadcast microphone'}
+            >
+              {micOn ? <Mic size={15} /> : <MicOff size={15} />}
+            </button>
+
+            <button
+              onClick={handleCam}
+              className={`p-2.5 rounded-lg border transition-all ${
+                camOn
+                  ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 hover:bg-blue-600/30'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-850 hover:text-white'
+              }`}
+              title={camOn ? 'Stop broadcast camera' : 'Start broadcast camera'}
+            >
+              {camOn ? <Video size={15} /> : <VideoOff size={15} />}
+            </button>
+
+            <button
+              onClick={handleShare}
+              className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
+                isSharing
+                  ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30 animate-pulse'
+                  : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
+              }`}
+              title={isSharing ? 'Stop screen sharing' : 'Share screen with the room'}
+            >
+              {isSharing ? <ScreenShareOff size={15} /> : <ScreenShare size={15} />}
+              <span className="hidden sm:inline">{isSharing ? 'Stop Share' : 'Share Screen'}</span>
+            </button>
+
+            {onToggleRecord && (
+              <button
+                onClick={onToggleRecord}
+                className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
+                  isRecording
+                    ? 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-600/30'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
+                }`}
+                title={isRecording ? 'Stop and download recording' : 'Record this live session'}
+              >
+                {isRecording ? <Square size={14} className="fill-white" /> : <Disc size={15} className="text-red-400" />}
+                <span className="hidden sm:inline">{isRecording ? 'Stop Recording' : 'Record'}</span>
+              </button>
+            )}
+
+            {onEndBroadcast && (
+              <button
+                onClick={onEndBroadcast}
+                disabled={isEndingBroadcast}
+                className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 transition-colors hover:bg-rose-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 flex items-center gap-1.5 text-xs font-bold"
+                title="End broadcast for every participant"
+              >
+                <Radio size={15} />
+                <span className="hidden sm:inline">{isEndingBroadcast ? 'Ending…' : 'End Broadcast'}</span>
+              </button>
+            )}
+          </>
         )}
 
-        {/* A broadcast has one presenter. Restricting capture to the host
-            prevents a viewer from accidentally replacing the active stream. */}
-        {isHost && (
-          <button
-            onClick={handleShare}
-            className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
-              isSharing
-                ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30 animate-pulse'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
-            }`}
-            title={isSharing ? 'Stop Screen Share' : 'Share Screen with Room'}
-          >
-            {isSharing ? <ScreenShareOff size={15} /> : <ScreenShare size={15} />}
-            <span className="hidden sm:inline">{isSharing ? 'Stop Share' : 'Share Screen'}</span>
-          </button>
-        )}
-
-        {/* Session Recording Button (Opt-in recording) */}
-        {onToggleRecord && (
-          <button
-            onClick={onToggleRecord}
-            className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
-              isRecording
-                ? 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-600/30'
-                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
-            }`}
-            title={isRecording ? 'Stop & Download Recording' : 'Opt-in Record Live Session'}
-          >
-            {isRecording ? <Square size={14} className="fill-white" /> : <Disc size={15} className="text-red-400" />}
-            <span className="hidden sm:inline">{isRecording ? 'Stop Recording' : 'Record'}</span>
-          </button>
-        )}
+        {!isHost && <span className="hidden sm:inline text-xs font-medium text-zinc-400">Watching host broadcast</span>}
       </div>
 
       {/* Leave Button */}

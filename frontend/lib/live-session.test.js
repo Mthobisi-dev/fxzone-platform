@@ -57,6 +57,16 @@ function rtcHarness() {
   return { client, stream, peers, signals };
 }
 
+test('only a host can control broadcast media and either a host or admin can end a session', () => {
+  const { canControlLiveBroadcastMedia, canEndLiveBroadcast } = load('liveSessionPermissions.ts', {});
+
+  assert.equal(canControlLiveBroadcastMedia(true), true);
+  assert.equal(canControlLiveBroadcastMedia(false), false);
+  assert.equal(canEndLiveBroadcast({ isHost: true, isAdmin: false }), true);
+  assert.equal(canEndLiveBroadcast({ isHost: false, isAdmin: true }), true);
+  assert.equal(canEndLiveBroadcast({ isHost: false, isAdmin: false }), false);
+});
+
 test('duplicate discovery during an outstanding offer does not replace the peer', async () => {
   const { client, stream, peers, signals } = rtcHarness();
   await client.setLocalStream(stream);
