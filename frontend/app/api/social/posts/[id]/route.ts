@@ -84,15 +84,20 @@ export async function DELETE(
       );
     }
 
-    // 3. Delete dependent rows in parallel/sequence to prevent foreign key errors
-    await Promise.allSettled([
+    // 3. Delete dependent rows before the post to prevent foreign key errors.
+    // Supabase returns failures in the result object, so inspect every result.
+    const dependencyResults = await Promise.all([
       db.from('comments').delete().eq('post_id', postId),
       db.from('reactions').delete().eq('post_id', postId),
-      db.from('post_reactions').delete().eq('post_id', postId),
       db.from('bookmarks').delete().eq('post_id', postId),
       db.from('reposts').delete().eq('post_id', postId),
       db.from('post_asset_tags').delete().eq('post_id', postId),
     ]);
+    const dependencyError = dependencyResults.find((result) => result.error)?.error;
+    if (dependencyError) {
+      console.error('Post dependency cleanup error:', dependencyError.message);
+      return NextResponse.json({ error: 'Unable to remove related post data' }, { status: 500 });
+    }
 
     // 4. Delete post row from posts table
     const { error: deleteError } = await db

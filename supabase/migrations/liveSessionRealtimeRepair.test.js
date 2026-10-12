@@ -33,3 +33,13 @@ test('broadcast schema compatibility migration restores the approval column', ()
   assert.match(migration, /ALTER COLUMN requires_approval SET NOT NULL/i);
   assert.doesNotMatch(statements, /DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
 });
+
+test('legacy counter triggers use a fixed SECURITY DEFINER search path', () => {
+  const hardeningPath = path.join(__dirname, '20261012010000_harden_legacy_counter_triggers.sql');
+  assert.ok(fs.existsSync(hardeningPath), 'the counter-trigger hardening migration must exist');
+  const migration = fs.readFileSync(hardeningPath, 'utf8');
+
+  assert.match(migration, /ALTER FUNCTION public\.handle_follow\(\)\s+SET search_path = pg_catalog, public, pg_temp/i);
+  assert.match(migration, /ALTER FUNCTION public\.handle_post_like\(\)\s+SET search_path = pg_catalog, public, pg_temp/i);
+  assert.doesNotMatch(migration, /DROP FUNCTION|DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
+});
