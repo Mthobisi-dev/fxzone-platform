@@ -5,6 +5,7 @@ const { test } = require('node:test');
 
 const migrationPath = path.join(__dirname, '20261011191252_repair_live_session_realtime_authorization.sql');
 const followerAdmissionPath = path.join(__dirname, '20261012110000_enforce_live_session_follower_approval.sql');
+const sessionEndBroadcastPath = path.join(__dirname, '20261012215233_broadcast_live_session_end.sql');
 
 test('live-session Realtime repair restores active-member access without public topics', () => {
   const migration = fs.readFileSync(migrationPath, 'utf8');
@@ -59,5 +60,18 @@ test('live-session admission requires a follow and host approval before private 
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.review_session_participant/i);
   assert.match(migration, /Participant no longer follows the host/i);
   assert.match(migration, /SET search_path = pg_catalog, public, pg_temp/i);
+  assert.doesNotMatch(statements, /DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
+});
+
+test('ending a live session broadcasts an authoritative private room event', () => {
+  assert.ok(fs.existsSync(sessionEndBroadcastPath), 'the session-end broadcast migration must exist');
+  const migration = fs.readFileSync(sessionEndBroadcastPath, 'utf8');
+  const statements = migration.replace(/^--.*$/gm, '');
+
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.broadcast_live_session_end\(\)/i);
+  assert.match(migration, /AFTER UPDATE OF status ON public\.live_sessions/i);
+  assert.match(migration, /NEW\.status = 'ended'/i);
+  assert.match(migration, /realtime\.send\([\s\S]*'session_ended'[\s\S]*'session_' \|\| NEW\.id::text[\s\S]*true/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.broadcast_live_session_end\(\) FROM PUBLIC/i);
   assert.doesNotMatch(statements, /DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
 });
