@@ -104,6 +104,35 @@ test('signals targeted to another viewer never create a connection', async () =>
   assert.equal(peers.length, 0);
 });
 
+test('a viewer only accepts presentation offers from the live-session host', async () => {
+  const { WebRTCClient } = load('webrtc.ts', { '@/lib/api': { api: { get: async () => null } } }, {
+    RTCPeerConnection: class {
+      constructor() { this.connectionState = 'new'; this.signalingState = 'stable'; this.senders = []; }
+      getSenders() { return this.senders; }
+      async createAnswer() { return { type: 'answer', sdp: 'answer-sdp' }; }
+      async setLocalDescription(sdp) { this.localDescription = sdp; }
+      async setRemoteDescription(sdp) { this.remoteDescription = sdp; }
+      async addIceCandidate() {}
+      close() { this.connectionState = 'closed'; this.signalingState = 'closed'; }
+    },
+    RTCSessionDescription: class { constructor(sdp) { Object.assign(this, sdp); } },
+    RTCIceCandidate: class { constructor(candidate) { Object.assign(this, candidate); } },
+  });
+  const signals = [];
+  const client = new WebRTCClient({
+    currentUserId: 'viewer',
+    presenterId: 'host',
+    onSignal: (signal) => signals.push(signal),
+  });
+
+  await client.handleSignal({ type: 'presenter_stream_started', sender_id: 'attacker' });
+  await client.handleSignal({ type: 'offer', sender_id: 'attacker', data: { type: 'offer', sdp: 'attacker-sdp' } });
+  assert.equal(signals.length, 0);
+
+  await client.handleSignal({ type: 'offer', sender_id: 'host', data: { type: 'offer', sdp: 'host-sdp' } });
+  assert.equal(signals.filter((signal) => signal.type === 'answer' && signal.target_user_id === 'host').length, 1);
+});
+
 test('closing a socket while Auth initializes never subscribes the abandoned channel', async () => {
   let finishAuth;
   let channels = 0;
@@ -162,6 +191,25 @@ test('unauthenticated admission polling cannot query private memberships', async
     '@/lib/api-error': { apiError: (code, message, status) => ({ status, code }) },
   });
   assert.equal((await GET({}, { params: Promise.resolve({ id: 'session' }) })).status, 401);
+});
+
+test('joining a session returns a clear forbidden response when the user does not follow its host', async () => {
+  const json = (body, options = {}) => ({ body, status: options.status || 200, headers: options.headers });
+  const { POST } = load('../app/api/sessions/[id]/join/route.ts', {
+    'next/server': { NextResponse: { json } },
+    '@/lib/supabase': {
+      getUserFromRequest: async () => ({ user: { id: 'viewer' } }),
+      getSupabaseAdmin: () => ({
+        rpc: async () => ({ data: null, error: { message: 'Follow the host before requesting access' } }),
+      }),
+    },
+    '@/lib/api-error': { apiError: (code, message, status) => json({ error: { code, message } }, { status }) },
+  });
+
+  const response = await POST({}, { params: Promise.resolve({ id: 'session' }) });
+  assert.equal(response.status, 403);
+  assert.equal(response.body.error.code, 'FORBIDDEN');
+  assert.equal(response.body.error.message, 'Follow the host before requesting access');
 });
 
 test('the session list reports an unapplied live-session schema migration safely', async () => {

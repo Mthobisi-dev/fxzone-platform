@@ -51,16 +51,16 @@ export async function POST(
 
     if (joinError) {
       const message = joinError.message || 'Unable to join session';
+      if (/follow the host/i.test(message)) {
+        return apiError('FORBIDDEN', 'Follow the host before requesting access', 403);
+      }
       const status = /not found/i.test(message) ? 404 : /ended|capacity/i.test(message) ? 409 : 400;
-      return NextResponse.json({ detail: message }, { status });
+      return apiError(status === 404 ? 'NOT_FOUND' : status === 409 ? 'CONFLICT' : 'BAD_REQUEST', message, status);
     }
 
     return NextResponse.json(participant);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Join session error:', error);
-    return NextResponse.json(
-      { error: 'Failed to join session', detail: error?.message },
-      { status: 500 }
-    );
+    return apiError('INTERNAL_SERVER_ERROR', 'Unable to request live-session access. Please try again.', 500);
   }
 }

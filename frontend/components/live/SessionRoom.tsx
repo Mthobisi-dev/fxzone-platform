@@ -55,6 +55,8 @@ export function SessionRoom({
   const [isRoomBeingRecorded, setIsRoomBeingRecorded] = useState(false);
   const [signalingStatus, setSignalingStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'unavailable'>('connecting');
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [reviewingParticipantId, setReviewingParticipantId] = useState<string | null>(null);
 
   // ─── Refs (never go stale in callbacks) ─────────────────────────────────────
   // The WebRTC client lives in a ref so it is NEVER re-created when state changes.
@@ -146,7 +148,16 @@ export function SessionRoom({
   const fetchParticipants = useCallback(async () => {
     try {
       const res = await api.get(`/api/sessions/${sessionId}/participants`);
-      if (Array.isArray(res)) setParticipants(res);
+      if (Array.isArray(res)) {
+        setParticipants(res.map((participant) => ({
+          ...participant,
+          user: participant.user ? {
+            ...participant.user,
+            displayName: participant.user.displayName || participant.user.display_name,
+            avatarUrl: participant.user.avatarUrl || participant.user.avatar_url,
+          } : null,
+        })));
+      }
     } catch (e) {
       console.error('Error fetching participants:', e);
     }
@@ -167,20 +178,32 @@ export function SessionRoom({
   }, [sessionId, isHost, fetchParticipants]);
 
   const handleApproveParticipant = async (targetUserId: string) => {
+    if (!targetUserId || reviewingParticipantId) return;
+    setApprovalError(null);
+    setReviewingParticipantId(targetUserId);
     try {
       await api.post(`/api/sessions/${sessionId}/approve/${targetUserId}`);
       await fetchParticipants();
     } catch (e) {
       console.error('Error approving user:', e);
+      setApprovalError(e instanceof Error ? e.message : 'Unable to approve this access request.');
+    } finally {
+      setReviewingParticipantId(null);
     }
   };
 
   const handleRejectParticipant = async (targetUserId: string) => {
+    if (!targetUserId || reviewingParticipantId) return;
+    setApprovalError(null);
+    setReviewingParticipantId(targetUserId);
     try {
       await api.post(`/api/sessions/${sessionId}/reject/${targetUserId}`);
       await fetchParticipants();
     } catch (e) {
       console.error('Error rejecting user:', e);
+      setApprovalError(e instanceof Error ? e.message : 'Unable to reject this access request.');
+    } finally {
+      setReviewingParticipantId(null);
     }
   };
 
@@ -198,6 +221,7 @@ export function SessionRoom({
       sessionId,
       currentUserId: String(userId),
       currentUsername: username,
+      presenterId: String(hostId),
       isHost,
       isPresenter: isHost,
       onStream: (stream, presenterInfo) => {
@@ -256,6 +280,10 @@ export function SessionRoom({
   // ─── Screen Share ─────────────────────────────────────────────────────────────
   const handleStartScreenShare = async () => {
     setBroadcastError(null);
+    if (!isHost) {
+      setBroadcastError('Only the broadcast host can share a screen.');
+      return;
+    }
     if (!navigator.mediaDevices?.getDisplayMedia) {
       setBroadcastError('Screen sharing is unavailable in this browser. Use a supported desktop browser to present; you can still watch here.');
       return;
@@ -302,7 +330,7 @@ export function SessionRoom({
           if (prev === null) return null;
           if (prev <= 1) {
             clearInterval(shareTimerRef.current);
-            handleStopScreenShare();
+            void handleStopScreenShare();
             alert('Your screen sharing reached the 30-minute session limit and was safely stopped.');
             return null;
           }
@@ -313,7 +341,7 @@ export function SessionRoom({
       // Handle user stopping via the native browser "Stop sharing" bar.
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        videoTrack.onended = () => handleStopScreenShare();
+        videoTrack.onended = () => { void handleStopScreenShare(); };
       }
     } catch (err: any) {
       console.warn('Display media capture cancelled or rejected:', err);
@@ -323,11 +351,9 @@ export function SessionRoom({
     }
   };
 
-  const handleStopScreenShare = () => {
-    // Stop all tracks
-    if (activeStreamRef.current) {
-      activeStreamRef.current.getTracks().forEach((track) => track.stop());
-    }
+  const handleStopScreenShare = async () => {
+    const stream = activeStreamRef.current;
+    if (!stream && !isSharingRef.current) return;
 
     isSharingRef.current = false;
     activeStreamRef.current = null;
@@ -340,15 +366,20 @@ export function SessionRoom({
       shareTimerRef.current = null;
     }
 
-    // Notify all peers the stream stopped
+    // Notify peers before ending tracks, so a delayed track-ended event cannot
+    // leave their UI showing an unavailable but still-live presentation.
     if (rtcClientRef.current) {
-      rtcClientRef.current.setLocalStream(null);
+      await rtcClientRef.current.setLocalStream(null);
+    }
+
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
     }
   };
 
   const handleShareToggle = (enabled: boolean) => {
-    if (enabled) handleStartScreenShare();
-    else handleStopScreenShare();
+    if (enabled) void handleStartScreenShare();
+    else void handleStopScreenShare();
   };
 
   // ─── Recording ───────────────────────────────────────────────────────────────
@@ -584,6 +615,11 @@ export function SessionRoom({
                 Access Requests ({pendingParticipants.length})
               </h3>
             </div>
+            {approvalError && (
+              <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-[10px] leading-relaxed text-rose-300">
+                {approvalError}
+              </p>
+            )}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar">
               {pendingParticipants.map((p) => {
                 const targetUserId = String(p.user_id || p.userId || p.user?.id);
@@ -611,13 +647,15 @@ export function SessionRoom({
                         className="h-6 px-2 text-[9px] bg-emerald-600 hover:bg-emerald-500 font-bold rounded-lg flex items-center gap-0.5"
                         onClick={() => handleApproveParticipant(targetUserId)}
                         title="Approve access"
+                        disabled={reviewingParticipantId === targetUserId}
                       >
-                        <Check size={10} /> Approve
+                        {reviewingParticipantId === targetUserId ? 'Working…' : <><Check size={10} /> Approve</>}
                       </Button>
                       <button
                         className="h-6 w-6 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-rose-600/80 text-zinc-400 hover:text-white transition-colors"
                         onClick={() => handleRejectParticipant(targetUserId)}
                         title="Reject request"
+                        disabled={reviewingParticipantId === targetUserId}
                       >
                         <X size={10} />
                       </button>

@@ -32,6 +32,8 @@ export interface WebRTCOptions {
   sessionId?: string | number;
   currentUserId?: string;
   currentUsername?: string;
+  /** The one account allowed to publish the broadcast stream. */
+  presenterId?: string;
   isHost?: boolean;
   isPresenter?: boolean;
   onStream?: (stream: MediaStream | null, presenterInfo?: { userId: string; username?: string }) => void;
@@ -50,6 +52,7 @@ export class WebRTCClient {
   private sessionId: string;
   private currentUserId: string = '';
   private currentUsername: string = '';
+  private presenterId: string = '';
   private isPresenter: boolean = false;
   private onStreamCallback: ((stream: MediaStream | null, presenterInfo?: { userId: string; username?: string }) => void) | null = null;
   private onSignalCallback: ((signal: any) => void) | null = null;
@@ -63,6 +66,7 @@ export class WebRTCClient {
       this.sessionId = String(options.sessionId || '');
       this.currentUserId = String(options.currentUserId || '');
       this.currentUsername = String(options.currentUsername || '');
+      this.presenterId = String(options.presenterId || '');
       this.isPresenter = !!(options.isHost || options.isPresenter);
       if (options.onStream) this.onStreamCallback = options.onStream;
       if (options.onSignal) this.onSignalCallback = options.onSignal;
@@ -257,6 +261,22 @@ export class WebRTCClient {
     // are still addressed to one peer, so every other participant must ignore
     // a message that is not intended for them.
     if (targetUserId && this.currentUserId && targetUserId !== this.currentUserId) {
+      return;
+    }
+
+    // A session is a one-to-many broadcast. Realtime authorizes room
+    // membership, while this client-side guard makes sure that only the host
+    // can cause a viewer to negotiate or render a presentation stream.
+    const presentationSignal = signalType === 'presenter_stream_started'
+      || signalType === 'presenter_stream_stopped'
+      || signalType === 'offer'
+      || signalType === 'candidate';
+    if (!this.isPresenter && this.presenterId && presentationSignal && senderId !== this.presenterId) {
+      return;
+    }
+    // Viewers only ever answer a host offer. A host should not accept an
+    // unsolicited offer that could replace or interfere with its broadcast.
+    if (this.isPresenter && signalType === 'offer') {
       return;
     }
 

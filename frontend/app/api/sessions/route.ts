@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, description, session_type, max_participants, requires_approval } = body;
+    const { title, description, session_type, max_participants } = body;
 
     if (!title?.trim()) {
       return apiError('UNPROCESSABLE_ENTITY', 'A broadcast title is required.', 422);
@@ -94,7 +94,9 @@ export async function POST(request: NextRequest) {
       description: (description || '').trim(),
       session_type: session_type || 'public',
       max_participants: typeof max_participants === 'number' ? max_participants : null,
-      requires_approval: typeof requires_approval === 'boolean' ? requires_approval : true,
+      // Followers may request access, but a host always grants the final
+      // approval before the private Realtime room becomes available.
+      requires_approval: true,
       status: 'live',
       viewer_count: 1,
       started_at: new Date().toISOString(),

@@ -17,8 +17,6 @@ import {
   Radio,
   Trash2,
   Search,
-  Lock,
-  Globe,
   Clock,
   Sparkles,
 } from 'lucide-react';
@@ -54,7 +52,6 @@ export default function SessionsPage() {
   // New session modal states
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [requiresApproval, setRequiresApproval] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -112,7 +109,6 @@ export default function SessionsPage() {
       const response = await api.post('/api/sessions', {
         title: newTitle.trim(),
         description: newDesc.trim(),
-        requires_approval: requiresApproval,
       });
       if (response && response.id) {
         setNewTitle('');
@@ -532,47 +528,20 @@ export default function SessionsPage() {
               />
             </div>
 
-            {/* Room Access Mode Toggle */}
+            {/* Session admission is deliberately consistent: following the
+                host grants the right to request access; the host approves it. */}
             <div className="p-3 bg-zinc-950 border border-zinc-850 rounded-xl space-y-2">
               <label className="text-[10px] font-bold text-zinc-300 block uppercase tracking-wider">
                 Audience Access Control
               </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRequiresApproval(false)}
-                  className={`flex-1 p-2 rounded-lg border text-left transition-all ${
-                    !requiresApproval
-                      ? 'bg-blue-600/15 border-blue-500/40 text-white'
-                      : 'bg-zinc-900 border-zinc-850 text-zinc-400 hover:bg-zinc-850'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 text-xs font-bold mb-0.5">
-                    <Globe size={12} className="text-blue-400" />
-                    <span>Open Access</span>
-                  </div>
-                  <p className="text-[9px] text-zinc-400">
-                    Traders can join immediately without waiting for host approval.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setRequiresApproval(true)}
-                  className={`flex-1 p-2 rounded-lg border text-left transition-all ${
-                    requiresApproval
-                      ? 'bg-purple-600/15 border-purple-500/40 text-white'
-                      : 'bg-zinc-900 border-zinc-850 text-zinc-400 hover:bg-zinc-850'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 text-xs font-bold mb-0.5">
-                    <Lock size={12} className="text-purple-400" />
-                    <span>Host Approval</span>
-                  </div>
-                  <p className="text-[9px] text-zinc-400">
-                    Host manually approves incoming viewer join requests.
-                  </p>
-                </button>
+              <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                  <Users size={12} className="text-purple-400" />
+                  <span>Followers with host approval</span>
+                </div>
+                <p className="mt-1 text-[9px] leading-relaxed text-zinc-400">
+                  A trader must follow you before requesting access. You approve each request before they can enter the live broadcast.
+                </p>
               </div>
             </div>
 
