@@ -7,6 +7,7 @@ const migrationPath = path.join(__dirname, '20261011191252_repair_live_session_r
 const followerAdmissionPath = path.join(__dirname, '20261012110000_enforce_live_session_follower_approval.sql');
 const sessionEndBroadcastPath = path.join(__dirname, '20261012215233_broadcast_live_session_end.sql');
 const admissionContractPath = path.join(__dirname, '20261013071833_repair_live_session_admission_contract.sql');
+const hostAdmissionPath = path.join(__dirname, '20261013113000_restore_live_session_host_admission.sql');
 
 test('live-session Realtime repair restores active-member access without public topics', () => {
   const migration = fs.readFileSync(migrationPath, 'utf8');
@@ -94,5 +95,21 @@ test('forward admission repair preserves follower approval and private Realtime 
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.join_session\(uuid, uuid\) TO service_role/i);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.review_session_participant\(uuid, uuid, uuid, text\) TO service_role/i);
   assert.doesNotMatch(statements, /ALTER TABLE realtime\.messages/i);
+  assert.doesNotMatch(statements, /DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
+});
+
+test('host admission repair never lets a stale membership make a host await approval', () => {
+  assert.ok(fs.existsSync(hostAdmissionPath), 'the host admission repair migration must exist');
+  const migration = fs.readFileSync(hostAdmissionPath, 'utf8');
+  const statements = migration.replace(/^--.*$/gm, '');
+
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.join_session/i);
+  assert.match(migration, /IF v_session\.host_id = p_user_id THEN/i);
+  assert.match(migration, /v_participant\.role = 'host'/i);
+  assert.match(migration, /v_role := 'host'/i);
+  assert.match(migration, /ON CONFLICT \(session_id, user_id\)[\s\S]*DO UPDATE SET\s+role = EXCLUDED\.role/i);
+  assert.match(migration, /Follow the host before requesting access/i);
+  assert.match(migration, /v_role := 'pending'/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.join_session\(uuid, uuid\) TO service_role/i);
   assert.doesNotMatch(statements, /DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
 });

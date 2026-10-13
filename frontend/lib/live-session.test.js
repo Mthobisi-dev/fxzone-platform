@@ -80,6 +80,13 @@ test('only admitted viewer and host roles may enter a live broadcast room', () =
   assert.equal(getLiveSessionRoleLabel('pending'), 'Awaiting approval');
 });
 
+test('a session owner is shown host controls instead of a viewer join request', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../app/(dashboard)/sessions/page.tsx'), 'utf8');
+
+  assert.match(source, /const isSessionHost = Boolean\(user && String\(user\.id\) === String\(session\.hostId\)\);/);
+  assert.match(source, /isSessionHost \? 'Open Host Room' : 'Request Access'/);
+});
+
 test('duplicate discovery during an outstanding offer does not replace the peer', async () => {
   const { client, stream, peers, signals } = rtcHarness();
   await client.setLocalStream(stream);

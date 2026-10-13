@@ -285,6 +285,7 @@ export default function SessionsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {liveSessions.map((session) => {
               const canDeleteThis = isAdmin || (user && String(user.id) === String(session.hostId));
+              const isSessionHost = Boolean(user && String(user.id) === String(session.hostId));
               return (
                 <Card
                   key={session.id}
@@ -342,7 +343,7 @@ export default function SessionsPage() {
                       className="flex-1 bg-blue-600 hover:bg-blue-500 font-bold text-xs py-1.5 flex items-center justify-center gap-1.5"
                     >
                       <Video size={13} />
-                      <span>Join Room</span>
+                      <span>{isSessionHost ? 'Open Host Room' : 'Request Access'}</span>
                     </Button>
 
                     {isAdmin && (
