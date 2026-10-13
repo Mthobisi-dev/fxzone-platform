@@ -72,7 +72,7 @@ function marketSector(assetType: MarketAsset['asset_type'], symbol: string): str
   return 'Metals';
 }
 
-export const SUPPORTED_ASSETS: MarketAsset[] = [
+export const SUPPORTED_ASSETS: MarketAsset[] = ([
   { id: 'asset-btc', symbol: 'BTCUSD', name: 'Bitcoin', asset_type: 'crypto', description: 'Digital Gold - Premier Cryptocurrency', is_active: true },
   { id: 'asset-eth', symbol: 'ETHUSD', name: 'Ethereum', asset_type: 'crypto', description: 'Smart Contract & Layer-1 Platform', is_active: true },
   { id: 'asset-sol', symbol: 'SOLUSD', name: 'Solana', asset_type: 'crypto', description: 'High Performance Layer-1 Blockchain', is_active: true },
@@ -109,7 +109,10 @@ export const SUPPORTED_ASSETS: MarketAsset[] = [
   { id: 'asset-eurgbp', symbol: 'EURGBP', name: 'Euro / British Pound', asset_type: 'forex', description: 'Eurozone vs Great Britain Currency Cross', is_active: true },
   { id: 'asset-xauusd', symbol: 'XAUUSD', name: 'Gold Spot / US Dollar', asset_type: 'commodity', description: 'Gold Bullion Spot Price per Ounce', is_active: true },
   { id: 'asset-xagusd', symbol: 'XAGUSD', name: 'Silver Spot / US Dollar', asset_type: 'commodity', description: 'Silver Bullion Spot Price per Ounce', is_active: true },
-].map((asset) => ({ ...asset, sector: marketSector(asset.asset_type, asset.symbol) }));
+] satisfies Array<Omit<MarketAsset, 'sector'>>).map((asset) => ({
+  ...asset,
+  sector: marketSector(asset.asset_type, asset.symbol),
+}));
 
 const COINGECKO_MAP: Record<string, string> = {
   BTCUSD: 'bitcoin', ETHUSD: 'ethereum', SOLUSD: 'solana', XRPUSD: 'ripple', ADAUSD: 'cardano',
