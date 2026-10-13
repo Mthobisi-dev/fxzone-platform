@@ -17,6 +17,7 @@ test('market screener never invents a quote for an asset without provider data',
     symbol: 'NVDA',
     name: 'NVIDIA',
     assetType: 'stock',
+    sector: 'stock',
     quote: null,
   }]);
 });
@@ -42,4 +43,19 @@ test('market screener preserves a real provider quote and its quality metadata',
   assert.equal(row.quote, quote);
   assert.equal(row.quote.price, 65000);
   assert.equal(row.quote.is_live, true);
+});
+
+test('market screener preserves provider market cap and the catalogue sector without inventing either', async () => {
+  const { buildMarketScreenerRows } = await loadScreener();
+  const [row] = buildMarketScreenerRows([
+    { id: 'asset-nvda', symbol: 'NVDA', name: 'NVIDIA', asset_type: 'stock', sector: 'Information Technology', is_active: true },
+  ], {
+    NVDA: {
+      symbol: 'NVDA', price: 140, change: 1, change_pct: 0.72, volume: 12_000, market_cap: 3_400_000_000_000,
+      timestamp: '2026-10-13T10:00:00.000Z', data_source: 'yahoo_finance', freshness: 'delayed', is_stale: false, is_live: false,
+    },
+  });
+
+  assert.equal(row.sector, 'Information Technology');
+  assert.equal(row.quote.market_cap, 3_400_000_000_000);
 });

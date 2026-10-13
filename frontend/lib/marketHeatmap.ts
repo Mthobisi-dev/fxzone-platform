@@ -2,6 +2,8 @@ import type { DashboardRow } from './marketDashboard';
 
 export type MarketHeatTone = 'gain-strong' | 'gain' | 'loss' | 'loss-strong' | 'unavailable';
 export type MarketHeatTileSize = 'feature' | 'standard';
+export type MarketHeatSizeMetric = 'market_cap' | 'volume' | 'equal';
+export type MarketHeatColorMetric = 'change_1d' | 'neutral';
 
 export interface MarketHeatmapGroup {
   id: string;
@@ -31,7 +33,8 @@ export function groupMarketHeatmapRows(rows: DashboardRow[]): MarketHeatmapGroup
 }
 
 /** Maps a real daily percentage move to a visual heat-map tone. */
-export function marketHeatTone(changePct: number | null | undefined): MarketHeatTone {
+export function marketHeatTone(changePct: number | null | undefined, metric: MarketHeatColorMetric = 'change_1d'): MarketHeatTone {
+  if (metric === 'neutral') return 'unavailable';
   if (typeof changePct !== 'number' || !Number.isFinite(changePct)) return 'unavailable';
   if (changePct >= 2) return 'gain-strong';
   if (changePct > 0) return 'gain';
@@ -40,17 +43,18 @@ export function marketHeatTone(changePct: number | null | undefined): MarketHeat
 }
 
 /**
- * Market-cap data is not available from the configured providers. A tile is
- * enlarged only when a comparable provider volume value is present, otherwise
- * the heat map keeps all instruments equal-sized.
+ * Sizes tiles only from the metric selected by the user. A missing market cap
+ * stays standard rather than silently substituting a different value.
  */
 export function marketHeatTileSize(
   row: Pick<DashboardRow, 'quote'>,
-  largestComparableVolume: number
+  largestComparableMetric: number,
+  metric: MarketHeatSizeMetric = 'volume',
 ): MarketHeatTileSize {
-  const volume = row.quote?.volume;
-  if (typeof volume !== 'number' || !Number.isFinite(volume) || volume <= 0 || largestComparableVolume <= 0) {
+  if (metric === 'equal') return 'standard';
+  const value = metric === 'market_cap' ? row.quote?.market_cap : row.quote?.volume;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || largestComparableMetric <= 0) {
     return 'standard';
   }
-  return volume >= largestComparableVolume ? 'feature' : 'standard';
+  return value >= largestComparableMetric ? 'feature' : 'standard';
 }

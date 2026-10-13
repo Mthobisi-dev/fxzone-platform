@@ -516,6 +516,11 @@ export function SessionRoom({
               <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
               Live
             </span>
+            {isHost && (
+              <span className="text-[9px] border border-blue-400/30 bg-blue-500/10 px-2 py-0.5 font-semibold uppercase tracking-wider text-blue-300 rounded-full">
+                Host controls
+              </span>
+            )}
           </h2>
           <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">Presenter: {hostName}</span>
         </div>

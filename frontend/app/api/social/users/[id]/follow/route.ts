@@ -22,11 +22,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
     const { data: existing, error: existingError } = await db.from('follows').select('id').eq('follower_id', user.id).eq('following_id', target.id).maybeSingle();
     if (existingError) throw existingError;
-    const is_following = !existing;
-    if (existing) {
+    // Existing profile controls use this endpoint as a toggle. A caller may
+    // explicitly state the desired state when following is a prerequisite for
+    // an access request, avoiding a retry that accidentally unfollows a host.
+    let requestedFollowing: boolean | undefined;
+    try {
+      const body: unknown = await request.json();
+      if (body && typeof body === 'object' && typeof (body as { following?: unknown }).following === 'boolean') {
+        requestedFollowing = (body as { following: boolean }).following;
+      }
+    } catch {
+      // Empty request bodies retain the backwards-compatible toggle behavior.
+    }
+    const is_following = requestedFollowing ?? !existing;
+    if (existing && !is_following) {
       const { error } = await db.from('follows').delete().eq('id', existing.id);
       if (error) throw error;
-    } else {
+    } else if (!existing && is_following) {
       const { error } = await db.from('follows').insert({ follower_id: user.id, following_id: target.id });
       if (error) throw error;
       const actorName = user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'A trader';

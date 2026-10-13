@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { SessionRoom } from '@/components/live/SessionRoom';
 import { Loader2, ShieldAlert, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { canEnterLiveBroadcastRoom, getLiveSessionRoleLabel, type LiveSessionAdmissionRole } from '@/lib/liveSessionPermissions';
 
 export default function SessionRoomPage() {
   const params = useParams();
@@ -21,6 +22,8 @@ export default function SessionRoomPage() {
   const [isRejected, setIsRejected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [requiresHostFollow, setRequiresHostFollow] = useState(false);
+  const [isRequestingAccess, setIsRequestingAccess] = useState(false);
 
   const fetchSessionDetails = async () => {
     try {
@@ -50,12 +53,14 @@ export default function SessionRoomPage() {
         setIsPendingApproval(response.role === 'pending');
         setIsRejected(response.role === 'rejected');
         setJoinError(null);
+        setRequiresHostFollow(false);
       }
       return response;
     } catch (err) {
       console.error('Error joining session:', err);
       const message = err instanceof Error ? err.message : 'Unable to join this live session.';
       setJoinError(message);
+      setRequiresHostFollow(/follow the host/i.test(message));
       return null;
     }
   };
@@ -132,6 +137,21 @@ export default function SessionRoomPage() {
     router.push('/sessions');
   };
 
+  const handleFollowAndRequestAccess = async () => {
+    if (!session?.hostId || isRequestingAccess) return;
+    setIsRequestingAccess(true);
+    setJoinError(null);
+    try {
+      const follow = await api.post(`/api/social/users/${session.hostId}/follow`, { following: true });
+      if (!follow?.is_following) throw new Error('Unable to follow the host. Please try again.');
+      await joinSession();
+    } catch (error) {
+      setJoinError(error instanceof Error ? error.message : 'Unable to request access to this broadcast.');
+    } finally {
+      setIsRequestingAccess(false);
+    }
+  };
+
   if (!isAuthLoading && !authReady) {
     return <div className="p-6 text-sm" role="alert">Sign in before joining a live session.</div>;
   }
@@ -168,14 +188,28 @@ export default function SessionRoomPage() {
         <div className="h-12 w-12 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-4 text-rose-500">
           <ShieldAlert size={24} />
         </div>
-        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Unable to Join Broadcast</h4>
-        <p className="text-[10px] text-zinc-500 max-w-[320px] mt-2 mb-6 leading-relaxed">{joinError}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 transition-colors"
-        >
-          Retry Connection
-        </button>
+        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{requiresHostFollow ? 'Follow Host to Request Access' : 'Unable to Join Broadcast'}</h4>
+        <p className="text-[10px] text-zinc-500 max-w-[320px] mt-2 mb-6 leading-relaxed">
+          {requiresHostFollow
+            ? 'This broadcast is limited to followers. Follow the host, then your access request will be sent for their approval.'
+            : joinError}
+        </p>
+        {requiresHostFollow ? (
+          <button
+            onClick={() => void handleFollowAndRequestAccess()}
+            disabled={isRequestingAccess}
+            className="h-8 px-4 bg-blue-600 hover:bg-blue-500 border border-blue-400/40 rounded-lg text-xs font-semibold text-white transition-colors disabled:cursor-wait disabled:opacity-60"
+          >
+            {isRequestingAccess ? 'Requesting access…' : 'Follow & Request Access'}
+          </button>
+        ) : (
+          <button
+            onClick={() => void joinSession()}
+            className="h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 transition-colors"
+          >
+            Retry Connection
+          </button>
+        )}
       </div>
     );
   }
@@ -220,7 +254,18 @@ export default function SessionRoomPage() {
     );
   }
 
-  const isHost = user?.id === session.hostId;
+  const participantRole = (participant?.role ?? null) as LiveSessionAdmissionRole;
+  const isHost = user?.id === session.hostId && participantRole === 'host';
+
+  if (!canEnterLiveBroadcastRoom(participantRole)) {
+    return (
+      <div className="h-[calc(100vh-64px-32px)] flex flex-col items-center justify-center text-center p-6 select-none bg-zinc-950">
+        <ShieldAlert size={24} className="text-amber-400" />
+        <h4 className="mt-3 text-xs font-bold text-white uppercase tracking-wider">Access not active</h4>
+        <p className="mt-2 max-w-xs text-[10px] leading-relaxed text-zinc-500">Your current room status is {getLiveSessionRoleLabel(participantRole).toLowerCase()}. Wait for the host to approve your request.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-64px-32px)] flex flex-col bg-zinc-950">

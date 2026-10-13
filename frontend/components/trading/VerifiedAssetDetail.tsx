@@ -23,6 +23,11 @@ interface AssetExplanationResponse {
   isAiGenerated: boolean;
   explanation: string;
   evidence: string[];
+  research: Array<{
+    id: 'market_snapshot' | 'technical_context' | 'data_quality';
+    title: string;
+    items: Array<{ label: string; value: string }>;
+  }>;
   insight: {
     status: 'available' | 'insufficient_data' | 'unavailable';
   };
@@ -76,6 +81,7 @@ function isAssetExplanation(value: unknown): value is AssetExplanationResponse {
     && typeof response.isAiGenerated === 'boolean'
     && typeof response.explanation === 'string'
     && Array.isArray(response.evidence)
+    && Array.isArray(response.research)
     && !!response.insight
     && ['available', 'insufficient_data', 'unavailable'].includes(response.insight.status)
   );
@@ -323,6 +329,26 @@ export function VerifiedAssetDetail({
             <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">{explanationError}</p>
           ) : (
             <>
+              {explanation && (
+                <div className="mb-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">Research details</p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    {explanation.research.map((section) => (
+                      <section key={section.id} className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
+                        <h5 className="text-[10px] font-semibold text-[var(--color-text)]">{section.title}</h5>
+                        <dl className="mt-1.5 space-y-1.5">
+                          {section.items.map((item) => (
+                            <div key={`${item.label}-${item.value}`}>
+                              <dt className="text-[9px] uppercase tracking-wide text-[var(--color-text-muted)]">{item.label}</dt>
+                              <dd className="mt-0.5 text-[10px] leading-4 text-[var(--color-text)]">{item.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </section>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-xs leading-5 text-[var(--color-text)]">{explanation?.explanation}</p>
               {explanation && explanation.evidence.length > 0 && (
                 <p className="mt-2 text-[11px] leading-4 text-[var(--color-text-muted)]">Evidence used: {explanation.evidence.join(' ')}</p>

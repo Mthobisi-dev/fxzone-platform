@@ -7,6 +7,7 @@ export interface Asset {
   symbol: string;
   name: string;
   asset_type: string;
+  sector?: string;
   description?: string;
   is_active: boolean;
 }
@@ -21,6 +22,7 @@ export interface PriceData {
   high: number | null;
   low: number | null;
   volume: number | null;
+  market_cap?: number | null;
   open: number | null;
   timestamp: string;
   data_source?: 'coingecko' | 'twelve_data' | 'frankfurter' | 'yahoo_finance';

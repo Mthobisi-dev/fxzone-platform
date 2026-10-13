@@ -32,6 +32,8 @@ test('uses an AI explanation only when the generated copy stays evidence-safe', 
   assert.match(result.explanation, /provider move is positive/i);
   assert.match(request.system, /no numbers/i);
   assert.match(request.prompt, /NVDA/);
+  assert.deepEqual(result.research.map((section) => section.id), ['market_snapshot', 'technical_context', 'data_quality']);
+  assert.ok(result.research.find((section) => section.id === 'technical_context')?.items.length);
 });
 
 test('falls back to a labelled verified-data briefing when generated copy makes a trade claim', async () => {
@@ -55,6 +57,7 @@ test('withholds technical interpretation when historical candles are unavailable
   assert.equal(result.source, 'verified_data');
   assert.equal(result.isAiGenerated, false);
   assert.match(result.explanation, /historical indicators are unavailable/i);
+  assert.deepEqual(result.research.map((section) => section.id), ['market_snapshot', 'data_quality']);
 });
 
 test('does not call an AI provider when no verified quote is available', async () => {

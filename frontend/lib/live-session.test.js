@@ -67,6 +67,19 @@ test('only a host can control broadcast media and either a host or admin can end
   assert.equal(canEndLiveBroadcast({ isHost: false, isAdmin: false }), false);
 });
 
+test('only admitted viewer and host roles may enter a live broadcast room', () => {
+  const { canEnterLiveBroadcastRoom, getLiveSessionRoleLabel } = load('liveSessionPermissions.ts', {});
+
+  assert.equal(canEnterLiveBroadcastRoom('host'), true);
+  assert.equal(canEnterLiveBroadcastRoom('viewer'), true);
+  assert.equal(canEnterLiveBroadcastRoom('pending'), false);
+  assert.equal(canEnterLiveBroadcastRoom('rejected'), false);
+  assert.equal(canEnterLiveBroadcastRoom(null), false);
+  assert.equal(getLiveSessionRoleLabel('host'), 'Host');
+  assert.equal(getLiveSessionRoleLabel('viewer'), 'Viewer');
+  assert.equal(getLiveSessionRoleLabel('pending'), 'Awaiting approval');
+});
+
 test('duplicate discovery during an outstanding offer does not replace the peer', async () => {
   const { client, stream, peers, signals } = rtcHarness();
   await client.setLocalStream(stream);
@@ -220,6 +233,46 @@ test('joining a session returns a clear forbidden response when the user does no
   assert.equal(response.status, 403);
   assert.equal(response.body.error.code, 'FORBIDDEN');
   assert.equal(response.body.error.message, 'Follow the host before requesting access');
+});
+
+test('an explicit follow intent never toggles an existing follow off during a broadcast access request', async () => {
+  let deleted = false;
+  const followQuery = {
+    select() { return this; },
+    eq() { return this; },
+    async maybeSingle() { return { data: { id: 'existing-follow' }, error: null }; },
+    delete() { deleted = true; return this; },
+    insert() { return this; },
+    then(resolve) { return Promise.resolve({ error: null }).then(resolve); },
+  };
+  const db = {
+    from(table) {
+      if (table === 'users') {
+        return {
+          select() { return this; },
+          eq() { return this; },
+          async maybeSingle() { return { data: { id: 'host', username: 'host', role: 'trader' }, error: null }; },
+        };
+      }
+      return followQuery;
+    },
+  };
+  const json = (body, options = {}) => ({ body, status: options.status || 200 });
+  const { POST } = load('../app/api/social/users/[id]/follow/route.ts', {
+    'next/server': { NextResponse: { json } },
+    '@/lib/supabase': {
+      getUserFromRequest: async () => ({ user: { id: 'viewer', email: 'viewer@example.test', user_metadata: {} } }),
+      getSupabaseAdmin: () => db,
+      ensureUserProfile: async () => true,
+    },
+    '@/lib/server/notifications': { createNotification: async () => {} },
+    '@/lib/server/socialCounters': { getFollowCounts: async () => ({ followers_count: 1, following_count: 2 }) },
+  });
+
+  const response = await POST({ json: async () => ({ following: true }) }, { params: Promise.resolve({ id: 'host' }) });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.is_following, true);
+  assert.equal(deleted, false);
 });
 
 test('the session list reports an unapplied live-session schema migration safely', async () => {

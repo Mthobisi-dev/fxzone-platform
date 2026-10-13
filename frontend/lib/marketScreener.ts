@@ -3,6 +3,7 @@ export interface MarketScreenerAsset {
   symbol: string;
   name: string;
   asset_type: string;
+  sector?: string;
   is_active: boolean;
 }
 
@@ -12,6 +13,7 @@ export interface MarketScreenerQuote {
   change: number;
   change_pct: number;
   volume?: number | null;
+  market_cap?: number | null;
   timestamp: string;
   data_source?: string;
   freshness?: 'live' | 'delayed' | 'cached' | 'stale';
@@ -24,6 +26,7 @@ export interface MarketScreenerRow {
   symbol: string;
   name: string;
   assetType: string;
+  sector: string;
   quote: MarketScreenerQuote | null;
 }
 
@@ -43,6 +46,7 @@ export function buildMarketScreenerRows(
       symbol: asset.symbol,
       name: asset.name,
       assetType: asset.asset_type,
+      sector: asset.sector ?? asset.asset_type,
       quote: prices[asset.symbol.toUpperCase()] ?? null,
     }));
 }

@@ -13,6 +13,8 @@ export interface MarketAsset {
   symbol: string;
   name: string;
   asset_type: 'stock' | 'crypto' | 'forex' | 'commodity';
+  /** Canonical instrument classification, not a provider-supplied price field. */
+  sector: string;
   description?: string;
   is_active: boolean;
 }
@@ -27,6 +29,8 @@ export interface PriceData {
   high: number | null;
   low: number | null;
   volume: number | null;
+  /** Provider-supplied market capitalization, when the selected provider exposes it. */
+  market_cap: number | null;
   open: number | null;
   /** Original provider timestamp where available. */
   timestamp: string;
@@ -51,6 +55,21 @@ export class MarketDataUnavailableError extends Error {
     super(message);
     this.name = 'MarketDataUnavailableError';
   }
+}
+
+const ASSET_SECTORS: Record<string, string> = {
+  NVDA: 'Information Technology', AAPL: 'Information Technology', MSFT: 'Information Technology',
+  GOOGL: 'Communication Services', META: 'Communication Services',
+  AMZN: 'Consumer Discretionary', TSLA: 'Consumer Discretionary',
+  AVGO: 'Information Technology', INTC: 'Information Technology', QCOM: 'Information Technology', AMD: 'Information Technology',
+  LLY: 'Health Care', JNJ: 'Health Care', WMT: 'Consumer Staples', CAT: 'Industrials', GE: 'Industrials',
+};
+
+function marketSector(assetType: MarketAsset['asset_type'], symbol: string): string {
+  if (assetType === 'stock') return ASSET_SECTORS[symbol] ?? 'Equities';
+  if (assetType === 'crypto') return 'Digital Assets';
+  if (assetType === 'forex') return 'Foreign Exchange';
+  return 'Metals';
 }
 
 export const SUPPORTED_ASSETS: MarketAsset[] = [
@@ -90,7 +109,7 @@ export const SUPPORTED_ASSETS: MarketAsset[] = [
   { id: 'asset-eurgbp', symbol: 'EURGBP', name: 'Euro / British Pound', asset_type: 'forex', description: 'Eurozone vs Great Britain Currency Cross', is_active: true },
   { id: 'asset-xauusd', symbol: 'XAUUSD', name: 'Gold Spot / US Dollar', asset_type: 'commodity', description: 'Gold Bullion Spot Price per Ounce', is_active: true },
   { id: 'asset-xagusd', symbol: 'XAGUSD', name: 'Silver Spot / US Dollar', asset_type: 'commodity', description: 'Silver Bullion Spot Price per Ounce', is_active: true },
-];
+].map((asset) => ({ ...asset, sector: marketSector(asset.asset_type, asset.symbol) }));
 
 const COINGECKO_MAP: Record<string, string> = {
   BTCUSD: 'bitcoin', ETHUSD: 'ethereum', SOLUSD: 'solana', XRPUSD: 'ripple', ADAUSD: 'cardano',
@@ -174,6 +193,7 @@ function createCoinGeckoQuote(symbol: string, item: Record<string, unknown>): Pr
     low: null,
     open: null,
     volume: asFiniteNumber(item.usd_24h_vol),
+    market_cap: asFiniteNumber(item.usd_market_cap),
     timestamp: quoteTimestamp(item.last_updated_at),
     is_indicative: false,
     data_source: 'coingecko',
@@ -200,6 +220,7 @@ function createTwelveDataQuote(symbol: string, quote: Record<string, unknown>): 
     low: asFiniteNumber(quote.low),
     open: asFiniteNumber(quote.open),
     volume: asFiniteNumber(quote.volume),
+    market_cap: asFiniteNumber(quote.market_cap),
     timestamp: quoteTimestamp(quote.timestamp ?? quote.datetime),
     is_indicative: false,
     data_source: 'twelve_data',
@@ -280,6 +301,7 @@ export function buildYahooFinanceQuotes(payload: YahooSparkPayload): Record<stri
       low: asFiniteNumber(meta.regularMarketDayLow),
       open: asFiniteNumber(meta.regularMarketOpen),
       volume: asFiniteNumber(meta.regularMarketVolume),
+      market_cap: asFiniteNumber(meta.marketCap),
       timestamp: quoteTimestamp(meta.regularMarketTime ?? lastFiniteNumber(response.timestamp)),
       is_indicative: false,
       data_source: 'yahoo_finance',
@@ -319,7 +341,7 @@ async function fetchCoinGeckoQuotes(): Promise<Record<string, PriceData>> {
   const ids = Object.values(COINGECKO_MAP).join(',');
   const apiKey = process.env.COINGECKO_DEMO_API_KEY;
   const response = await fetch(
-    `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_last_updated_at=true`,
+    `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true&include_last_updated_at=true`,
     {
       headers: apiKey ? { 'x-cg-demo-api-key': apiKey } : undefined,
       next: { revalidate: 15 },
@@ -407,6 +429,7 @@ export function buildFrankfurterForexQuotes(payload: FrankfurterPayload): Record
       low: null,
       open: null,
       volume: null,
+      market_cap: null,
       timestamp: new Date(`${currentDate}T00:00:00.000Z`).toISOString(),
       is_indicative: true,
       data_source: 'frankfurter',

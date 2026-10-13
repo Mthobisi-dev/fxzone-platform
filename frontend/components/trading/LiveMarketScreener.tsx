@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Grid2X2, List as ListIcon, RefreshCw, Search, Settings2, Wifi, WifiOff } from 'lucide-react';
-import { filterMarketDashboardRows, type DashboardChangeFilter, type DashboardPriceFilter } from '@/lib/marketDashboard';
-import { groupMarketHeatmapRows, marketHeatTileSize, marketHeatTone, type MarketHeatTone } from '@/lib/marketHeatmap';
+import { filterMarketDashboardRows, type DashboardChangeFilter, type DashboardMarketCapFilter, type DashboardPriceFilter } from '@/lib/marketDashboard';
+import { groupMarketHeatmapRows, marketHeatTileSize, marketHeatTone, type MarketHeatColorMetric, type MarketHeatSizeMetric, type MarketHeatTone } from '@/lib/marketHeatmap';
 import { buildMarketScreenerRows } from '@/lib/marketScreener';
 import { groupScreenerListRows } from '@/lib/marketScreenerView';
 import { useMarketStore } from '@/stores/marketStore';
@@ -56,6 +56,10 @@ export function LiveMarketScreener() {
   const [filter, setFilter] = useState<MarketFilter>('stock');
   const [priceFilter, setPriceFilter] = useState<DashboardPriceFilter>('all');
   const [changeFilter, setChangeFilter] = useState<DashboardChangeFilter>('all');
+  const [marketCapFilter, setMarketCapFilter] = useState<DashboardMarketCapFilter>('all');
+  const [sectorFilter, setSectorFilter] = useState('all');
+  const [sizeMetric, setSizeMetric] = useState<MarketHeatSizeMetric>('volume');
+  const [colorMetric, setColorMetric] = useState<MarketHeatColorMetric>('change_1d');
   const [search, setSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [view, setView] = useState<ScreenerView>('heatmap');
@@ -79,15 +83,21 @@ export function LiveMarketScreener() {
     market: filter,
     price: priceFilter,
     change: changeFilter,
+    marketCap: marketCapFilter,
+    sector: sectorFilter,
     search,
-  }), [assets, changeFilter, filter, priceFilter, prices, search]);
+  }), [assets, changeFilter, filter, marketCapFilter, priceFilter, prices, search, sectorFilter]);
 
   const groups = useMemo(() => groupMarketHeatmapRows(rows), [rows]);
   const listGroups = useMemo(() => groupScreenerListRows(rows), [rows]);
   const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
-  const largestComparableVolume = useMemo(
-    () => Math.max(0, ...rows.map((row) => row.quote?.volume ?? 0).filter((volume) => Number.isFinite(volume))),
+  const sectors = useMemo(
+    () => Array.from(new Set(rows.map((row) => row.sector).filter((sector): sector is string => Boolean(sector)))).sort(),
     [rows]
+  );
+  const largestComparableMetric = useMemo(
+    () => Math.max(0, ...rows.map((row) => sizeMetric === 'market_cap' ? row.quote?.market_cap ?? 0 : row.quote?.volume ?? 0).filter((value) => Number.isFinite(value))),
+    [rows, sizeMetric]
   );
   const liveCount = rows.filter((row) => row.quote?.is_live).length;
   const delayedCount = rows.filter((row) => row.quote?.freshness === 'delayed').length;
@@ -104,10 +114,14 @@ export function LiveMarketScreener() {
     setFilter('stock');
     setPriceFilter('all');
     setChangeFilter('all');
+    setMarketCapFilter('all');
+    setSectorFilter('all');
+    setSizeMetric('volume');
+    setColorMetric('change_1d');
     setSearch('');
   };
 
-  const hasActiveFilters = filter !== 'stock' || priceFilter !== 'all' || changeFilter !== 'all' || Boolean(search.trim());
+  const hasActiveFilters = filter !== 'stock' || priceFilter !== 'all' || changeFilter !== 'all' || marketCapFilter !== 'all' || sectorFilter !== 'all' || sizeMetric !== 'volume' || colorMetric !== 'change_1d' || Boolean(search.trim());
 
   return (
     <section className="fxzone-screener fxzone-heatmap overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_22px_60px_rgba(2,6,23,0.2)]">
@@ -184,10 +198,38 @@ export function LiveMarketScreener() {
               <option value="losers">Losers</option>
             </select>
           </label>
-          <span className="fxzone-heatmap-filter" title="Market-cap data is not available from the current verified providers.">Mkt cap: unavailable</span>
-          <span className="fxzone-heatmap-filter" title="Sector data is not available from the current verified providers.">Sector: asset class</span>
-          <span className="fxzone-heatmap-filter">Size: provider volume</span>
-          <span className="fxzone-heatmap-filter">Color: 1D % change</span>
+          <label className="fxzone-heatmap-filter">
+            <span>Mkt cap:</span>
+            <select value={marketCapFilter} onChange={(event) => setMarketCapFilter(event.target.value as DashboardMarketCapFilter)}>
+              <option value="all">All</option>
+              <option value="under_10b">Under 10B</option>
+              <option value="from_10b_to_100b">10B–100B</option>
+              <option value="over_100b">Over 100B</option>
+              <option value="unavailable">Not supplied</option>
+            </select>
+          </label>
+          <label className="fxzone-heatmap-filter">
+            <span>Sector:</span>
+            <select value={sectorFilter} onChange={(event) => setSectorFilter(event.target.value)}>
+              <option value="all">All</option>
+              {sectors.map((sector) => <option key={sector} value={sector}>{sector}</option>)}
+            </select>
+          </label>
+          <label className="fxzone-heatmap-filter">
+            <span>Size:</span>
+            <select value={sizeMetric} onChange={(event) => setSizeMetric(event.target.value as MarketHeatSizeMetric)}>
+              <option value="volume">Provider volume</option>
+              <option value="market_cap">Market cap</option>
+              <option value="equal">Equal tiles</option>
+            </select>
+          </label>
+          <label className="fxzone-heatmap-filter">
+            <span>Color:</span>
+            <select value={colorMetric} onChange={(event) => setColorMetric(event.target.value as MarketHeatColorMetric)}>
+              <option value="change_1d">1D % change</option>
+              <option value="neutral">Neutral</option>
+            </select>
+          </label>
           {hasActiveFilters && <button type="button" onClick={resetFilters} className="shrink-0 px-1 text-[10px] font-medium text-cyan-600 hover:underline dark:text-cyan-400">Reset</button>}
         </div>
 
@@ -226,12 +268,12 @@ export function LiveMarketScreener() {
                   {group.rows.map((row) => {
                     const quote = row.quote;
                     const asset = assetById.get(row.id);
-                    const tone = marketHeatTone(quote?.change_pct);
-                    const featured = marketHeatTileSize(row, largestComparableVolume) === 'feature';
+                    const tone = marketHeatTone(quote?.change_pct, colorMetric);
+                    const featured = marketHeatTileSize(row, largestComparableMetric, sizeMetric) === 'feature';
                     const isSelected = selectedAssetId === row.id;
                     const positive = (quote?.change_pct ?? 0) >= 0;
                     const title = quote
-                      ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · updated ${quote.timestamp ? new Date(quote.timestamp).toLocaleString() : 'time unavailable'}`
+                      ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · ${row.sector} · updated ${quote.timestamp ? new Date(quote.timestamp).toLocaleString() : 'time unavailable'}`
                       : `${row.symbol} is unavailable`;
 
                     return (
@@ -254,7 +296,7 @@ export function LiveMarketScreener() {
                           </p>
                           {quote ? <Wifi size={featured ? 14 : 11} className="shrink-0 text-white/65" /> : <WifiOff size={featured ? 14 : 11} className="shrink-0 text-white/45" />}
                         </div>
-                        <p className={cn('mt-0.5 truncate text-white/70', featured ? 'text-[11px]' : 'text-[9px]')}>{row.name}</p>
+                          <p className={cn('mt-0.5 truncate text-white/70', featured ? 'text-[11px]' : 'text-[9px]')}>{row.name}</p>
                         {quote ? (
                           <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
                             <p className={cn('tabular-nums font-medium text-white', featured ? 'text-base' : 'text-[11px]')}>{formatPrice(quote.price)}</p>

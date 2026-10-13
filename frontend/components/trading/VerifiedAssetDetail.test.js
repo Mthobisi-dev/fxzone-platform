@@ -11,6 +11,8 @@ test('selected-instrument detail loads an abortable asset-specific AI explanatio
   assert.match(component, /\/api\/market\/explanation\/\$\{asset\.symbol\}/);
   assert.match(component, /AbortController/);
   assert.match(component, /AI research explanation/);
+  assert.match(component, /research\.map/);
+  assert.match(component, /Research details/);
   assert.match(component, /AI-generated explanation/);
   assert.doesNotMatch(component, /ai\/sentiment/);
 });

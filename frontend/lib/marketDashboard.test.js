@@ -39,3 +39,17 @@ test('keeps unavailable instruments visible when no numeric filters are active',
   assert.equal(filtered.length, 5);
   assert.equal(filtered.find((row) => row.symbol === 'XAUUSD')?.quote, null);
 });
+
+test('filters only provider-supplied market capitalization and canonical sector classifications', async () => {
+  const { filterMarketDashboardRows } = await loadDashboardFilters();
+  const filterRows = [
+    { id: 'nvda', symbol: 'NVDA', name: 'NVIDIA', assetType: 'stock', sector: 'Information Technology', quote: { price: 140, change_pct: 1, market_cap: 3_400_000_000_000 } },
+    { id: 'small', symbol: 'SMALL', name: 'Small Co', assetType: 'stock', sector: 'Industrials', quote: { price: 20, change_pct: 1, market_cap: 5_000_000_000 } },
+    { id: 'eur', symbol: 'EURUSD', name: 'Euro', assetType: 'forex', sector: 'Foreign Exchange', quote: { price: 1.1, change_pct: 0.1, market_cap: null } },
+  ];
+  const filtered = filterMarketDashboardRows(filterRows, {
+    market: 'all', price: 'all', change: 'all', search: '', sector: 'Information Technology', marketCap: 'over_100b',
+  });
+
+  assert.deepEqual(filtered.map((row) => row.symbol), ['NVDA']);
+});

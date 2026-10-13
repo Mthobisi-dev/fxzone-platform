@@ -6,6 +6,7 @@ const { test } = require('node:test');
 const migrationPath = path.join(__dirname, '20261011191252_repair_live_session_realtime_authorization.sql');
 const followerAdmissionPath = path.join(__dirname, '20261012110000_enforce_live_session_follower_approval.sql');
 const sessionEndBroadcastPath = path.join(__dirname, '20261012215233_broadcast_live_session_end.sql');
+const admissionContractPath = path.join(__dirname, '20261013071833_repair_live_session_admission_contract.sql');
 
 test('live-session Realtime repair restores active-member access without public topics', () => {
   const migration = fs.readFileSync(migrationPath, 'utf8');
@@ -73,5 +74,25 @@ test('ending a live session broadcasts an authoritative private room event', () 
   assert.match(migration, /NEW\.status = 'ended'/i);
   assert.match(migration, /realtime\.send\([\s\S]*'session_ended'[\s\S]*'session_' \|\| NEW\.id::text[\s\S]*true/i);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.broadcast_live_session_end\(\) FROM PUBLIC/i);
+  assert.doesNotMatch(statements, /DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
+});
+
+test('forward admission repair preserves follower approval and private Realtime authorization', () => {
+  const migration = fs.readFileSync(admissionContractPath, 'utf8');
+  const statements = migration.replace(/^--.*$/gm, '');
+
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS requires_approval BOOLEAN/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.join_session/i);
+  assert.match(migration, /Follow the host before requesting access/i);
+  assert.match(migration, /v_role := 'pending'/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.review_session_participant/i);
+  assert.match(migration, /Participant no longer follows the host/i);
+  assert.match(migration, /SET search_path = pg_catalog, public, pg_temp/i);
+  assert.match(migration, /CREATE POLICY fxzone_read_own_session_membership/i);
+  assert.match(migration, /CREATE POLICY fxzone_realtime_private_read[\s\S]*ON realtime\.messages/i);
+  assert.match(migration, /CREATE POLICY fxzone_realtime_private_write[\s\S]*ON realtime\.messages/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.join_session\(uuid, uuid\) TO service_role/i);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.review_session_participant\(uuid, uuid, uuid, text\) TO service_role/i);
+  assert.doesNotMatch(statements, /ALTER TABLE realtime\.messages/i);
   assert.doesNotMatch(statements, /DROP TABLE|TRUNCATE|DELETE\s+FROM/i);
 });

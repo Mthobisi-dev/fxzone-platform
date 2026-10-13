@@ -21,12 +21,24 @@ export interface AiExplanationRequest {
 
 export type AiExplanationGenerator = (request: AiExplanationRequest) => Promise<string | null>;
 
+export interface SelectedAssetResearchItem {
+  label: string;
+  value: string;
+}
+
+export interface SelectedAssetResearchSection {
+  id: 'market_snapshot' | 'technical_context' | 'data_quality';
+  title: string;
+  items: SelectedAssetResearchItem[];
+}
+
 export interface SelectedAssetExplanation {
   source: ExplanationSource;
   isAiGenerated: boolean;
   explanation: string;
   evidence: string[];
   insight: SelectedAssetInsight;
+  research: SelectedAssetResearchSection[];
 }
 
 const AI_SYSTEM_PROMPT = [
@@ -48,6 +60,57 @@ function verifiedFallback(insight: SelectedAssetInsight): string {
   }
 
   return 'This verified-data briefing combines the latest provider quote with the deterministic historical indicators shown above. It is research context and does not recommend an action.';
+}
+
+function directionLabel(direction: SelectedAssetInsight['direction']): string {
+  if (direction === 'up') return 'Up today';
+  if (direction === 'down') return 'Down today';
+  if (direction === 'flat') return 'Unchanged today';
+  return 'Unavailable';
+}
+
+function formatChange(changePct: number | null): string {
+  if (changePct === null || !Number.isFinite(changePct)) return 'Not supplied';
+  return `${changePct > 0 ? '+' : ''}${changePct.toFixed(2)}%`;
+}
+
+/**
+ * Turns the verified insight into inspectable sections. These values are
+ * deterministic provider facts or calculated indicators; model wording never
+ * creates a new metric or a trading recommendation.
+ */
+export function buildSelectedAssetResearch(insight: SelectedAssetInsight): SelectedAssetResearchSection[] {
+  const sections: SelectedAssetResearchSection[] = [{
+    id: 'market_snapshot',
+    title: 'Market snapshot',
+    items: [
+      { label: 'Daily move', value: formatChange(insight.changePct) },
+      { label: 'Session state', value: directionLabel(insight.direction) },
+      { label: 'Verified status', value: insight.status === 'unavailable' ? 'Quote unavailable' : 'Quote available' },
+    ],
+  }];
+
+  if (insight.status === 'available' && insight.highlights.length > 0) {
+    sections.push({
+      id: 'technical_context',
+      title: 'Technical context',
+      items: insight.highlights.map((highlight, index) => ({
+        label: index === 0 ? 'Calculated indicator' : 'Calculated context',
+        value: highlight,
+      })),
+    });
+  }
+
+  sections.push({
+    id: 'data_quality',
+    title: 'Data quality',
+    items: [
+      { label: 'Provider', value: insight.dataSource ?? 'Not supplied' },
+      { label: 'Freshness', value: insight.freshness ?? 'Unavailable' },
+      { label: 'Provider time', value: insight.timestamp ?? 'Time unavailable' },
+    ],
+  });
+  return sections;
 }
 
 function isSafeAiCopy(value: string): boolean {
@@ -121,6 +184,7 @@ export async function buildSelectedAssetExplanation(
     explanation: verifiedFallback(insight),
     evidence: insight.highlights,
     insight,
+    research: buildSelectedAssetResearch(insight),
   };
 
   if (insight.status !== 'available') return fallback;

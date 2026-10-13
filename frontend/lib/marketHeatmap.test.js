@@ -38,3 +38,11 @@ test('only enlarges a tile when a provider supplies comparable volume', async ()
   assert.equal(marketHeatTileSize({ quote: { volume: null } }, 1_000), 'standard');
   assert.equal(marketHeatTileSize({ quote: null }, 1_000), 'standard');
 });
+
+test('uses the selected provider metric for heatmap tile size and does not substitute volume for missing market cap', async () => {
+  const { marketHeatTileSize } = await loadHeatmap();
+
+  assert.equal(marketHeatTileSize({ quote: { volume: 10, market_cap: 500 } }, 500, 'market_cap'), 'feature');
+  assert.equal(marketHeatTileSize({ quote: { volume: 10, market_cap: null } }, 500, 'market_cap'), 'standard');
+  assert.equal(marketHeatTileSize({ quote: { volume: 1_000, market_cap: 5 } }, 1_000, 'volume'), 'feature');
+});
