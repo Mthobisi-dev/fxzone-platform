@@ -19,3 +19,8 @@ test('rejects missing, zero, and non-finite post-video durations', async () => {
   assert.equal(isAllowedPostVideoDuration(Number.POSITIVE_INFINITY), false);
   assert.equal(isAllowedPostVideoDuration(Number.NaN), false);
 });
+test('story video accepts 60 seconds, rejects longer and unknown duration', async () => {
+ const m = await import('./postMedia.ts');
+ assert.equal(m.isAllowedStoryVideoDuration(60), true);
+ for (const value of [60.01, 0, NaN, Infinity]) assert.equal(m.isAllowedStoryVideoDuration(value), false);
+});

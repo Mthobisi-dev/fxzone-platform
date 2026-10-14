@@ -21,8 +21,6 @@ export async function getPostInteractionCounts(db: QueryClient, postId: string) 
     countRows(db.from('bookmarks').select('*', { count: 'exact', head: true }).eq('post_id', postId), true),
   ]);
   const counts = { likes_count, comments_count, reposts_count, saves_count };
-  const { error: reconcileError } = await db.from('posts').update({ likes_count, comments_count, reposts_count }).eq('id', postId);
-  if (reconcileError) console.warn('Could not reconcile post counters:', reconcileError.message);
   return counts;
 }
 

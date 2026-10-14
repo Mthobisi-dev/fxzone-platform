@@ -25,28 +25,44 @@ export async function GET(request: NextRequest) {
     const convIds = memberships.map((m: any) => m.conversation_id);
 
     // Batch: fetch all conversations in one query
-    const { data: conversations, error: convError } = await db
+    const conversationsResult = await db
       .from('conversations')
       .select(`
         id,
         name,
         is_group,
         created_at,
-        updated_at
+        updated_at,
+        canonical_conversation_id
       `)
       .in('id', convIds)
       .order('updated_at', { ascending: false });
 
-    if (convError) throw convError;
+    let hasCanonicalChatMigration = true;
+    let conversations: any[] | null = conversationsResult.data;
+    let conversationError = conversationsResult.error;
+    if (conversationsResult.error?.code === '42703' && conversationsResult.error.message.includes('canonical_conversation_id')) {
+      // Preserve all existing history until the one-time merge migration is applied.
+      hasCanonicalChatMigration = false;
+      const fallback = await db
+        .from('conversations')
+        .select('id,name,is_group,created_at,updated_at')
+        .in('id', convIds)
+        .order('updated_at', { ascending: false });
+      conversations = fallback.data;
+      conversationError = fallback.error;
+    }
+    if (conversationError) throw conversationError;
 
     // Batch: fetch all members for all conversations in ONE query (not N queries)
-    const { data: allMembers } = await db
+    const { data: allMembers, error: allMembersError } = await db
       .from('conversation_members')
       .select(`
         conversation_id,
         users:user_id (id, username, display_name, avatar_url)
       `)
       .in('conversation_id', convIds);
+    if (allMembersError) throw allMembersError;
 
     // Build a map of conversationId → members[]
     const membersByConvId: Record<string, any[]> = {};
@@ -59,21 +75,34 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Enrich conversations without per-item DB calls
-    const enriched = (conversations || []).map((conv: any) => {
+    // Enrich conversations without per-item DB calls. Older deployments may
+    // contain duplicate direct-chat rows, so return one stable (oldest) thread
+    // for each unordered pair even before the data-consolidation migration runs.
+    const visibleConversations = (conversations || []).filter((conv: any) => !conv.canonical_conversation_id);
+    const orderedConversations = [...visibleConversations].sort((a: any, b: any) =>
+      String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id)),
+    );
+    const seenDirectPairs = new Set<string>();
+    const enriched = orderedConversations.flatMap((conv: any) => {
       const membership = memberships.find((m: any) => m.conversation_id === conv.id);
-      return {
+      const members = membersByConvId[conv.id] || [];
+      if (hasCanonicalChatMigration && !conv.is_group && members.length === 2) {
+        const pairKey = members.map((member: any) => String(member.id)).sort().join(':');
+        if (seenDirectPairs.has(pairKey)) return [];
+        seenDirectPairs.add(pairKey);
+      }
+      return [{
         id: conv.id,
         name: conv.name,
         is_group: conv.is_group,
         created_at: conv.created_at,
         updated_at: conv.updated_at,
-        members: membersByConvId[conv.id] || [],
+        members,
         // Unread count is computed client-side from Realtime state; skip expensive per-conv COUNT query
         unread_count: 0,
         last_read_at: membership?.last_read_at || null,
-      };
-    });
+      }];
+    }).sort((a: any, b: any) => String(b.updated_at).localeCompare(String(a.updated_at)));
 
     return NextResponse.json(enriched);
   } catch (error: unknown) {
@@ -117,34 +146,13 @@ export async function POST(request: NextRequest) {
       return apiError('UNPROCESSABLE_ENTITY', 'One or more selected chat members no longer exist.', 422);
     }
 
-    // For 1-on-1 chats, check if a conversation already exists
-    if (!is_group && allMemberIds.length === 2) {
-      const otherId = allMemberIds.find(id => id !== user.id);
-      const { data: myConvs } = await db
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', user.id);
-
-      if (myConvs && myConvs.length > 0) {
-        const myConvIds = myConvs.map((c: any) => c.conversation_id);
-        const { data: shared } = await db
-          .from('conversation_members')
-          .select('conversation_id')
-          .eq('user_id', otherId)
-          .in('conversation_id', myConvIds);
-
-        if (shared && shared.length > 0) {
-          const { data: existing } = await db
-            .from('conversations')
-            .select('*')
-            .eq('id', shared[0].conversation_id)
-            .eq('is_group', false)
-            .maybeSingle();
-          if (existing) {
-            return NextResponse.json({ ...existing, members: allMemberIds });
-          }
-        }
-      }
+    if (is_group !== true) {
+      if (allMemberIds.length !== 2) return apiError('UNPROCESSABLE_ENTITY', 'Select exactly one other user for a direct chat.', 422);
+      const { data: conversation, error } = await db.rpc('get_or_create_direct_conversation', {
+        p_user: user.id, p_other: allMemberIds.find(id => id !== user.id),
+      });
+      if (error) throw error;
+      return NextResponse.json({ ...conversation, members: allMemberIds });
     }
 
     // Create new conversation

@@ -20,7 +20,6 @@ import {
   Bookmark,
   Trash2,
   AlertTriangle,
-  Building2,
   ShieldCheck,
   TrendingUp,
   BarChart2,
@@ -52,6 +51,22 @@ export default function ProfilePage() {
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'about'>('posts');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [connectionKind, setConnectionKind] = useState<'followers' | 'following' | null>(null);
+  const [connections, setConnections] = useState<Array<{id: string; username: string; display_name: string; avatar_url: string | null}>>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [connectionsError, setConnectionsError] = useState('');
+  const [connectionsMore, setConnectionsMore] = useState(false);
+  const openConnections = async (kind: 'followers' | 'following', offset = 0) => {
+    setConnectionKind(kind); setConnectionsLoading(true); setConnectionsError('');
+    if (offset === 0) setConnections([]);
+    try {
+      const result = await api.get(`/api/social/users/${profile?.id || targetId}/connections?kind=${kind}&offset=${offset}`);
+      setConnections(prev => offset ? [...prev, ...result.users] : result.users);
+      setConnectionsMore(result.has_more === true);
+    } catch { setConnectionsError('Unable to load this list. Please retry.'); }
+    finally { setConnectionsLoading(false); }
+  };
 
   // Delete account state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -444,12 +459,7 @@ export default function ProfilePage() {
                 </span>
               </div>
               <span className="text-xs text-zinc-400 block mt-1 font-mono">@{profile?.username}</span>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <span className="text-[10px] font-bold text-amber-300 flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-lg shadow-sm">
-                  <Building2 size={12} className="text-amber-400" />
-                  Preferred Broker: <strong className="text-white">{profile?.preferred_broker || profile?.preferredBroker || 'Exness'}</strong>
-                </span>
-              </div>
+
             </div>
           </div>
 
@@ -512,23 +522,20 @@ export default function ProfilePage() {
             <p className="text-xs text-zinc-300 leading-relaxed my-3 font-medium">{profile.bio}</p>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-zinc-900/80">
-            <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
+          <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-zinc-900/80">
+            <button type="button" onClick={() => openConnections('followers')} className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
               <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Followers</span>
               <span className="text-sm font-extrabold text-white block">
                 {profile?.followersCount ?? profile?.followers_count ?? 0}
               </span>
-            </div>
-            <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
+            </button>
+            <button type="button" onClick={() => openConnections('following')} className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
               <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Following</span>
               <span className="text-sm font-extrabold text-white block">
                 {profile?.followingCount ?? profile?.following_count ?? 0}
               </span>
-            </div>
-            <div className="p-2.5 bg-zinc-900/50 border border-zinc-850 rounded-xl">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold block mb-0.5">Technical Posts</span>
-              <span className="text-sm font-extrabold text-white block">{posts.length}</span>
-            </div>
+            </button>
+
           </div>
         </div>
       </Card>
@@ -616,15 +623,6 @@ export default function ProfilePage() {
             </div>
             <div>
               <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
-                Preferred Broker
-              </h4>
-              <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
-                <Building2 size={13} className="text-amber-400" />
-                {profile?.preferred_broker || profile?.preferredBroker || 'Exness'}
-              </span>
-            </div>
-            <div>
-              <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
                 About
               </h4>
               <p className="text-xs text-zinc-300 leading-relaxed">{profile?.bio || 'No bio set.'}</p>
@@ -662,6 +660,19 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {connectionKind && <Modal isOpen onClose={() => setConnectionKind(null)} title={connectionKind === 'followers' ? 'Followers' : 'Following'}>
+        <div className="space-y-3">
+          {connections.map(person => <a key={person.id} href={`/profile/${person.id}`} className="flex items-center gap-3 rounded-lg p-2 hover:bg-zinc-800">
+            <Avatar src={person.avatar_url || undefined} alt={person.username} size="sm" />
+            <span>{person.display_name || person.username}<span className="block text-xs text-zinc-400">@{person.username}</span></span>
+          </a>)}
+          {connectionsError && <p role="alert">{connectionsError}</p>}
+          {connectionsLoading ? <p role="status">Loading...</p> : <>
+            {!connections.length && !connectionsError && <p>No {connectionKind} yet.</p>}
+            {(connectionsMore || connectionsError) && <Button onClick={() => openConnections(connectionKind, connections.length)}>Load more / retry</Button>}
+          </>}
+        </div>
+      </Modal>}
       {/* Edit Profile Modal */}
       {editModalOpen && (
         <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Edit Your Profile">

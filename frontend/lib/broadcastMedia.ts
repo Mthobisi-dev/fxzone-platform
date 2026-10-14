@@ -22,3 +22,8 @@ export function stopBroadcastTracks(stream: MediaStream): void {
     track.stop();
   });
 }
+
+/** True only when the active browser exposes the screen-capture API. */
+export function supportsScreenShare(mediaDevices?: Pick<MediaDevices, 'getDisplayMedia'>): boolean {
+  return typeof mediaDevices?.getDisplayMedia === 'function';
+}

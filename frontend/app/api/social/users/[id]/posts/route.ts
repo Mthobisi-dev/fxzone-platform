@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 import { apiError } from '@/lib/api-error';
 
 // Fetch posts and chart analyses published by a profile. The route accepts both
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const { data: posts, error, count } = await db
       .from('posts')
-      .select('id, content, image_url, caption, asset_tags, likes_count, comments_count, reposts_count, is_story, is_pinned, created_at, users:user_id (id, username, display_name, avatar_url, role)', { count: 'exact' })
+      .select('id, content, image_url, caption, asset_tags, show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share, likes_count, comments_count, reposts_count, is_story, is_pinned, created_at, users:user_id (id, username, display_name, avatar_url, role)', { count: 'exact' })
       .eq('user_id', profile.id)
       .or('is_story.is.null,is_story.eq.false')
       .order('is_pinned', { ascending: false })
@@ -27,8 +27,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       .limit(50);
     if (error) throw error;
 
+    const { user: viewer } = await getUserFromRequest(request);
+    const ids = (posts || []).map((post: any) => post.id);
+    const states = viewer && ids.length ? await Promise.all(['reactions','bookmarks','reposts'].map(table => db.from(table).select('post_id').eq('user_id',viewer.id).in('post_id',ids))) : [];
+    for (const state of states) if (state.error) throw state.error;
+    const active = states.map(state => new Set((state.data || []).map(row => row.post_id)));
     const mappedPosts = (posts || []).map((post: any) => ({
       ...post,
+      is_liked_by_user: active[0]?.has(post.id) || false,
+      is_bookmarked_by_user: active[1]?.has(post.id) || false,
+      is_reposted_by_user: active[2]?.has(post.id) || false,
       user_id: post.users?.id || profile.id,
       user: {
         id: post.users?.id || profile.id,

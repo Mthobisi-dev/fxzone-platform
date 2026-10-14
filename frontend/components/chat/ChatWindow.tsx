@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { useMarketStore } from '@/stores/marketStore';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { TradingViewChatPanel } from '../trading/TradingViewChatPanel';
@@ -324,13 +325,13 @@ export function ChatWindow({
                               <div className="text-right">
                                 <span className="text-[9px] text-zinc-500 uppercase block">Snapshot Price</span>
                                 <span className="text-[11px] font-extrabold text-emerald-400">
-                                  {msg.content.match(/Price:\s*([^\s|]+)/)?.[1] || '1.0850'}
+                                  {msg.content.match(/Price:\s*([^\s|]+)/)?.[1] || 'Unavailable'}
                                 </span>
                               </div>
                             </div>
 
                             <button
-                              onClick={() => setViewMode('chart')}
+                              onClick={() => { const symbol = msg.content.match(/Symbol:\s*([^\s|]+)/)?.[1]; if (symbol) useMarketStore.getState().setSelectedAsset(symbol); setViewMode('chart'); }}
                               className="w-full h-7 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
                             >
                               <ExternalLink size={12} /> Inspect Live TradingView Chart

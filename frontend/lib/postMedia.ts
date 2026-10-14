@@ -29,3 +29,11 @@ export function readLocalVideoDuration(file: File): Promise<number> {
     video.src = url;
   });
 }
+
+export const MAX_STORY_VIDEO_DURATION_SECONDS = 60;
+export function isAllowedStoryVideoDuration(duration: number): boolean {
+  return Number.isFinite(duration) && duration > 0 && duration <= MAX_STORY_VIDEO_DURATION_SECONDS;
+}
+export function isVideoMediaUrl(url: string): boolean {
+  return /\.(mp4|webm|mov|mkv)(?:[?#]|$)/i.test(url);
+}

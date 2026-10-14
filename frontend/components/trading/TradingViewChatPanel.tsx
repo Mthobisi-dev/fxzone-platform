@@ -46,7 +46,13 @@ export function TradingViewChatPanel({
   className,
   isCompact = false
 }: TradingViewChatPanelProps) {
-  const { selectedAsset, setSelectedAsset, assets, prices } = useMarketStore();
+  const { selectedAsset, setSelectedAsset, assets, prices, fetchAssets, fetchPrices } = useMarketStore();
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  useEffect(() => {
+    void fetchAssets(); void fetchPrices();
+    const timer = setInterval(() => { if (!document.hidden) void fetchPrices(); }, 60_000);
+    return () => clearInterval(timer);
+  }, [fetchAssets, fetchPrices]);
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -58,7 +64,7 @@ export function TradingViewChatPanel({
   const emaSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
 
   // Timeframe state
-  const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1h' | '4h' | '1d'>('1h');
+  const [timeframe, setTimeframe] = useState<'1h' | '1d'>('1h');
   const [chartType, setChartType] = useState<'candlestick' | 'line' | 'area'>('candlestick');
   const [isLoading, setIsLoading] = useState(false);
   const [activeIndicators, setActiveIndicators] = useState<{ sma: boolean; ema: boolean; volume: boolean }>({
@@ -89,18 +95,13 @@ export function TradingViewChatPanel({
   const [aiAnalysisText, setAiAnalysisText] = useState<string>('');
 
   // Active asset price
-  const currentSymbol = selectedAsset?.symbol || 'EURUSD';
+  const currentSymbol = selectedAsset?.symbol || '';
   const currentPriceObj = prices[currentSymbol];
-  const livePrice = currentPriceObj?.price || (selectedAsset as any)?.lastPrice || 1.0850;
+  const livePrice = Number.isFinite(currentPriceObj?.price) && currentPriceObj.price > 0 ? currentPriceObj.price : null;
 
   useEffect(() => {
-    if (livePrice && !signalEntry) {
-      const isForexPip = (selectedAsset as any)?.pipSize || (selectedAsset as any)?.pip_size;
-      setSignalEntry(livePrice.toString());
-      setSignalTP((livePrice * 1.008).toFixed(isForexPip ? 5 : 2));
-      setSignalSL((livePrice * 0.995).toFixed(isForexPip ? 5 : 2));
-    }
-  }, [livePrice, selectedAsset]);
+    setSignalEntry(''); setSignalTP(''); setSignalSL('');
+  }, [currentSymbol]);
 
   // Handle Chart Creation & Data Loading
   useEffect(() => {
@@ -108,6 +109,10 @@ export function TradingViewChatPanel({
     let isMounted = true;
 
     chartContainerRef.current.innerHTML = '';
+    candlestickSeriesRef.current = null; lineSeriesRef.current = null;
+    areaSeriesRef.current = null; volumeSeriesRef.current = null;
+    smaSeriesRef.current = null; emaSeriesRef.current = null;
+    horizontalLinesRef.current = []; trendLinesRef.current = []; trendlineStartRef.current = null;
 
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
@@ -171,7 +176,7 @@ export function TradingViewChatPanel({
     if (activeIndicators.sma) {
       smaSeriesRef.current = (chart.addSeries as any)(LineSeries, {
         color: '#f59e0b',
-        lineWidth: 1.5,
+        lineWidth: 2,
         title: 'SMA 20',
       });
     }
@@ -180,7 +185,7 @@ export function TradingViewChatPanel({
     if (activeIndicators.ema) {
       emaSeriesRef.current = (chart.addSeries as any)(LineSeries, {
         color: '#ec4899',
-        lineWidth: 1.5,
+        lineWidth: 2,
         title: 'EMA 50',
       });
     }
@@ -225,15 +230,24 @@ export function TradingViewChatPanel({
 
     // Load History
     const fetchHistory = async () => {
+      if (!currentSymbol) {
+        setIsLoading(false);
+        setHistoryError('Choose an instrument to load verified market history.');
+        return;
+      }
       setIsLoading(true);
+      setHistoryError(null);
       try {
-        const res = await api.get(`/api/market/prices/${currentSymbol}/history`, {
+        const response = await api.get(`/api/market/prices/${encodeURIComponent(currentSymbol)}/history`, {
           params: { timeframe },
         });
 
         if (!isMounted) return;
 
-        if (Array.isArray(res) && res.length > 0) {
+        if (!Array.isArray(response)) throw new Error('Invalid provider history.');
+        const res = Array.from(new Map(response.filter((row: any) => [row.time,row.open,row.high,row.low,row.close].every(Number.isFinite)).map((row: any) => [row.time,row])).values()).sort((a: any,b: any) => a.time-b.time) as any[];
+        if (!res.length) throw new Error('No verified historical candles are available.');
+        if (res.length > 0) {
           if (chartType === 'candlestick') {
             const candleData = res.map((h: any) => ({
               time: h.time,
@@ -295,6 +309,7 @@ export function TradingViewChatPanel({
         }
       } catch (err) {
         console.error('Failed to load chart history:', err);
+        if (isMounted) setHistoryError('Verified chart history is unavailable. Try another instrument or interval.');
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -311,10 +326,13 @@ export function TradingViewChatPanel({
       }
     };
 
+    const observer = new ResizeObserver(handleResize);
+    observer.observe(chartContainerRef.current);
     window.addEventListener('resize', handleResize);
 
     return () => {
       isMounted = false;
+      observer.disconnect();
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
@@ -340,7 +358,8 @@ export function TradingViewChatPanel({
 
   // Generate & Share Chart Snapshot into Chat
   const handleShareSnapshot = () => {
-    const formattedText = `[TradingView Chart] Symbol: ${currentSymbol} | Timeframe: ${timeframe} | Price: ${livePrice.toFixed(4)}`;
+    if (livePrice === null) return;
+    const formattedText = `[TradingView Chart] Symbol: ${currentSymbol} | Timeframe: ${timeframe} | Price: ${livePrice} | Source: ${currentPriceObj?.data_source} | Status: ${currentPriceObj?.freshness} | As of: ${currentPriceObj?.timestamp}`;
     if (onShareSnapshot) {
       onShareSnapshot(formattedText);
     }
@@ -348,6 +367,8 @@ export function TradingViewChatPanel({
 
   // Generate Signal and Share to Chat
   const handleCreateSignal = () => {
+    if (![signalEntry, signalTP, signalSL].every(value => Number.isFinite(Number(value)) && Number(value) > 0)) return;
+    if (!currentSymbol) return;
     const text = `[Signal Card] Side: ${signalSide} | Asset: ${currentSymbol} | Entry: ${signalEntry} | TP: ${signalTP} | SL: ${signalSL} | Note: ${signalNote || 'FxZone Trading Strategy'}`;
     if (onShareSignal) {
       onShareSignal(text);
@@ -358,19 +379,11 @@ export function TradingViewChatPanel({
 
   // Fetch AI Technical Intelligence
   const handleFetchAiIntelligence = async () => {
-    setAiModalOpen(true);
+    setAiModalOpen(true); setAiAnalysisText('Loading verified research...');
     try {
-      const res = await api.get(`/api/ai/sentiment/${currentSymbol}`);
-      if (res) {
-        setAiAnalysisText(
-          res.summary || res.analysis || `AI technical rating for ${currentSymbol} is ${res.sentiment || 'Bullish'} with ${(res.confidence * 100 || 85).toFixed(0)}% confidence.`
-        );
-      } else {
-        setAiAnalysisText(`Current Technical Bias for ${currentSymbol}: Bullish momentum with strong support near ${(livePrice * 0.995).toFixed(4)}.`);
-      }
-    } catch (err) {
-      setAiAnalysisText(`Current Technical Bias for ${currentSymbol}: Bullish momentum above key support level.`);
-    }
+      const result = await api.get(`/api/market/explanation/${encodeURIComponent(currentSymbol)}`);
+      setAiAnalysisText(typeof result?.explanation === 'string' ? result.explanation : 'Verified research is unavailable.');
+    } catch { setAiAnalysisText('Verified research is unavailable. No technical conclusions can be drawn from missing data.'); }
   };
 
   return (
@@ -389,6 +402,7 @@ export function TradingViewChatPanel({
               }}
               className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white font-bold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer flex items-center gap-1"
             >
+              <option value="" disabled>Select instrument</option>
               {assets.map((a) => (
                 <option key={a.id || a.symbol} value={a.symbol}>
                   {a.symbol} • {a.name}
@@ -399,7 +413,7 @@ export function TradingViewChatPanel({
 
           {/* Timeframe Buttons */}
           <div className="flex bg-zinc-900/90 border border-zinc-850 rounded-lg p-0.5 gap-0.5">
-            {(['1m', '5m', '15m', '1h', '4h', '1d'] as const).map((tf) => (
+            {(['1h', '1d'] as const).map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
@@ -495,6 +509,7 @@ export function TradingViewChatPanel({
           {onShareSnapshot && (
             <button
               onClick={handleShareSnapshot}
+              disabled={livePrice === null || !!historyError || isLoading}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold transition-all shadow-md shadow-blue-900/30"
               title="Snapshot Chart & Post to Chat"
             >
@@ -559,7 +574,7 @@ export function TradingViewChatPanel({
             <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-20">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-blue-400 font-bold">
                 <Activity size={14} className="animate-spin text-blue-500" />
-                <span>Syncing TradingView Feeds...</span>
+                <span>Loading provider candles...</span>
               </div>
             </div>
           )}

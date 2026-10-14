@@ -20,6 +20,7 @@ interface SessionControlsProps {
   isSharing: boolean;
   isStartingShare?: boolean;
   canStartShare?: boolean;
+  screenShareSupported?: boolean;
   hasSharedAudio?: boolean;
   isRecording?: boolean;
   recordingDuration?: string;
@@ -38,6 +39,7 @@ export function SessionControls({
   isSharing,
   isStartingShare = false,
   canStartShare = true,
+  screenShareSupported = true,
   hasSharedAudio = false,
   isRecording = false,
   recordingDuration = '00:00',
@@ -141,13 +143,13 @@ export function SessionControls({
 
             <button
               onClick={handleShare}
-              disabled={isStartingShare || (!isSharing && !canStartShare)}
+              disabled={isStartingShare || (!isSharing && (!canStartShare || !screenShareSupported))}
               className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
                 isSharing
                   ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30 animate-pulse'
                   : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
               }`}
-              title={isSharing ? 'Stop screen sharing' : 'Share screen with the room'}
+              title={isSharing ? 'Stop screen sharing' : !screenShareSupported ? 'This browser cannot share a device screen' : 'Share screen with the room'}
             >
               {isSharing ? <ScreenShareOff size={15} /> : <ScreenShare size={15} />}
               <span>{isStartingShare ? 'Choose a screen…' : isSharing ? 'Stop sharing' : !canStartShare ? 'Connecting…' : 'Share screen'}</span>

@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
       },
       content: p.content,
       image_url: p.image_url,
-      media_type: p.image_url ? 'image' : 'none',
+      media_type: !p.image_url ? 'none' : /\.(mp4|webm|mov|m4v|mkv)(?:[?#].*)?$/i.test(p.image_url) ? 'video' : 'image',
       likes_count: p.likes_count || 0,
       comments_count: p.comments_count || 0,
       reposts_count: p.reposts_count || 0,

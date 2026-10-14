@@ -6,6 +6,9 @@ import { Button } from '../ui/Button';
 import { Plus, X, ArrowLeft, ArrowRight, Upload, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
+import { uploadSocialMedia } from '@/lib/uploadSocialMedia';
+import { isAllowedStoryVideoDuration, isVideoMediaUrl, readLocalVideoDuration } from '@/lib/postMedia';
+import { playExclusive } from '@/lib/mediaPlayback';
 import { Modal } from '../ui/Modal';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -81,6 +84,8 @@ export function StoryBar() {
   }, {} as Record<string, Story[]>);
 
   const handleCreateStory = async () => {
+    if (publishing) return;
+    setPublishError(null);
     if (!newContent.trim() && !newImageUrl.trim() && !storyFile) return;
     setPublishing(true);
     try {
@@ -88,12 +93,10 @@ export function StoryBar() {
 
       // If a file was selected, upload it first
       if (storyFile) {
-        const formData = new FormData();
-        formData.append('file', storyFile);
-        const uploadRes = await api.post('/api/social/posts/upload', formData);
-        if (uploadRes?.url) {
-          imageUrl = uploadRes.url;
+        if (storyFile.type.startsWith('video/') && !isAllowedStoryVideoDuration(await readLocalVideoDuration(storyFile))) {
+          throw new Error('Video stories must be 60 seconds or shorter.');
         }
+        imageUrl = await uploadSocialMedia(storyFile);
       }
 
       await api.post('/api/social/posts', {
@@ -142,7 +145,12 @@ export function StoryBar() {
   };
 
   // Preview URL for the selected file
-  const filePreviewUrl = storyFile ? URL.createObjectURL(storyFile) : null;
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!storyFile) { setFilePreviewUrl(null); return; }
+    const url = URL.createObjectURL(storyFile); setFilePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [storyFile]);
 
   return (
     <div className="flex gap-4 items-center bg-zinc-950/20 border border-zinc-850 p-3 rounded-xl overflow-x-auto select-none no-scrollbar">
@@ -189,12 +197,16 @@ export function StoryBar() {
             {/* Image Preview */}
             {(filePreviewUrl || newImageUrl.trim()) && (
               <div className="relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
+                {storyFile?.type.startsWith('video/') || isVideoMediaUrl(newImageUrl) ? (
+                  <video src={filePreviewUrl || newImageUrl.trim()} controls playsInline className="w-full h-48 object-contain" onPlay={e => playExclusive(e.currentTarget)} />
+                ) : (
                 <img
                   src={filePreviewUrl || newImageUrl.trim()}
                   alt="Story preview"
                   className="w-full h-48 object-cover"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
+                )}
                 <button
                   onClick={() => { setStoryFile(null); setNewImageUrl(''); }}
                   className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80"
@@ -220,7 +232,7 @@ export function StoryBar() {
               <label className="flex-1 flex items-center gap-2 px-3 py-2.5 bg-zinc-900/60 border border-zinc-800 rounded-lg cursor-pointer hover:bg-zinc-850 transition-colors group">
                 <Upload size={14} className="text-zinc-500 group-hover:text-purple-400 transition-colors" />
                 <span className="text-[10px] text-zinc-400 group-hover:text-zinc-300">
-                  {storyFile ? storyFile.name : 'Upload Image'}
+                  {storyFile ? storyFile.name : 'Image or video (up to 60s)'}
                 </span>
                 <input
                   type="file"
@@ -315,30 +327,33 @@ export function StoryBar() {
               {/* Story Content View */}
               <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
                 {activeStoryGroup[activeStoryIdx].imageUrl ? (
+                  isVideoMediaUrl(activeStoryGroup[activeStoryIdx].imageUrl || '') ? (
+                    <video key={activeStoryGroup[activeStoryIdx].id} src={activeStoryGroup[activeStoryIdx].imageUrl} controls autoPlay muted playsInline onEnded={nextStory} onPlay={e => playExclusive(e.currentTarget)} className="absolute inset-0 w-full h-full object-contain" />
+                  ) : (
                   <img
                     src={activeStoryGroup[activeStoryIdx].imageUrl}
                     alt="Story image"
                     className="absolute inset-0 w-full h-full object-cover"
-                  />
+                  />                  )
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-tr from-indigo-950 via-purple-950 to-pink-950" />
                 )}
                 
                 {/* Story Text content (with background block if image) */}
-                <div className="z-10 bg-black/45 backdrop-blur-md border border-white/10 p-4 rounded-xl max-w-[85%] text-center text-sm font-semibold text-white leading-relaxed shadow-lg">
+                <div className="z-10 pointer-events-none bg-black/45 backdrop-blur-md border border-white/10 p-4 rounded-xl max-w-[85%] text-center text-sm font-semibold text-white leading-relaxed shadow-lg">
                   {activeStoryGroup[activeStoryIdx].content}
                 </div>
               </div>
 
               {/* Navigation overlays */}
-              <div className="absolute inset-y-0 left-0 w-1/4 z-10 cursor-pointer flex items-center pl-2" onClick={prevStory}>
+              <div className="absolute top-1/2 left-0 w-10 z-10 cursor-pointer flex items-center pl-2" onClick={prevStory}>
                 {activeStoryIdx > 0 && (
                   <div className="h-8 w-8 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70">
                     <ArrowLeft size={16} />
                   </div>
                 )}
               </div>
-              <div className="absolute inset-y-0 right-0 w-1/4 z-10 cursor-pointer flex items-center justify-end pr-2" onClick={nextStory}>
+              <div className="absolute top-1/2 right-0 w-10 z-10 cursor-pointer flex items-center justify-end pr-2" onClick={nextStory}>
                 <div className="h-8 w-8 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70">
                   <ArrowRight size={16} />
                 </div>
