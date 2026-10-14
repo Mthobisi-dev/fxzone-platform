@@ -17,19 +17,19 @@ export interface SessionChatMessage {
 
 interface SessionChatProps {
   messages: SessionChatMessage[];
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => boolean;
   currentUserId: string;
+  connected?: boolean;
 }
 
-export function SessionChat({ messages, onSendMessage, currentUserId }: SessionChatProps) {
+export function SessionChat({ messages, onSendMessage, currentUserId, connected = true }: SessionChatProps) {
   const [text, setText] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    onSendMessage(text.trim());
-    setText('');
+    if (!text.trim() || !connected) return;
+    if (onSendMessage(text.trim())) setText('');
   };
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function SessionChat({ messages, onSendMessage, currentUserId }: SessionC
   }, [messages]);
 
   return (
-    <div className="w-80 h-full border-l border-zinc-850 bg-zinc-950/30 flex flex-col justify-between shrink-0">
+    <div className="w-full xl:w-80 h-80 xl:h-auto min-h-72 border-t xl:border-t-0 xl:border-l border-zinc-850 bg-zinc-950/30 flex flex-col justify-between shrink-0">
       {/* Header */}
       <div className="h-12 px-4 border-b border-zinc-850 flex items-center justify-between bg-zinc-900/10 select-none">
         <span className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -52,7 +52,7 @@ export function SessionChat({ messages, onSendMessage, currentUserId }: SessionC
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 min-h-0">
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-4 text-center select-none">
-            <p className="text-[10px] text-zinc-550 italic">Discussion is silent. Type a message below to start the conversation.</p>
+            <p className="text-sm text-zinc-400">Say hello or ask the host a question.</p>
           </div>
         ) : (
           messages.map((msg) => {
@@ -86,11 +86,14 @@ export function SessionChat({ messages, onSendMessage, currentUserId }: SessionC
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Ask host a question..."
-          className="flex-1 h-8 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+          maxLength={2000}
+          aria-label="Message the broadcast"
+          className="flex-1 min-w-0 h-10 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 text-sm text-white placeholder-zinc-400 focus:outline-none focus:border-zinc-700"
         />
         <button
           type="submit"
-          disabled={!text.trim()}
+          disabled={!text.trim() || !connected}
+          aria-label={connected ? 'Send message' : 'Waiting for connection'}
           className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white transition-colors disabled:opacity-40"
         >
           <Send size={12} />

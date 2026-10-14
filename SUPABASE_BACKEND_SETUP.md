@@ -92,12 +92,18 @@ Realtime policies, the authenticated user's own membership-read policy, and
 the approval/join RPCs. The second restores `live_sessions.requires_approval`
 for projects where an earlier backend-hardening migration was missed; without
 it, the session list and Start Broadcast action return an error. Do not disable
-row security or make session channels public to bypass this.
+row security or make session channels public to bypass this. Also apply the later
+admission repairs in order: `20261012110000_enforce_live_session_follower_approval.sql`,
+`20261012215233_broadcast_live_session_end.sql`,
+`20261013071833_repair_live_session_admission_contract.sql`, and
+`20261013113000_restore_live_session_host_admission.sql`. The last repair ensures
+an old pending/rejected membership cannot make the session owner await approval.
 
 In **Database → Replication → Realtime**, confirm **Allow public access** is
 disabled. Supabase only enforces `realtime.messages` policies for private
-channels when that setting is disabled. The browser must then show **Signal
-connected** for both the host and an approved viewer before sharing starts.
+channels. Disabling public access also prevents clients from joining public
+topics. The browser must show **Connected** for both the host and an approved
+viewer before sharing starts.
 
 The waiting room now uses `GET /api/sessions/<id>/join` to read its own admission
 state. Only the initial join uses POST. Approved/rejected decisions are not
@@ -113,18 +119,59 @@ the signaling messages; a TURN provider relays media when a direct route fails.
 Deploy the current commit to the Vercel production project rooted at `frontend`.
 Use two distinct accounts in separate browsers/devices:
 
-1. Create an approval-required room as host. Request access as viewer.
-2. Approve once; verify the viewer leaves the waiting room and stays approved.
-3. Verify both rooms show **Signal connected**. Choose a screen/window/tab with
-   Share Screen on a supported desktop browser. Check actual moving video in the
-   viewer browser; the host's local preview is not proof of broadcast delivery.
+1. Create a room as host. Confirm host controls open immediately, without approval.
+   In a second account, follow the host and request access. The viewer should see
+   **Request sent**; the host should see an **Approve** action under Access Requests.
+2. Approve once; verify the viewer enters automatically and stays approved. A
+   nonfollower must use **Follow & Request Access** before requesting admission.
+3. Verify both rooms show **Connected**. Use **Share screen** in a supported
+   desktop browser and choose a presentation tab/window. The picker discourages
+   capturing the broadcast tab where supported. The host sees a sharing-status
+   panel with no local video, preventing recursive screen feedback even if a
+   whole monitor is selected. Verify moving video on the viewer's device.
+   Viewers start muted; use **Enable audio** to hear audio shared by the host.
+   **Mute shared audio** controls the capture's audio, not a microphone. Select
+   the browser's tab-audio option if sound is needed. **Pause shared video** pauses
+   the screen track, not a camera. Recording requires an active shared screen.
 4. Stop and restart sharing, then briefly disconnect/reconnect the viewer's
    network. Confirm delivery recovers. Repeat across two different networks to
    test TURN. Confirm `/api/webrtc/credentials?sessionId=<id>` returns 200 for an
    active host/viewer and denies pending/nonmembers. Do not copy credentials.
 5. End the session and confirm the viewer leaves the media room within 5 seconds.
+6. Cancel a pending request. Verify it disappears from the host's requests. Test
+   a declined request and an interrupted connection; neither may enter the private
+   room. On a phone, scroll to requests/chat and verify the controls fit the screen.
+7. Click Share twice quickly, cancel the picker, and retry. Only one picker should
+   open. Stop sharing using the browser toolbar and verify capture/audio/recording
+   stop. Leave while a picker is open; accepting it must not keep capturing.
 
 If connection stays unavailable, inspect the private channel error and verify
-the migrations in the same Supabase project used by Vercel. No database migration
-has been applied automatically. Local tests cover signaling lifecycle and API
+the migrations in the same Supabase project used by Vercel. The broadcast role/privacy repair was applied and verified on the connected production project on 2026-10-14. Local tests cover signaling lifecycle and API
 ownership; they do not replace this two-browser media and production RLS check.
+
+### Broadcast repair verification (2026-10-14)
+
+`20261014051643_repair_broadcast_participant_roles_and_privacy.sql` adds the
+missing `pending` and `rejected` participant-role values and removes the generic
+broadcast SELECT policy that bypassed scoped topic authorization. It has been
+applied to the connected production project. Other environments need this
+migration after the scoped Realtime policies; commit it before using new enum
+values. The migration is idempotent and does not delete users or sessions.
+
+Both rollback-only SQL tests in `supabase/tests/` passed against production:
+- `live_session_admission.sql`: immediate host admission, pending follower,
+  denial of nonfollowers/nonhost approval, host approval, stale host repair.
+- `live_session_realtime.sql`: authenticated host/viewer signaling allowed;
+  pending users and nonmembers denied for both reads and writes. Test messages
+  use `skip_broadcast`; no test data persists.
+
+Application verification passed: 71 tests, typecheck, `npm run lint -- --quiet`
+(existing warnings remain), and production build. Real two-device audio/video
+and cross-network TURN delivery still need the manual checklist above.
+
+The post-migration security advisor also reported existing issues outside this
+broadcast repair: RLS tables without policies (including chat membership),
+trigger-function execute grants, a mutable function search path, the pg_trgm
+extension in public, and disabled leaked-password protection. Do not solve these
+by granting blanket access. See the [Supabase database linter](https://supabase.com/docs/guides/database/database-linter)
+and [password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).

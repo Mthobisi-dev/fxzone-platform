@@ -3,6 +3,7 @@
  * Institutional-grade peer-to-peer screen sharing and real-time audio/video streaming.
  */
 import { api } from '@/lib/api';
+import { broadcastCaptureOptions, stopBroadcastTracks } from '@/lib/broadcastMedia';
 
 function buildBaseRtcConfig(): RTCConfiguration {
   const iceServers: RTCIceServer[] = [
@@ -171,28 +172,21 @@ export class WebRTCClient {
    */
   public async startLocalStream(): Promise<MediaStream> {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: 'monitor',
-          cursor: 'always',
-          frameRate: { ideal: 30, max: 60 },
-          width: { ideal: 1920, max: 2560 },
-          height: { ideal: 1080, max: 1440 },
-        } as any,
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      const stream = await navigator.mediaDevices.getDisplayMedia(broadcastCaptureOptions());
+
+      if (this.closed) {
+        stopBroadcastTracks(stream);
+        throw new Error('The broadcast room has closed.');
+      }
 
       await this.setLocalStream(stream);
 
       // Handle user stopping screen share via native browser bar
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        videoTrack.onended = () => {
-          this.setLocalStream(null);
+        videoTrack.onended = async () => {
+          stopBroadcastTracks(stream);
+          if (this.localStream === stream) await this.setLocalStream(null);
         };
       }
 

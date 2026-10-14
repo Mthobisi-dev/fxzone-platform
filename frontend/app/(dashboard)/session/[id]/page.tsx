@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { SessionRoom } from '@/components/live/SessionRoom';
@@ -24,11 +24,16 @@ export default function SessionRoomPage() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [requiresHostFollow, setRequiresHostFollow] = useState(false);
   const [isRequestingAccess, setIsRequestingAccess] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const joinPromiseRef = useRef<{ key: string; promise: Promise<any> } | null>(null);
+  const leavingRef = useRef(false);
+  const accessKey = `${sessionId}:${userId}`;
+  const activeRoomRef = useRef(accessKey);
 
-  const fetchSessionDetails = async () => {
-    try {
+  const fetchSessionDetails = async (isCurrent: () => boolean = () => true) => {
       const response = await api.get(`/api/sessions/${sessionId}`);
-      if (response) {
+      if (response && isCurrent()) {
         setSession({
           ...response,
           hostId: response.host_id || response.hostId,
@@ -40,15 +45,19 @@ export default function SessionRoomPage() {
           },
         });
       }
-    } catch (err) {
-      console.error('Error fetching session details:', err);
-    }
+      return response;
   };
 
-  const joinSession = async () => {
+  const joinSession = async (isCurrent: () => boolean = () => activeRoomRef.current === accessKey) => {
+    if (leavingRef.current) return null;
+    const pending = joinPromiseRef.current?.key === accessKey
+      ? joinPromiseRef.current.promise
+      : api.post(`/api/sessions/${sessionId}/join`);
+    joinPromiseRef.current = { key: accessKey, promise: pending };
+    setIsRequestingAccess(true);
     try {
-      const response = await api.post(`/api/sessions/${sessionId}/join`);
-      if (response) {
+      const response = await pending;
+      if (response && isCurrent() && !leavingRef.current) {
         setParticipant(response);
         setIsPendingApproval(response.role === 'pending');
         setIsRejected(response.role === 'rejected');
@@ -59,9 +68,14 @@ export default function SessionRoomPage() {
     } catch (err) {
       console.error('Error joining session:', err);
       const message = err instanceof Error ? err.message : 'Unable to join this live session.';
-      setJoinError(message);
-      setRequiresHostFollow(/follow the host/i.test(message));
+      if (isCurrent() && !leavingRef.current) {
+        setJoinError(message);
+        setRequiresHostFollow(/follow the host/i.test(message));
+      }
       return null;
+    } finally {
+      if (joinPromiseRef.current?.promise === pending) joinPromiseRef.current = null;
+      if (isCurrent() && !leavingRef.current) setIsRequestingAccess(false);
     }
   };
 
@@ -76,10 +90,24 @@ export default function SessionRoomPage() {
     }
 
     let cancelled = false;
+    activeRoomRef.current = accessKey;
     const enterSession = async () => {
-      await fetchSessionDetails();
-      if (!cancelled) {
-        await joinSession();
+      setLoading(true);
+      setSession(null);
+      setParticipant(null);
+      setJoinError(null);
+      setStatusError(null);
+      setIsPendingApproval(false);
+      setIsRejected(false);
+      leavingRef.current = false;
+      try {
+        const details = await fetchSessionDetails(() => !cancelled);
+        if (!cancelled && details) {
+          if (details.status === 'ended') setJoinError('This broadcast has ended. Choose another live room.');
+          else await joinSession(() => !cancelled);
+        }
+      } catch (error) {
+        if (!cancelled) setJoinError(error instanceof Error ? error.message : 'Unable to load this broadcast. Please try again.');
       }
       if (!cancelled) setLoading(false);
     };
@@ -87,6 +115,7 @@ export default function SessionRoomPage() {
     void enterSession();
     return () => {
       cancelled = true;
+      activeRoomRef.current = '';
     };
   // Refreshing the token must not rejoin and remount an active broadcast.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,8 +131,9 @@ export default function SessionRoomPage() {
     const checkAdmission = async () => {
         try {
           const response = await api.get(`/api/sessions/${sessionId}/join`);
-          if (cancelled) return;
+          if (cancelled || leavingRef.current) return;
           if (response) {
+            setStatusError(null);
             setParticipant(response);
             setIsPendingApproval(response.role === 'pending');
             setIsRejected(response.role === 'rejected');
@@ -118,6 +148,7 @@ export default function SessionRoomPage() {
             setJoinError('This broadcast is no longer available.');
             return;
           }
+          if (!cancelled) setStatusError('Connection interrupted. We’re checking your access again automatically.');
         }
         if (!cancelled) timer = setTimeout(checkAdmission, isPendingApproval ? 2500 : 5000);
     };
@@ -129,10 +160,19 @@ export default function SessionRoomPage() {
   }, [isPendingApproval, isRejected, sessionId, participant?.id, authReady]);
 
   const handleLeave = async () => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setIsLeaving(true);
     try {
+      // Complete any pending Join first so cancellation cannot strand a request.
+      await joinPromiseRef.current?.promise.catch(() => null);
       await api.post(`/api/sessions/${sessionId}/leave`);
     } catch (e) {
       console.error(e);
+      leavingRef.current = false;
+      setIsLeaving(false);
+      setStatusError('We could not leave the room. Please retry so your request is cancelled.');
+      return;
     }
     router.push('/sessions');
   };
@@ -153,19 +193,19 @@ export default function SessionRoomPage() {
   };
 
   if (!isAuthLoading && !authReady) {
-    return <div className="p-6 text-sm" role="alert">Sign in before joining a live session.</div>;
+    return <div className="p-6 text-sm" role="alert">Sign in to join this broadcast. <a className="text-blue-400 underline" href="/login">Log in</a></div>;
   }
 
   if (loading) {
     return (
       <div className="h-96 flex flex-col items-center justify-center gap-2">
         <Loader2 className="animate-spin text-blue-500" size={24} />
-        <span className="text-xs text-zinc-550 font-semibold">Connecting to signaling room...</span>
+        <span className="text-sm text-zinc-400">Opening your broadcast…</span>
       </div>
     );
   }
 
-  if (!session) {
+  if (!session && !joinError) {
     return (
       <div className="h-96 flex flex-col items-center justify-center text-center p-6 select-none">
         <h4 className="text-xs font-bold text-zinc-300">Room Unavailable</h4>
@@ -173,7 +213,7 @@ export default function SessionRoomPage() {
           The requested broadcast session does not exist or has already been terminated.
         </p>
         <button
-          onClick={handleLeave}
+          onClick={() => router.push('/sessions')}
           className="text-xs font-semibold text-blue-400 hover:text-blue-300 underline"
         >
           Return to listings
@@ -188,8 +228,8 @@ export default function SessionRoomPage() {
         <div className="h-12 w-12 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-4 text-rose-500">
           <ShieldAlert size={24} />
         </div>
-        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{requiresHostFollow ? 'Follow Host to Request Access' : 'Unable to Join Broadcast'}</h4>
-        <p className="text-[10px] text-zinc-500 max-w-[320px] mt-2 mb-6 leading-relaxed">
+        <h4 className="text-lg font-semibold text-white">{requiresHostFollow ? 'Join this broadcast' : 'Unable to join yet'}</h4>
+        <p className="text-sm text-zinc-400 max-w-sm mt-2 mb-6 leading-relaxed">
           {requiresHostFollow
             ? 'This broadcast is limited to followers. Follow the host, then your access request will be sent for their approval.'
             : joinError}
@@ -198,18 +238,23 @@ export default function SessionRoomPage() {
           <button
             onClick={() => void handleFollowAndRequestAccess()}
             disabled={isRequestingAccess}
-            className="h-8 px-4 bg-blue-600 hover:bg-blue-500 border border-blue-400/40 rounded-lg text-xs font-semibold text-white transition-colors disabled:cursor-wait disabled:opacity-60"
+            className="min-h-11 px-4 bg-blue-600 hover:bg-blue-500 border border-blue-400/40 rounded-lg text-sm font-semibold text-white transition-colors disabled:cursor-wait disabled:opacity-60"
           >
             {isRequestingAccess ? 'Requesting access…' : 'Follow & Request Access'}
           </button>
         ) : (
           <button
-            onClick={() => void joinSession()}
-            className="h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 transition-colors"
+            onClick={() => {
+              if (!session) window.location.reload();
+              else void joinSession();
+            }}
+            disabled={isRequestingAccess}
+            className="min-h-11 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-sm font-semibold text-zinc-300 transition-colors disabled:opacity-60"
           >
-            Retry Connection
+            {isRequestingAccess ? 'Requesting access…' : 'Try again'}
           </button>
         )}
+        <button onClick={() => router.push('/sessions')} className="mt-4 min-h-11 text-sm text-blue-400 underline">Back to live rooms</button>
       </div>
     );
   }
@@ -240,15 +285,17 @@ export default function SessionRoomPage() {
         <div className="h-12 w-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4">
           <Loader2 size={20} className="text-purple-400 animate-spin" />
         </div>
-        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Awaiting Host Approval</h4>
-        <p className="text-[10px] text-zinc-500 max-w-[280px] mt-2 mb-6 leading-relaxed">
-          The host of this live room (&quot;{session.host?.displayName || session.host?.username}&quot;) must authorize your access request before you can enter the feed.
+        <h4 className="text-lg font-semibold text-white" role="status">Request sent to {session.host?.displayName || session.host?.username}</h4>
+        <p className="text-sm text-zinc-400 max-w-sm mt-2 mb-6 leading-relaxed">
+          You’ll enter automatically when the host approves you. Keep this page open; you don’t need to request again.
         </p>
+        {statusError && <p className="mb-4 max-w-sm text-sm text-amber-500" role="alert">{statusError}</p>}
         <button
           onClick={handleLeave}
-          className="h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-lg text-xs font-semibold text-zinc-300 transition-colors"
+          disabled={isLeaving}
+          className="min-h-11 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-lg text-sm font-semibold text-zinc-300 transition-colors disabled:opacity-60"
         >
-          Cancel Request & Return
+          {isLeaving ? 'Cancelling…' : 'Cancel request'}
         </button>
       </div>
     );
@@ -268,7 +315,8 @@ export default function SessionRoomPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px-32px)] flex flex-col bg-zinc-950">
+    <div className="min-h-[calc(100dvh-6rem)] xl:h-[calc(100dvh-6rem)] flex flex-col bg-zinc-950">
+      {statusError && <p role="alert" className="p-3 text-sm text-amber-500">{statusError}</p>}
       <SessionRoom
         sessionId={session.id}
         sessionTitle={session.title}

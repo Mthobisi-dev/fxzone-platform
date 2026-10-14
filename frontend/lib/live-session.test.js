@@ -10,12 +10,13 @@ const ts = require('typescript');
 function load(file, imports, globals = {}) {
   const source = fs.readFileSync(path.join(__dirname, file), 'utf8');
   const { outputText } = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.React, esModuleInterop: true },
   });
   const exports = {};
   vm.runInNewContext(outputText, {
     exports, console, setTimeout, clearTimeout,
     require: (name) => {
+      if (name === '@/lib/broadcastMedia') return load('broadcastMedia.ts', {});
       assert.ok(name in imports, `Unexpected dependency: ${name}`);
       return imports[name];
     },
@@ -23,6 +24,151 @@ function load(file, imports, globals = {}) {
   }, { filename: file });
   return exports;
 }
+
+// Minimal hook scheduler for exercising actual component event handlers. The
+// boundary doubles replace browser/network APIs, never admission/media logic.
+function componentHarness(file, imports, globals = {}) {
+  const React = require('react');
+  const slots = [];
+  const effects = [];
+  const timers = new Map();
+  let cursor = 0;
+  let nextTimer = 0;
+  const changed = (before, after) => !before || !after || before.length !== after.length || after.some((value, i) => value !== before[i]);
+  const react = {
+    ...React,
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
+      return [slots[index], (next) => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
+    },
+    useRef(initial) { const index = cursor++; return slots[index] ??= { current: initial }; },
+    useCallback(callback, deps) {
+      const index = cursor++;
+      if (!slots[index] || changed(slots[index].deps, deps)) slots[index] = { deps, callback };
+      return slots[index].callback;
+    },
+    useEffect(callback, deps) {
+      const index = cursor++;
+      if (!slots[index] || changed(slots[index].deps, deps)) {
+        effects.push(() => { slots[index]?.cleanup?.(); slots[index] = { deps, cleanup: callback() }; });
+      }
+    },
+  };
+  const loadedComponent = load(file, { ...imports, react }, {
+    setTimeout: (callback) => { const id = ++nextTimer; timers.set(id, callback); return id; },
+    clearTimeout: (id) => timers.delete(id),
+    setInterval: () => ++nextTimer, clearInterval() {},
+    ...globals,
+  });
+  return {
+    timers,
+    render(name, props = {}) { cursor = 0; const tree = loadedComponent[name](props); effects.splice(0).forEach((effect) => effect()); return tree; },
+    unmount() { slots.forEach((slot) => slot?.cleanup?.()); timers.clear(); },
+  };
+}
+
+function elements(tree, predicate) {
+  if (!tree || typeof tree !== 'object') return [];
+  if (Array.isArray(tree)) return tree.flatMap((child) => elements(child, predicate));
+  return [...(predicate(tree) ? [tree] : []), ...elements(tree.props?.children, predicate)];
+}
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('follower enters automatically only after approval; the host enters directly', async () => {
+  for (const initialRole of ['pending', 'host']) {
+    let status = initialRole;
+    let joinCalls = 0;
+    const Room = () => null;
+    const harness = componentHarness('../app/(dashboard)/session/[id]/page.tsx', {
+      'next/navigation': { useParams: () => ({ id: 'room' }), useRouter: () => ({ push() {} }) },
+      '@/hooks/useAuth': { useAuth: () => ({ user: { id: initialRole === 'host' ? 'host' : 'viewer' }, token: 'test', isAuthenticated: true, isLoading: false }) },
+      '@/components/live/SessionRoom': { SessionRoom: Room },
+      'lucide-react': require('lucide-react'),
+      '@/lib/liveSessionPermissions': load('liveSessionPermissions.ts', {}),
+      '@/lib/api': { api: {
+        get: async (url) => url.endsWith('/join') ? { id: 'member', role: status, session_status: 'live' } : { id: 'room', host_id: 'host', host: { displayName: 'Host' }, title: 'Room', status: 'live' },
+        post: async () => { joinCalls++; return { id: 'member', role: initialRole }; },
+      } },
+    });
+    harness.render('default');
+    await settle();
+    let tree = harness.render('default');
+    assert.equal(elements(tree, (node) => node.type === Room).length, initialRole === 'host' ? 1 : 0);
+    if (initialRole === 'pending') {
+      status = 'viewer';
+      await [...harness.timers.values()][0]();
+      tree = harness.render('default');
+      assert.equal(elements(tree, (node) => node.type === Room).length, 1);
+    }
+    assert.equal(elements(tree, (node) => node.type === Room)[0].props.isHost, initialRole === 'host');
+    assert.equal(joinCalls, 1, 'approval polling must not resubmit join requests');
+    harness.unmount();
+  }
+});
+
+test('double Share clicks open one picker and leaving before selection releases every capture track', async () => {
+  let finishCapture;
+  let captures = 0;
+  let stopped = 0;
+  const Controls = () => null;
+  class RTC { close() {} async setLocalStream() {} }
+  const harness = componentHarness('../components/live/SessionRoom.tsx', {
+    './ScreenShare': { ScreenShare: () => null }, './SessionChat': { SessionChat: () => null },
+    './SessionControls': { SessionControls: Controls },
+    '@/hooks/useAuth': { useAuth: () => ({ user: { id: 'host' }, token: 'test', isAuthenticated: true }) },
+    '@/hooks/useWebSocket': { useWebSocket: () => ({ current: { getState: () => 'CONNECTED', send: () => true } }) },
+    'lucide-react': require('lucide-react'), '@/lib/webrtc': { WebRTCClient: RTC },
+    '@/lib/api': { api: { get: async () => [] } },
+    '@/lib/liveSessionPermissions': load('liveSessionPermissions.ts', {}),
+    '../ui/Button': { Button: () => null }, '../ui/Avatar': { Avatar: () => null },
+  }, {
+    document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} },
+    navigator: { mediaDevices: { getDisplayMedia: () => { captures++; return new Promise((resolve) => { finishCapture = resolve; }); } } },
+  });
+  const tree = harness.render('SessionRoom', { sessionId: 'room', hostId: 'host', isHost: true, hostName: 'Host', sessionTitle: 'Room', onLeave() {} });
+  const control = elements(tree, (node) => node.type === Controls)[0];
+  control.props.onToggleShare(true);
+  control.props.onToggleShare(true);
+  assert.equal(captures, 1);
+  harness.unmount();
+  finishCapture({ getTracks: () => [{ stop() { stopped++; } }, { stop() { stopped++; } }] });
+  await settle();
+  assert.equal(stopped, 2);
+});
+
+test('repeated admission retries share one request and cannot subscribe before it is approved', async () => {
+  let joins = 0;
+  let finishJoin;
+  const Room = () => null;
+  const harness = componentHarness('../app/(dashboard)/session/[id]/page.tsx', {
+    'next/navigation': { useParams: () => ({ id: 'room' }), useRouter: () => ({ push() {} }) },
+    '@/hooks/useAuth': { useAuth: () => ({ user: { id: 'viewer' }, token: 'test', isAuthenticated: true, isLoading: false }) },
+    '@/components/live/SessionRoom': { SessionRoom: Room },
+    'lucide-react': require('lucide-react'),
+    '@/lib/liveSessionPermissions': load('liveSessionPermissions.ts', {}),
+    '@/lib/api': { api: {
+      get: async () => ({ id: 'room', host_id: 'host', host: {}, status: 'live' }),
+      post: () => {
+        joins++;
+        if (joins === 1) return Promise.reject(new Error('Connection failed'));
+        return new Promise((resolve) => { finishJoin = resolve; });
+      },
+    } },
+  }, { console: { ...console, error() {} } });
+  harness.render('default');
+  await settle();
+  const tree = harness.render('default');
+  const retry = elements(tree, (node) => node.type === 'button' && node.props.children === 'Try again')[0];
+  retry.props.onClick();
+  retry.props.onClick();
+  assert.equal(joins, 2, 'a double click should add only one retry');
+  finishJoin({ id: 'member', role: 'pending' });
+  await settle();
+  assert.equal(elements(harness.render('default'), (node) => node.type === Room).length, 0);
+  harness.unmount();
+});
 
 function rtcHarness() {
   const peers = [];
@@ -94,6 +240,47 @@ test('duplicate discovery during an outstanding offer does not replace the peer'
   await client.handleSignal({ type: 'request_stream', sender_id: 'viewer' });
   assert.equal(peers.length, 1);
   assert.equal(signals.filter((s) => s.type === 'offer').length, 1);
+});
+
+test('host screen sharing never renders its own capture back into the captured page', () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const { ScreenShare } = load('../components/live/ScreenShare.tsx', {
+    react: React, 'lucide-react': require('lucide-react'),
+  });
+  const stream = { active: true, getVideoTracks: () => [] };
+  const host = renderToStaticMarkup(React.createElement(ScreenShare, { stream, presenterName: 'Host', isLocal: true }));
+  assert.ok(!host.includes('<video'), 'rendering the local capture creates a hall-of-mirrors feedback loop');
+  assert.match(host, /You are sharing your screen/);
+  const viewer = renderToStaticMarkup(React.createElement(ScreenShare, { stream, presenterName: 'Host' }));
+  assert.match(viewer, /<video/);
+});
+
+test('screen capture discourages sharing the broadcast tab and stops audio when native sharing ends', async () => {
+  let captureOptions;
+  let stopped = 0;
+  const video = { kind: 'video', stop() { stopped++; } };
+  const audio = { kind: 'audio', stop() { stopped++; } };
+  const stream = { getTracks: () => [video, audio], getVideoTracks: () => [video], getAudioTracks: () => [audio] };
+  const { WebRTCClient } = load('webrtc.ts', { '@/lib/api': { api: {} } }, {
+    navigator: { mediaDevices: { getDisplayMedia: async (options) => { captureOptions = options; return stream; } } },
+  });
+  const client = new WebRTCClient({ currentUserId: 'host', isHost: true });
+  await client.startLocalStream();
+  assert.equal(captureOptions.selfBrowserSurface, 'exclude');
+  assert.equal(captureOptions.video.displaySurface, 'window');
+  await video.onended();
+  assert.equal(stopped, 2, 'ending a video capture must also release its audio track');
+  client.close();
+});
+
+test('host ignores its own stream announcements, including another tab with the same identity', async () => {
+  const { client, stream, peers } = rtcHarness();
+  await client.setLocalStream(stream);
+  await client.handleSignal({ type: 'peer_joined', user_id: 'host' });
+  await client.handleSignal({ type: 'request_stream', sender_id: 'host' });
+  assert.equal(peers.length, 0);
+  client.close();
 });
 
 test('a new offer renegotiates the existing receiving connection', async () => {

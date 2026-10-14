@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Mic,
-  MicOff,
+  Volume2,
+  VolumeX,
   Video,
   VideoOff,
   ScreenShare,
@@ -18,6 +18,9 @@ import { Button } from '../ui/Button';
 interface SessionControlsProps {
   isHost: boolean;
   isSharing: boolean;
+  isStartingShare?: boolean;
+  canStartShare?: boolean;
+  hasSharedAudio?: boolean;
   isRecording?: boolean;
   recordingDuration?: string;
   onToggleMic: (enabled: boolean) => void;
@@ -33,6 +36,9 @@ interface SessionControlsProps {
 export function SessionControls({
   isHost,
   isSharing,
+  isStartingShare = false,
+  canStartShare = true,
+  hasSharedAudio = false,
   isRecording = false,
   recordingDuration = '00:00',
   onToggleMic,
@@ -42,15 +48,15 @@ export function SessionControls({
   onEndBroadcast,
   isEndingBroadcast = false,
   onLeave,
-  startTime = new Date(),
+  startTime,
 }: SessionControlsProps) {
   const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(false);
+  const [camOn, setCamOn] = useState(true);
   const [duration, setDuration] = useState('00:00:00');
-  const [showOptMenu, setShowOptMenu] = useState(false);
+  const [mountedAt] = useState(() => Date.now());
 
   useEffect(() => {
-    const start = new Date(startTime).getTime();
+    const start = startTime ? new Date(startTime).getTime() : mountedAt;
 
     const interval = setInterval(() => {
       const diff = Math.max(0, Date.now() - start);
@@ -61,7 +67,7 @@ export function SessionControls({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [startTime]);
+  }, [startTime, mountedAt]);
 
   const handleMic = () => {
     const val = !micOn;
@@ -76,11 +82,12 @@ export function SessionControls({
   };
 
   const handleShare = () => {
+    if (!isSharing) { setMicOn(true); setCamOn(true); }
     onToggleShare(!isSharing);
   };
 
   return (
-    <div className="bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-3 flex items-center justify-between gap-4 select-none relative">
+    <div className="bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-3 flex flex-wrap items-center justify-between gap-3 select-none relative">
       {/* Session Timer & Recording Badge */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 bg-zinc-900/80 border border-zinc-800 px-3 py-1.5 rounded-lg">
@@ -101,35 +108,40 @@ export function SessionControls({
       </div>
 
       {/* Interactive Controls */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-2">
         {isHost && (
           <>
             <button
               onClick={handleMic}
+              disabled={!isSharing || !hasSharedAudio}
               className={`p-2.5 rounded-lg border transition-all ${
                 micOn
                   ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-850'
                   : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
               }`}
-              title={micOn ? 'Mute broadcast microphone' : 'Unmute broadcast microphone'}
+              title={!hasSharedAudio ? 'No shared audio. Choose Share tab audio in the screen picker.' : micOn ? 'Mute shared audio' : 'Unmute shared audio'}
+              aria-label={micOn ? 'Mute shared audio' : 'Unmute shared audio'}
             >
-              {micOn ? <Mic size={15} /> : <MicOff size={15} />}
+              {micOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
             </button>
 
             <button
               onClick={handleCam}
+              disabled={!isSharing}
               className={`p-2.5 rounded-lg border transition-all ${
                 camOn
                   ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 hover:bg-blue-600/30'
                   : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-850 hover:text-white'
               }`}
-              title={camOn ? 'Stop broadcast camera' : 'Start broadcast camera'}
+              title={camOn ? 'Pause shared video' : 'Resume shared video'}
+              aria-label={camOn ? 'Pause shared video' : 'Resume shared video'}
             >
               {camOn ? <Video size={15} /> : <VideoOff size={15} />}
             </button>
 
             <button
               onClick={handleShare}
+              disabled={isStartingShare || (!isSharing && !canStartShare)}
               className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
                 isSharing
                   ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30 animate-pulse'
@@ -138,12 +150,13 @@ export function SessionControls({
               title={isSharing ? 'Stop screen sharing' : 'Share screen with the room'}
             >
               {isSharing ? <ScreenShareOff size={15} /> : <ScreenShare size={15} />}
-              <span className="hidden sm:inline">{isSharing ? 'Stop Share' : 'Share Screen'}</span>
+              <span>{isStartingShare ? 'Choose a screen…' : isSharing ? 'Stop sharing' : !canStartShare ? 'Connecting…' : 'Share screen'}</span>
             </button>
 
             {onToggleRecord && (
               <button
                 onClick={onToggleRecord}
+                disabled={!isSharing && !isRecording}
                 className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
                   isRecording
                     ? 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-600/30'
@@ -152,7 +165,7 @@ export function SessionControls({
                 title={isRecording ? 'Stop and download recording' : 'Record this live session'}
               >
                 {isRecording ? <Square size={14} className="fill-white" /> : <Disc size={15} className="text-red-400" />}
-                <span className="hidden sm:inline">{isRecording ? 'Stop Recording' : 'Record'}</span>
+                <span>{isRecording ? 'Stop recording' : 'Record'}</span>
               </button>
             )}
 
@@ -164,7 +177,7 @@ export function SessionControls({
                 title="End broadcast for every participant"
               >
                 <Radio size={15} />
-                <span className="hidden sm:inline">{isEndingBroadcast ? 'Ending…' : 'End Broadcast'}</span>
+                <span>{isEndingBroadcast ? 'Ending…' : 'End broadcast'}</span>
               </button>
             )}
           </>

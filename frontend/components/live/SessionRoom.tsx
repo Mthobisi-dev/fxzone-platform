@@ -16,6 +16,7 @@ import {
   Disc,
 } from 'lucide-react';
 import { WebRTCClient } from '@/lib/webrtc';
+import { broadcastCaptureOptions, stopBroadcastTracks } from '@/lib/broadcastMedia';
 import { api } from '@/lib/api';
 import { canControlLiveBroadcastMedia, canEndLiveBroadcast } from '@/lib/liveSessionPermissions';
 import { Button } from '../ui/Button';
@@ -59,6 +60,9 @@ export function SessionRoom({
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [reviewingParticipantId, setReviewingParticipantId] = useState<string | null>(null);
   const [isEndingBroadcast, setIsEndingBroadcast] = useState(false);
+  const [isStartingShare, setIsStartingShare] = useState(false);
+  const [hasSharedAudio, setHasSharedAudio] = useState(false);
+  const capturePendingRef = useRef(false);
 
   // ─── Refs (never go stale in callbacks) ─────────────────────────────────────
   // The WebRTC client lives in a ref so it is NEVER re-created when state changes.
@@ -115,7 +119,7 @@ export function SessionRoom({
     },
     chat_message: (payload) => {
       const msg = payload.data as SessionChatMessage;
-      setChatMessages((prev) => [...prev, msg]);
+      if (msg?.id) setChatMessages((prev) => prev.some((item) => item.id === msg.id) ? prev : [...prev.slice(-199), msg]);
     },
     rtc_signal: (payload) => {
       // Always use the ref — never a captured stale closure value.
@@ -161,9 +165,12 @@ export function SessionRoom({
             avatarUrl: participant.user.avatarUrl || participant.user.avatar_url,
           } : null,
         })));
+        setParticipantsCount(res.filter((participant) => participant.role === 'viewer' || participant.role === 'host').length);
+        setApprovalError(null);
       }
     } catch (e) {
       console.error('Error fetching participants:', e);
+      setApprovalError('Access requests could not refresh. Retrying automatically.');
     }
   }, [sessionId]);
 
@@ -274,6 +281,11 @@ export function SessionRoom({
     return () => {
       clearTimeout(announceTimer);
       if (shareTimerRef.current) clearInterval(shareTimerRef.current);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+      if (activeStreamRef.current && isSharingRef.current) stopBroadcastTracks(activeStreamRef.current);
+      activeStreamRef.current = null;
+      isSharingRef.current = false;
       client.close();
       rtcClientRef.current = null;
     };
@@ -283,6 +295,7 @@ export function SessionRoom({
 
   // ─── Screen Share ─────────────────────────────────────────────────────────────
   const handleStartScreenShare = async () => {
+    if (capturePendingRef.current || isSharingRef.current) return;
     setBroadcastError(null);
     if (!canControlBroadcast) {
       setBroadcastError('Only the broadcast host can share a screen.');
@@ -297,22 +310,15 @@ export function SessionRoom({
       return;
     }
     const client = rtcClientRef.current;
+    capturePendingRef.current = true;
+    setIsStartingShare(true);
+    let capturedStream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          cursor: 'always',
-          displaySurface: 'monitor',
-          frameRate: { ideal: 30, max: 60 },
-        } as any,
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      const stream = await navigator.mediaDevices.getDisplayMedia(broadcastCaptureOptions());
+      capturedStream = stream;
 
       if (rtcClientRef.current !== client) {
-        stream.getTracks().forEach((track) => track.stop());
+        stopBroadcastTracks(stream);
         return;
       }
 
@@ -321,10 +327,15 @@ export function SessionRoom({
       activeStreamRef.current = stream;
       setActiveStream(stream);
       setIsSharingScreen(true);
+      setHasSharedAudio(stream.getAudioTracks().length > 0);
 
       // Push stream into the existing (ref-stable) WebRTC client.
       if (rtcClientRef.current) {
         await rtcClientRef.current.setLocalStream(stream);
+      }
+      if (rtcClientRef.current !== client || !isSharingRef.current) {
+        stopBroadcastTracks(stream);
+        return;
       }
 
       // Start 30-minute share limit timer
@@ -347,11 +358,20 @@ export function SessionRoom({
       if (videoTrack) {
         videoTrack.onended = () => { void handleStopScreenShare(); };
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      if (capturedStream) stopBroadcastTracks(capturedStream);
+      isSharingRef.current = false;
+      activeStreamRef.current = null;
+      setActiveStream(null);
+      setIsSharingScreen(false);
+      setHasSharedAudio(false);
       console.warn('Display media capture cancelled or rejected:', err);
-      setBroadcastError(err?.name === 'NotAllowedError'
+      setBroadcastError(err instanceof Error && err.name === 'NotAllowedError'
         ? 'Screen sharing was cancelled or denied. Click Share Screen and choose a screen, window, or tab.'
         : 'Unable to capture your screen. Check browser permissions and try again.');
+    } finally {
+      capturePendingRef.current = false;
+      setIsStartingShare(false);
     }
   };
 
@@ -363,7 +383,9 @@ export function SessionRoom({
     activeStreamRef.current = null;
     setActiveStream(null);
     setIsSharingScreen(false);
+    setHasSharedAudio(false);
     setShareTimeLeft(null);
+    if (mediaRecorderRef.current?.state === 'recording') stopRecording();
 
     if (shareTimerRef.current) {
       clearInterval(shareTimerRef.current);
@@ -372,13 +394,8 @@ export function SessionRoom({
 
     // Notify peers before ending tracks, so a delayed track-ended event cannot
     // leave their UI showing an unavailable but still-live presentation.
-    if (rtcClientRef.current) {
-      await rtcClientRef.current.setLocalStream(null);
-    }
-
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
+    if (stream) stopBroadcastTracks(stream);
+    if (rtcClientRef.current) await rtcClientRef.current.setLocalStream(null);
   };
 
   const handleShareToggle = (enabled: boolean) => {
@@ -395,7 +412,8 @@ export function SessionRoom({
       if (activeStreamRef.current && activeStreamRef.current.active) {
         recordStream = activeStreamRef.current;
       } else {
-        recordStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        setBroadcastError('Share your screen before starting a recording.');
+        return;
       }
 
       recordedChunksRef.current = [];
@@ -461,11 +479,11 @@ export function SessionRoom({
     `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
   const handleSendChat = (text: string) => {
-    if (!user) return;
-    socketRef.current?.send({
+    if (!user || socketRef.current?.getState() !== 'CONNECTED') return false;
+    return socketRef.current.send({
       type: 'chat_message',
       data: {
-        id: Math.random().toString(),
+        id: crypto.randomUUID(),
         userId: user.id,
         username: user.username,
         displayName: user.display_name || user.username,
@@ -506,9 +524,9 @@ export function SessionRoom({
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="flex-1 h-full flex flex-col justify-between select-none">
+    <div className="flex-1 min-w-0 flex flex-col select-none">
       {/* Title Bar */}
-      <div className="h-14 px-6 border-b border-zinc-850 bg-zinc-950 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-zinc-850 bg-zinc-950 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             {sessionTitle}
@@ -525,7 +543,7 @@ export function SessionRoom({
           <span className="text-[10px] text-zinc-400 block mt-0.5 font-medium">Presenter: {hostName}</span>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-semibold text-zinc-300">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-300">
           <span
             className={`text-[9px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-lg border ${
               signalingStatus === 'connected'
@@ -539,10 +557,10 @@ export function SessionRoom({
               : undefined}
           >
             {signalingStatus === 'connected'
-              ? 'Signal connected'
+              ? 'Connected'
               : signalingStatus === 'unavailable'
                 ? 'Signal unavailable'
-                : 'Connecting signal'}
+                  : 'Connecting…'}
           </span>
           {(isRecording || isRoomBeingRecorded) && (
             <div className="flex items-center gap-1.5 bg-red-500/15 border border-red-500/30 text-red-400 px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider">
@@ -573,7 +591,7 @@ export function SessionRoom({
 
           <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 px-2.5 py-1 rounded-lg">
             <Users size={13} className="text-blue-400" />
-            <span className="text-[10px]">{participantsCount} {participantsCount === 1 ? 'viewer' : 'viewers'}</span>
+            <span className="text-xs">{participantsCount} {participantsCount === 1 ? 'participant' : 'participants'}</span>
           </div>
 
           <div className="h-4 w-[1px] bg-zinc-800" />
@@ -584,9 +602,9 @@ export function SessionRoom({
       </div>
 
       {/* Main Room Split View */}
-      <div className="flex-1 flex min-h-0 relative">
+      <div className="flex-1 flex flex-col xl:flex-row min-h-0 relative">
         {/* Stream Area */}
-        <div className="flex-1 p-6 flex flex-col gap-4 min-w-0">
+        <div className="flex-1 p-3 sm:p-5 flex flex-col gap-4 min-w-0">
           {broadcastError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">{broadcastError}</p>}
           {/* AI Alerts */}
           {copilotAlerts.length > 0 && (
@@ -600,7 +618,7 @@ export function SessionRoom({
           )}
 
           {/* Screen Share Component */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-64 h-[45dvh] xl:h-auto">
             <ScreenShare
               stream={activeStream}
               presenterName={
@@ -609,6 +627,7 @@ export function SessionRoom({
                   : (remotePresenterName ? `@${remotePresenterName}` : hostName)
               }
               isLocal={isSharingScreen}
+              isHost={isHost}
             />
           </div>
 
@@ -616,6 +635,9 @@ export function SessionRoom({
           <SessionControls
             isHost={canControlBroadcast}
             isSharing={isSharingScreen}
+            isStartingShare={isStartingShare}
+            canStartShare={signalingStatus === 'connected'}
+            hasSharedAudio={hasSharedAudio}
             isRecording={isRecording}
             recordingDuration={formatRecordTime(recordingSeconds)}
             onToggleMic={handleMicToggle}
@@ -632,20 +654,21 @@ export function SessionRoom({
         </div>
 
         {/* Host Participant Approval Sidebar */}
-        {isHost && pendingParticipants.length > 0 && (
-          <div className="w-72 border-l border-zinc-850 bg-zinc-950 p-4 flex flex-col gap-3">
+        {isHost && (
+          <div className="w-full xl:w-72 xl:shrink-0 border-t xl:border-t-0 xl:border-l border-zinc-850 bg-zinc-950 p-4 flex flex-col gap-3">
             <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-850">
               <Users size={14} className="text-purple-400 animate-pulse" />
-              <h3 className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">
+              <h3 className="text-xs font-semibold text-zinc-300" aria-live="polite">
                 Access Requests ({pendingParticipants.length})
               </h3>
             </div>
+            {pendingParticipants.length === 0 && <p className="text-sm text-zinc-400">No requests yet. Followers can request to join this room; you choose who enters.</p>}
             {approvalError && (
               <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-[10px] leading-relaxed text-rose-300">
                 {approvalError}
               </p>
             )}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar">
+            <div className="flex-1 max-h-72 xl:max-h-none overflow-y-auto space-y-2 pr-1">
               {pendingParticipants.map((p) => {
                 const targetUserId = String(p.user_id || p.userId || p.user?.id);
                 return (
@@ -669,18 +692,19 @@ export function SessionRoom({
                     <div className="flex items-center gap-1 shrink-0">
                       <Button
                         size="sm"
-                        className="h-6 px-2 text-[9px] bg-emerald-600 hover:bg-emerald-500 font-bold rounded-lg flex items-center gap-0.5"
+                        className="min-h-10 px-2 text-xs bg-emerald-600 hover:bg-emerald-500 font-semibold rounded-lg flex items-center gap-1"
                         onClick={() => handleApproveParticipant(targetUserId)}
                         title="Approve access"
-                        disabled={reviewingParticipantId === targetUserId}
+                        disabled={Boolean(reviewingParticipantId)}
                       >
                         {reviewingParticipantId === targetUserId ? 'Working…' : <><Check size={10} /> Approve</>}
                       </Button>
                       <button
-                        className="h-6 w-6 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-rose-600/80 text-zinc-400 hover:text-white transition-colors"
+                        className="h-10 w-10 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-rose-600/80 text-zinc-400 hover:text-white transition-colors"
+                        aria-label={`Decline ${p.user?.displayName || p.user?.username || 'user'}'s request`}
                         onClick={() => handleRejectParticipant(targetUserId)}
                         title="Reject request"
-                        disabled={reviewingParticipantId === targetUserId}
+                        disabled={Boolean(reviewingParticipantId)}
                       >
                         <X size={10} />
                       </button>
@@ -697,6 +721,7 @@ export function SessionRoom({
           messages={chatMessages}
           onSendMessage={handleSendChat}
           currentUserId={user?.id || ''}
+          connected={signalingStatus === 'connected'}
         />
       </div>
     </div>
