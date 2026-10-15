@@ -72,6 +72,8 @@
 
   html {
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
@@ -80,6 +82,10 @@
     font-family: 'Inter', sans-serif;
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
     overflow-x: hidden;
+  }
+
+  :where(h1, h2, h3, h4, h5, h6, p, li, dt, dd, blockquote, figcaption) {
+    overflow-wrap: anywhere;
   }
 
   /* Custom Scrollbars */
@@ -287,6 +293,29 @@ html[class*="theme-"] :focus-visible {
   iframe,
   canvas {
     max-width: 100%;
+  }
+
+  /* Keep legacy fixed-size Tailwind headings readable without allowing them
+     to dominate a narrow viewport. Responsive sm:* sizes still apply on
+     tablets and desktop. */
+  :is(.text-9xl, .text-8xl, .text-7xl, .text-6xl, .text-5xl) {
+    font-size: 1.875rem !important;
+    line-height: 2.25rem !important;
+  }
+
+  .text-4xl {
+    font-size: 1.75rem !important;
+    line-height: 2.125rem !important;
+  }
+
+  .text-3xl {
+    font-size: 1.5rem !important;
+    line-height: 1.875rem !important;
+  }
+
+  .text-2xl {
+    font-size: 1.25rem !important;
+    line-height: 1.625rem !important;
   }
 }
 

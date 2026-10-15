@@ -581,7 +581,7 @@ export function TradingViewChatPanel({
 
           {/* Active Symbol Watermark */}
           <div className="absolute top-4 left-4 pointer-events-none select-none z-0 opacity-15">
-            <span className="text-4xl font-extrabold text-white tracking-tighter block">{currentSymbol}</span>
+            <span className="block text-2xl font-extrabold tracking-tighter text-white sm:text-4xl">{currentSymbol}</span>
             <span className="text-xs text-zinc-400 font-semibold">{selectedAsset?.name || 'Trading Pair'}</span>
           </div>
 

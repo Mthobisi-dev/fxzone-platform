@@ -61,7 +61,7 @@ export function LandingDetails({ quotes, loading, onInspect }: Props) {
         <div className="fxzone-landing-panel grid min-w-0 gap-8 rounded-3xl border border-border p-5 sm:p-8 lg:grid-cols-2 lg:p-10">
           <div className="min-w-0">
             <p className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-sky-400"><BrainCircuit size={18} /> Google Gemini AI assistant</p>
-            <h2 id="landing-ai-title" className="text-3xl font-black tracking-tight text-text sm:text-4xl">Put your market research in context.</h2>
+            <h2 id="landing-ai-title" className="text-2xl font-black tracking-tight text-text sm:text-4xl">Put your market research in context.</h2>
             <p className="mt-5 leading-7 text-text-muted">Bring questions about chart setups, market news, and risk to the AI assistant. Use your terminal to review the evidence behind your next decision.</p>
             <ul className="mt-6 space-y-3 text-sm text-text">
               {['Discuss technical indicators and market sentiment', 'Explore risk and position-sizing questions', 'Compare your research across timeframes'].map((item) => (
@@ -94,7 +94,7 @@ export function LandingDetails({ quotes, loading, onInspect }: Props) {
       <section id="features" aria-labelledby="landing-features-title" className="scroll-mt-6 pb-12 sm:pb-20">
         <div className="mx-auto mb-8 max-w-2xl text-center sm:mb-12">
           <p className="text-sm font-bold uppercase tracking-widest text-sky-400">The complete workspace</p>
-          <h2 id="landing-features-title" className="mt-4 text-3xl font-black tracking-tight text-text sm:text-4xl">Market intelligence meets community.</h2>
+          <h2 id="landing-features-title" className="mt-4 text-2xl font-black tracking-tight text-text sm:text-4xl">Market intelligence meets community.</h2>
           <p className="mt-4 leading-7 text-text-muted">Research, follow the news, share analysis, and connect with other traders in one place.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:gap-6">

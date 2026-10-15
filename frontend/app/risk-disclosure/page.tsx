@@ -6,14 +6,14 @@ import { ArrowLeft, AlertTriangle } from 'lucide-react';
 
 export default function RiskDisclosurePage() {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-12 max-w-4xl mx-auto font-sans">
+    <div className="mx-auto min-h-screen max-w-4xl bg-zinc-950 p-4 font-sans text-zinc-100 sm:p-6 md:p-12">
       <Link href="/" className="inline-flex items-center gap-2 text-xs font-semibold text-purple-400 hover:text-purple-300 mb-8 transition-colors">
         <ArrowLeft size={14} /> Back to FxZone
       </Link>
 
       <div className="flex items-center gap-3 mb-6 border-b border-zinc-800 pb-4">
         <AlertTriangle size={28} className="text-amber-400" />
-        <h1 className="text-3xl font-black text-white">Risk & Financial Disclosure</h1>
+        <h1 className="text-2xl font-black text-white sm:text-3xl">Risk & Financial Disclosure</h1>
       </div>
 
       <div className="space-y-6 text-sm text-zinc-300 leading-relaxed font-normal">

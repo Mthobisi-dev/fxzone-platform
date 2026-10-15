@@ -21,6 +21,17 @@ test('all themes define the shared background alias and mobile-safe control sizi
   assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?font-size:\s*16px/);
 });
 
+test('mobile typography prevents browser inflation and caps legacy oversized headings', () => {
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.match(styles, /-webkit-text-size-adjust:\s*100%/);
+  assert.match(styles, /text-size-adjust:\s*100%/);
+  assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?:is\(\.text-9xl,[\s\S]*?\.text-5xl\)[\s\S]*?font-size:\s*1\.875rem/);
+  assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?\.text-4xl\s*\{[\s\S]*?font-size:\s*1\.75rem/);
+  assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?\.text-3xl\s*\{[\s\S]*?font-size:\s*1\.5rem/);
+  assert.match(styles, /overflow-wrap:\s*anywhere/);
+});
+
 test('market screener uses the broader Markets title', () => {
   const screener = fs.readFileSync(path.join(__dirname, '..', 'components', 'trading', 'LiveMarketScreener.tsx'), 'utf8');
   assert.match(screener, />Markets</);
