@@ -1,20 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard,
-  BarChart3,
   Globe,
   Video,
   MessageSquare,
   User as UserIcon,
-  ChevronLeft,
-  ChevronRight,
   LogOut,
-  Sliders,
   Compass,
   Instagram,
   Linkedin,
@@ -25,9 +21,7 @@ import { Avatar } from '../ui/Avatar';
 
 export function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, logout } = useAuth();
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   React.useEffect(() => {
@@ -66,10 +60,8 @@ export function Sidebar() {
     <>
       {/* Desktop / Tablet Sidebar */}
       <aside
-        className={cn(
-          'hidden md:flex border-r border-zinc-850 bg-zinc-950/60 backdrop-blur-md flex-col justify-between shrink-0 select-none transition-all duration-300 relative',
-          isCollapsed ? 'w-16' : 'w-56'
-        )}
+        className="relative hidden w-16 shrink-0 select-none flex-col justify-between border-r border-zinc-850 bg-zinc-950/60 backdrop-blur-md md:flex"
+        aria-label="Primary navigation"
       >
         {/* Sidebar Items */}
         <div className="flex flex-col gap-6 py-6 px-3">
@@ -81,8 +73,10 @@ export function Sidebar() {
                 <Link
                   key={item.path}
                   href={item.path}
+                  aria-label={item.label}
+                  title={item.label}
                   className={cn(
-                    'flex items-center gap-3 w-full py-2.5 px-3 rounded-lg text-xs font-semibold transition-all duration-200 focus:outline-none group relative',
+                    'group relative flex min-h-11 w-full items-center justify-center rounded-lg border text-xs font-semibold transition-all duration-200 focus:outline-none',
                     isActive
                       ? 'bg-blue-600/10 text-blue-400 border border-blue-500/25 shadow-[0_0_10px_rgba(59,130,246,0.08)]'
                       : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
@@ -91,14 +85,9 @@ export function Sidebar() {
                   <span className={cn('text-current transition-colors', isActive ? 'text-blue-400' : 'text-zinc-400 group-hover:text-white')}>
                     {item.icon}
                   </span>
-                  {!isCollapsed && <span className="truncate">{item.label}</span>}
-                  
-                  {/* Tooltip on Collapsed */}
-                  {isCollapsed && (
-                    <div className="absolute left-16 bg-zinc-900 border border-zinc-800 text-[10px] font-bold text-white px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-50">
-                      {item.label}
-                    </div>
-                  )}
+                  <span className="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
@@ -108,15 +97,9 @@ export function Sidebar() {
         {/* Bottom Actions */}
         <div className="flex flex-col gap-4 p-3 border-t border-zinc-850/60 bg-zinc-950/30">
           {/* User Card */}
-          {mounted && user && !isCollapsed && (
-            <Link href={`/profile/${user.id}`} className="flex items-center gap-2.5 py-1 px-1 rounded-lg hover:bg-zinc-900/50 transition-colors">
+          {mounted && user && (
+            <Link href={`/profile/${user.id}`} aria-label="Open profile" title="Open profile" className="flex items-center justify-center rounded-lg py-1 transition-colors hover:bg-zinc-900/50">
               <Avatar name={user.display_name || user.username} src={user.avatar_url} size="sm" />
-              <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs font-semibold text-zinc-300 truncate">
-                  {user.display_name || user.username}
-                </span>
-                <span className="text-[9px] text-zinc-500 truncate uppercase tracking-wider">{user.role}</span>
-              </div>
             </Link>
           )}
 
@@ -125,24 +108,20 @@ export function Sidebar() {
             {mounted && user && (
               <Link
                 href={`/profile/${user.id}`}
+                aria-label="Profile"
+                title="Profile"
                 className={cn(
-                  'flex items-center gap-3 w-full py-2 px-3 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white hover:bg-white/5 transition-all group relative',
+                  'group relative flex min-h-10 w-full items-center justify-center rounded-lg text-xs font-semibold text-zinc-400 transition-all hover:bg-white/5 hover:text-white',
                   pathname === `/profile/${user.id}` && 'bg-blue-600/10 text-blue-400 border border-blue-500/25'
                 )}
               >
                 <UserIcon size={18} />
-                {!isCollapsed && <span>Profile</span>}
-                {isCollapsed && (
-                  <div className="absolute left-16 bg-zinc-900 border border-zinc-800 text-[10px] font-bold text-white px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-50">
-                    Profile
-                  </div>
-                )}
+                <span className="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Profile</span>
               </Link>
             )}
 
             {/* Contact Links */}
-            {!isCollapsed && (
-              <div className="flex items-center justify-center gap-3 py-2">
+              <div className="flex flex-col items-center justify-center gap-2 py-2">
                 <a
                   href="https://www.instagram.com/it.is_jack?igsh=MXV1dW1uM3o5NjI1Zg=="
                   target="_blank"
@@ -171,30 +150,19 @@ export function Sidebar() {
                   <Github size={14} />
                 </a>
               </div>
-            )}
 
             <button
               onClick={() => logout()}
-              className="flex items-center gap-3 w-full py-2 px-3 rounded-lg text-xs font-semibold text-zinc-400 hover:text-red-400 hover:bg-red-500/5 transition-all group relative"
+              aria-label="Sign out"
+              title="Sign out"
+              className="group relative flex min-h-10 w-full items-center justify-center rounded-lg text-xs font-semibold text-zinc-400 transition-all hover:bg-red-500/5 hover:text-red-400"
             >
               <LogOut size={18} />
-              {!isCollapsed && <span>Sign Out</span>}
-              {isCollapsed && (
-                <div className="absolute left-16 bg-zinc-900 border border-zinc-800 text-[10px] font-bold text-white px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-50">
-                  Sign Out
-                </div>
-              )}
+              <span className="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Sign out</span>
             </button>
           </div>
         </div>
 
-        {/* Collapse/Expand toggle button */}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute top-1/2 -right-3 h-6 w-6 rounded-full border border-zinc-800 bg-zinc-950 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all z-50 shadow-md cursor-pointer"
-        >
-          {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-        </button>
       </aside>
 
       {/* Mobile Bottom Navigation Bar (< 768px) */}
@@ -205,8 +173,10 @@ export function Sidebar() {
             <Link
               key={item.path}
               href={item.path}
+              aria-label={item.label}
+              title={item.label}
               className={cn(
-                'flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[9px] font-semibold transition-all',
+                'flex min-h-12 min-w-12 items-center justify-center rounded-lg font-semibold transition-all',
                 isActive
                   ? 'text-blue-400 font-bold'
                   : 'text-zinc-500 hover:text-zinc-300'
@@ -215,26 +185,9 @@ export function Sidebar() {
               <span className={cn('p-1 rounded-md transition-colors', isActive && 'bg-blue-600/15 text-blue-400')}>
                 {item.icon}
               </span>
-              <span className="truncate max-w-[55px] text-[8px] mt-0.5">{item.label}</span>
             </Link>
           );
         })}
-        {mounted && user && (
-          <Link
-            href={`/profile/${user.id}`}
-            className={cn(
-              'flex flex-col items-center justify-center py-1 px-2 rounded-lg text-[9px] font-semibold transition-all',
-              pathname.startsWith('/profile')
-                ? 'text-blue-400 font-bold'
-                : 'text-zinc-500 hover:text-zinc-300'
-            )}
-          >
-            <span className={cn('p-1 rounded-md transition-colors', pathname.startsWith('/profile') && 'bg-blue-600/15 text-blue-400')}>
-              <UserIcon size={18} />
-            </span>
-            <span className="truncate max-w-[55px] text-[8px] mt-0.5">Profile</span>
-          </Link>
-        )}
       </nav>
     </>
   );

@@ -14,14 +14,12 @@ import {
   UserPlus,
   UserMinus,
   MessageCircle,
-  Users,
   Loader2,
   Shield,
   TrendingUp,
-  X,
-  Check,
   Newspaper,
   ExternalLink,
+  FileText,
 } from 'lucide-react';
 
 interface DiscoverUser {
@@ -40,10 +38,24 @@ interface DiscoverUser {
 interface DiscoverNewsArticle {
   id: string;
   title: string;
+  content: string;
   source: string;
   url: string | null;
   published_at: string | null;
   asset_tags: string[];
+}
+
+interface NewsExplanationResult {
+  source: 'ai_gateway' | 'verified_data';
+  isAiGenerated: boolean;
+  explanation: string;
+  limitation: string;
+}
+
+interface NewsExplanationState {
+  loading: boolean;
+  error: string | null;
+  result: NewsExplanationResult | null;
 }
 
 export default function DiscoverPage() {
@@ -51,16 +63,37 @@ export default function DiscoverPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<DiscoverUser[]>([]);
   const [news, setNews] = useState<DiscoverNewsArticle[]>([]);
+  const [trendingNews, setTrendingNews] = useState<DiscoverNewsArticle[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(true);
+  const [trendingError, setTrendingError] = useState<string | null>(null);
+  const [newsExplanations, setNewsExplanations] = useState<Record<string, NewsExplanationState>>({});
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const requestSequence = useRef(0);
   const [followLoading, setFollowLoading] = useState<string | null>(null);
 
-  // Group creation state
-  const [groupModalOpen, setGroupModalOpen] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [selectedMembers, setSelectedMembers] = useState<DiscoverUser[]>([]);
-  const [creatingGroup, setCreatingGroup] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setTrendingLoading(true);
+    void api.get('/api/news/feed?limit=8', { public: true })
+      .then((result) => {
+        if (!active) return;
+        setTrendingNews(Array.isArray(result) ? result : []);
+        setTrendingError(null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error('Failed to load trending market news:', error);
+        setTrendingNews([]);
+        setTrendingError('Trending market news is temporarily unavailable.');
+      })
+      .finally(() => {
+        if (active) setTrendingLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const fetchDiscovery = useCallback(async (rawQuery: string) => {
     const query = normalizeDiscoverQuery(rawQuery);
@@ -156,35 +189,27 @@ export default function DiscoverPage() {
     }
   };
 
-  const toggleGroupMember = (targetUser: DiscoverUser) => {
-    setSelectedMembers((prev) => {
-      const exists = prev.find((m) => m.id === targetUser.id);
-      if (exists) return prev.filter((m) => m.id !== targetUser.id);
-      return [...prev, targetUser];
-    });
-  };
-
-  const handleCreateGroup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedMembers.length < 1 || !groupName.trim() || creatingGroup) return;
-    setCreatingGroup(true);
-
+  const explainNews = async (article: DiscoverNewsArticle) => {
+    setNewsExplanations((previous) => ({
+      ...previous,
+      [article.id]: { loading: true, error: null, result: previous[article.id]?.result ?? null },
+    }));
     try {
-      const response = await api.post('/api/chat/conversations', {
-        participant_ids: selectedMembers.map((m) => m.id),
-        name: groupName.trim(),
-        is_group: true,
-      });
-      if (response?.id) {
-        router.push(`/chat?conv=${response.id}`);
-      }
-    } catch (err) {
-      console.error('Failed to create group:', err);
-    } finally {
-      setCreatingGroup(false);
-      setGroupModalOpen(false);
-      setGroupName('');
-      setSelectedMembers([]);
+      const result = await api.post('/api/news/explanation', article, { timeoutMs: 12_000 });
+      setNewsExplanations((previous) => ({
+        ...previous,
+        [article.id]: { loading: false, error: null, result },
+      }));
+    } catch (error) {
+      console.error('Failed to explain market news:', error);
+      setNewsExplanations((previous) => ({
+        ...previous,
+        [article.id]: {
+          loading: false,
+          error: error instanceof Error ? error.message : 'Explanation is temporarily unavailable.',
+          result: previous[article.id]?.result ?? null,
+        },
+      }));
     }
   };
 
@@ -259,52 +284,32 @@ export default function DiscoverPage() {
 
   const normalizedSearch = normalizeDiscoverQuery(search);
   const hasSearch = shouldSearchDiscover(normalizedSearch);
+  const visibleNews = hasSearch ? news : trendingNews;
+  const newsLoading = hasSearch ? loading : trendingLoading;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-3 sm:space-y-6 sm:p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-lg font-bold text-[var(--color-text)] tracking-tight flex items-center gap-2">
-            Discover Traders
-          </h1>
-          <p className="text-[11px] text-zinc-500 mt-0.5">
-            Search by username or find verified market reporting from real providers.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setGroupModalOpen(true)}
-            size="sm"
-            className="h-8 px-3 text-[10px] flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500"
-          >
-            <Users size={12} />
-            Create Group
-          </Button>
-        </div>
-      </div>
-
       {/* Search bar */}
-      <div className="relative">
+      <div className="relative mx-auto w-full max-w-2xl">
         <Search
-          size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
+          size={13}
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500"
         />
         <input
           type="text"
           value={search}
           onChange={(e) => handleSearchChange(e.target.value)}
           placeholder="Search a username or market news topic..."
-          className="w-full h-10 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl pl-9 pr-4 text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 transition-colors"
+          aria-label="Search traders and market news"
+          className="h-9 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] pl-8 pr-3 text-[11px] text-[var(--color-text)] transition-colors placeholder:text-[var(--color-text-muted)] focus:border-blue-500 focus:outline-none sm:text-xs"
         />
       </div>
 
       {/* User grid */}
       {!hasSearch ? (
-        <div className="text-center py-14 rounded-xl border border-dashed border-[var(--color-border)]">
-          <Search className="mx-auto mb-3 text-[var(--color-text-muted)]" size={22} aria-hidden="true" />
-          <p className="text-xs text-[var(--color-text-muted)]">Enter at least two characters to search traders and verified market news.</p>
+        <div className="rounded-xl border border-dashed border-[var(--color-border)] py-8 text-center sm:py-10">
+          <Search className="mx-auto mb-2 text-[var(--color-text-muted)]" size={18} aria-hidden="true" />
+          <p className="px-4 text-[11px] text-[var(--color-text-muted)] sm:text-xs">Enter at least two characters to search for a trader. Trending provider news appears below.</p>
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center py-20">
@@ -405,160 +410,74 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {hasSearch && !loading && (
-        <section className="space-y-3" aria-labelledby="discover-news-heading">
-          <div className="flex items-center gap-2">
-            <Newspaper size={16} className="text-blue-500" aria-hidden="true" />
-            <h2 id="discover-news-heading" className="text-sm font-bold text-[var(--color-text)]">Verified market news</h2>
+      <section className="space-y-3" aria-labelledby="discover-news-heading">
+        <div className="flex items-center gap-2">
+          <Newspaper size={15} className="text-blue-500" aria-hidden="true" />
+          <h2 id="discover-news-heading" className="text-xs font-bold text-[var(--color-text)] sm:text-sm">
+            {hasSearch ? 'Market news results' : 'Trending market news'}
+          </h2>
+        </div>
+        {newsLoading ? (
+          <div className="flex items-center justify-center py-10" aria-label="Loading market news">
+            <Loader2 className="animate-spin text-blue-500" size={20} />
           </div>
-          {news.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-xs text-[var(--color-text-muted)]">
-              No verified news matched &quot;{normalizedSearch}&quot;.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {news.map((article) => (
-                <article key={article.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        ) : visibleNews.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-[11px] text-[var(--color-text-muted)] sm:text-xs">
+            {hasSearch
+              ? `No verified news matched “${normalizedSearch}”.`
+              : trendingError ?? 'No verified trending news is available right now.'}
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {visibleNews.map((article) => {
+              const explanation = newsExplanations[article.id];
+              return (
+                <article key={article.id} className="min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4">
                   <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
                     <span className="font-semibold text-blue-500">{article.source}</span>
                     {article.published_at && <time dateTime={article.published_at}>{new Date(article.published_at).toLocaleDateString()}</time>}
                   </div>
                   <h3 className="text-xs font-semibold leading-relaxed text-[var(--color-text)]">{article.title}</h3>
+                  {article.content && (
+                    <p className="mt-2 line-clamp-3 text-[11px] leading-5 text-[var(--color-text-muted)]">{article.content}</p>
+                  )}
                   {article.asset_tags?.length > 0 && (
                     <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">{article.asset_tags.slice(0, 4).join(' · ')}</p>
                   )}
-                  {article.url && (
-                    <a href={article.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-500 hover:text-blue-400">
-                      Read source <ExternalLink size={10} aria-hidden="true" />
-                    </a>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void explainNews(article)}
+                      disabled={explanation?.loading}
+                      className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 text-[10px] font-semibold text-[var(--color-text)] transition-colors hover:border-blue-500 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {explanation?.loading ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
+                      {explanation?.result ? 'Refresh explanation' : 'Explain news'}
+                    </button>
+                    {article.url && (
+                      <a href={article.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center gap-1 px-1 text-[10px] font-semibold text-blue-500 hover:text-blue-400">
+                        Read source <ExternalLink size={10} aria-hidden="true" />
+                      </a>
+                    )}
+                  </div>
+                  {explanation?.error && (
+                    <p className="mt-3 rounded-lg border border-rose-500/20 bg-rose-500/5 p-2 text-[10px] text-rose-400">{explanation.error}</p>
+                  )}
+                  {explanation?.result && (
+                    <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                      <p className="text-[9px] font-bold uppercase tracking-wide text-blue-500">
+                        {explanation.result.isAiGenerated ? 'AI explanation' : 'Verified context'}
+                      </p>
+                      <p className="mt-1.5 text-[11px] leading-5 text-[var(--color-text)]">{explanation.result.explanation}</p>
+                      <p className="mt-2 text-[9px] leading-4 text-[var(--color-text-muted)]">{explanation.result.limitation}</p>
+                    </div>
                   )}
                 </article>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Create Group Modal */}
-      {groupModalOpen && (
-        <Modal
-          isOpen={groupModalOpen}
-          onClose={() => {
-            setGroupModalOpen(false);
-            setSelectedMembers([]);
-            setGroupName('');
-          }}
-          title="Create Group Chat"
-        >
-          <form onSubmit={handleCreateGroup} className="space-y-4">
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1">Group Name</label>
-              <input
-                type="text"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                placeholder="e.g., EURUSD Trading Circle"
-                className="w-full h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1.5">
-                Select Members ({selectedMembers.length} selected - Follows Only)
-              </label>
-              <div className="max-h-48 overflow-y-auto space-y-1 border border-zinc-850 rounded-lg p-2 bg-zinc-950/50">
-                {users.filter((u) => u.is_following || u.is_follower).map((u) => {
-                  const isSelected = selectedMembers.some((m) => m.id === u.id);
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => toggleGroupMember(u)}
-                      className={`w-full flex items-center gap-2.5 py-2 px-2.5 rounded-lg text-left transition-colors ${
-                        isSelected
-                          ? 'bg-blue-600/10 border border-blue-500/30'
-                          : 'hover:bg-zinc-900 border border-transparent'
-                      }`}
-                    >
-                      <Avatar
-                        src={u.avatar_url || undefined}
-                        name={u.display_name || u.username}
-                        size="sm"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-semibold text-white truncate">
-                          {u.display_name || u.username}
-                        </p>
-                        <p className="text-[9px] text-zinc-500">@{u.username}</p>
-                      </div>
-                      {isSelected && (
-                        <div className="h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center">
-                          <Check size={10} className="text-white" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Selected chips */}
-            {selectedMembers.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {selectedMembers.map((m) => (
-                  <span
-                    key={m.id}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] text-zinc-300 font-medium"
-                  >
-                    {m.display_name || m.username}
-                    <button
-                      type="button"
-                      onClick={() => toggleGroupMember(m)}
-                      className="hover:text-red-400 transition-colors"
-                    >
-                      <X size={10} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setGroupModalOpen(false);
-                  setSelectedMembers([]);
-                  setGroupName('');
-                }}
-                disabled={creatingGroup}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-500"
-                type="submit"
-                disabled={selectedMembers.length < 1 || !groupName.trim() || creatingGroup}
-              >
-                {creatingGroup ? (
-                  <>
-                    <Loader2 size={10} className="animate-spin mr-1" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <Users size={10} className="mr-1" />
-                    Create Group ({selectedMembers.length + 1} members)
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Add Trader Modal */}
       {addTraderModalOpen && (
