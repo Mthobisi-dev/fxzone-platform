@@ -176,13 +176,13 @@ export function Sidebar() {
               aria-label={item.label}
               title={item.label}
               className={cn(
-                'flex min-h-12 min-w-12 items-center justify-center rounded-lg font-semibold transition-all',
+                'flex flex-1 min-h-14 min-w-0 items-center justify-center rounded-lg font-semibold transition-all',
                 isActive
                   ? 'text-blue-400 font-bold'
                   : 'text-zinc-500 hover:text-zinc-300'
               )}
             >
-              <span className={cn('p-1 rounded-md transition-colors', isActive && 'bg-blue-600/15 text-blue-400')}>
+              <span className={cn('p-2 rounded-lg transition-colors [&>svg]:h-6 [&>svg]:w-6', isActive && 'bg-blue-600/15 text-blue-400')}>
                 {item.icon}
               </span>
             </Link>

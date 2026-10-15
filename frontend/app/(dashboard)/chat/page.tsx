@@ -165,15 +165,16 @@ export default function ChatPage() {
   const fetchEligibleUsers = async () => {
     setLoadingUsers(true);
     try {
-      const response = await api.get('/api/social/users?limit=100');
+      const response = await api.get('/api/social/users?limit=100&mutual=true');
       if (Array.isArray(response)) {
-        // Allow messaging any user except current user and FxZone Bot
+        // The server returns only mutual followers for People suggestions.
         const filtered = response.filter(
-          (u: any) => u.id !== user?.id && u.username !== 'fxzone_bot' && u.email !== 'bot@fxzone.com'
+          (u: any) => u.id !== user?.id && u.is_mutual === true
         );
         setEligibleUsers(filtered);
       }
     } catch (err) {
+      setEligibleUsers([]);
       console.error('Failed to load eligible users:', err);
     } finally {
       setLoadingUsers(false);

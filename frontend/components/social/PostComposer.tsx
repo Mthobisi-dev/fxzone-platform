@@ -144,7 +144,11 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     }
     setMediaError(firstError);
     if (newMedia.length > 0) {
-      setMediaFiles((prev) => [...prev, ...newMedia].slice(0, 5));
+      setMediaFiles((prev) => {
+        const accepted = newMedia.slice(0, Math.max(0, 5 - prev.length));
+        newMedia.slice(accepted.length).forEach(media => URL.revokeObjectURL(media.previewUrl));
+        return [...prev, ...accepted];
+      });
       setIsExpanded(true);
     }
   }, []);
@@ -235,13 +239,13 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
           throw new Error('The attachment could not be uploaded. Check your connection and try again.');
         }
 
-        return { url: signedUpload.url, error: null };
+        return { url: signedUpload.url + (media.type === 'audio' ? '#fxzone-audio' : ''), error: null };
       }
 
       const formData = new FormData();
       formData.append('file', media.file);
       const res = await api.post('/api/social/posts/upload', formData, { timeoutMs: 60_000 });
-      return { url: typeof res?.url === 'string' ? res.url : null, error: null };
+      return { url: typeof res?.url === 'string' ? res.url + (media.type === 'audio' ? '#fxzone-audio' : '') : null, error: null };
     } catch (err: unknown) {
       console.error('File upload failed:', err);
       return { url: null, error: err instanceof Error ? err.message : 'The attachment could not be uploaded.' };
@@ -262,10 +266,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       const uploadedUrls = uploadResults.flatMap((result) => result.url ? [result.url] : []);
       const uploadErrors = uploadResults.flatMap((result) => result.error ? [result.error] : []);
 
-      if (mediaFiles.length > 0 && uploadedUrls.length === 0) {
-        if (!content.trim()) {
-          throw new Error(uploadErrors[0] || 'Your attachment could not be uploaded. Please try again.');
-        }
+      if (uploadErrors.length > 0 || uploadedUrls.length !== mediaFiles.length) {
+        throw new Error(uploadErrors[0] || 'An attachment failed to upload. Your draft is kept; please retry.');
       }
 
       // Primary attachment is first uploaded media
@@ -274,7 +276,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       let finalContent = content.trim();
       if (!finalContent && (primaryUrl || mediaFiles.length > 0)) {
         finalContent = '📊 Shared media attachment';
-      } else if (uploadedUrls.length > 1) {
+      }
+      if (uploadedUrls.length > 1) {
         const extraUrls = uploadedUrls.slice(1);
         finalContent += '\n\n' + extraUrls.map((u) => `📎 ${u}`).join('\n');
       }
@@ -353,7 +356,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
   return (
     <Card
-      className={`p-4 border transition-colors ${
+      className={`fxzone-post-composer p-3 sm:p-4 border transition-colors ${
         isDragOver
           ? 'border-blue-500 bg-blue-950/20'
           : 'border-zinc-850 bg-zinc-900/10'
@@ -380,8 +383,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             onFocus={() => setIsExpanded(true)}
             placeholder={
               mediaFiles.length > 0
-                ? "Write a caption or technical analysis for your attached chart/media..."
-                : "Share technical analysis, charts, video walkthroughs, or voice memos..."
+                ? "Write about your photos or videos…"
+                : "Share an update, photo or video…"
             }
             rows={isExpanded ? (mediaFiles.length > 0 ? 3 : 3) : 1}
             className="w-full bg-transparent border-0 text-xs text-white placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[36px] leading-relaxed"
@@ -554,7 +557,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
               </div>
 
               {/* Toolbar Actions — Responsive Mobile Flex Container */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 select-none pt-2 border-t border-zinc-850/60 mt-2">
+              <div className="flex flex-wrap items-center justify-between gap-2.5 select-none pt-2 border-t border-zinc-850/60 mt-2">
                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 sm:pb-0 pr-1">
                   <button
                     type="button"
@@ -614,7 +617,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                         ? 'bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30'
                         : 'hover:bg-zinc-850 text-zinc-400 hover:text-white'
                     }`}
-                    title="Configure Post Privacy & Interaction Controls"
+                    aria-expanded={showOptionsModal}
+                    title="Post settings"
                   >
                     <SlidersHorizontal size={14} className="text-purple-400" />
                     <span>Options</span>
@@ -623,10 +627,10 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
                 {/* Post Options Drawer */}
                 {showOptionsModal && (
-                  <div className="p-3 bg-zinc-950/90 border border-zinc-800 rounded-xl space-y-2 text-xs text-zinc-300 mt-2 shadow-xl">
+                  <div className="order-last w-full p-3 bg-zinc-950/90 border border-zinc-800 rounded-xl space-y-2 text-xs text-zinc-300 mt-2 shadow-xl">
                     <div className="flex items-center justify-between pb-1 border-b border-zinc-850">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                        <SlidersHorizontal size={12} className="text-purple-400" /> Interaction & Counter Controls
+                        <SlidersHorizontal size={12} className="text-purple-400" /> Post settings
                       </span>
                       <button
                         type="button"

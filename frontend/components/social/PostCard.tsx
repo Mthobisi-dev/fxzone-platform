@@ -33,7 +33,8 @@ import { CommentThread } from './CommentThread';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-import { playExclusive, releaseMedia } from '@/lib/mediaPlayback';
+import { PostGallery } from './PostGallery';
+import { readPostAttachments } from '@/lib/postAttachments';
 
 export interface Post {
   id: string;
@@ -105,6 +106,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   };
 
   const imageUrl = post.imageUrl || raw.image_url;
+  const attachments = readPostAttachments(post.content || '', imageUrl);
   const assetTags = post.assetTags || raw.asset_tags || [];
   const initialLikes = post.likesCount ?? raw.likes_count ?? 0;
   const initialComments = post.commentsCount ?? raw.comments_count ?? 0;
@@ -393,17 +395,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     }
   };
 
-  // Media Detection Helpers
-  const isVideoUrl = (url?: string) => {
-    if (!url) return false;
-    return /\.(mp4|webm|mov|m4v|mkv)(\?.*)?$/i.test(url);
-  };
-
-  const isAudioUrl = (url?: string) => {
-    if (!url) return false;
-    return /\.(mp3|wav|ogg|m4a|aac)(\?.*)?$/i.test(url) || url.includes('voice-memo');
-  };
-
   // YouTube match in content
   const youtubeMatch = post.content.match(
     /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i
@@ -562,7 +553,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
 
           {/* Text Content with Viewable Link Highlights */}
           <div className="text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap mb-3 break-words">
-            {post.content.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
+            {attachments.text.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
               if (/^https?:\/\//.test(part)) {
                 return (
                   <a
@@ -595,54 +586,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             </div>
           )}
 
-          {/* Video Attachment Player */}
-          {imageUrl && isVideoUrl(imageUrl) && (
-            <div className="relative rounded-xl border border-zinc-800/80 overflow-hidden mb-3 bg-black flex items-center justify-center shadow-lg">
-              <video
-                src={imageUrl}
-                controls
-                playsInline
-                preload="metadata"
-                className="w-full max-h-[70svh] rounded-xl object-contain bg-black sm:max-h-[38rem]"
-                onClick={(e) => e.stopPropagation()}
-                onPlay={(event) => playExclusive(event.currentTarget)}
-                onEnded={(event) => releaseMedia(event.currentTarget)}
-              />
-            </div>
-          )}
-
-          {/* Audio / Voice Memo Player */}
-          {imageUrl && isAudioUrl(imageUrl) && (
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="bg-zinc-950/90 border border-purple-500/30 rounded-xl p-3 flex items-center gap-3 mb-3 shadow-md"
-            >
-              <div className="h-9 w-9 rounded-full bg-purple-600/20 text-purple-400 flex items-center justify-center shrink-0">
-                <Mic size={16} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className="text-[9px] font-bold text-purple-400 uppercase tracking-wider block mb-1">
-                  Audio / Voice Memo
-                </span>
-                <audio src={imageUrl} controls className="w-full h-8" onPlay={(event) => playExclusive(event.currentTarget)} onEnded={(event) => releaseMedia(event.currentTarget)} />
-              </div>
-            </div>
-          )}
-
-          {/* Image Attachment (when not video/audio) */}
-          {imageUrl && !isVideoUrl(imageUrl) && !isAudioUrl(imageUrl) && (
-            <div className="relative rounded-xl border border-zinc-800/60 overflow-hidden mb-3 bg-zinc-900/60 flex items-center justify-center">
-              <img
-                src={imageUrl}
-                alt="Post attachment"
-                className="w-full max-h-[70svh] object-contain rounded-xl hover:opacity-95 transition-opacity sm:max-h-[38rem]"
-                loading="lazy"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).parentElement!.style.display = 'none';
-                }}
-              />
-            </div>
-          )}
+          <PostGallery urls={attachments.urls} />
 
           {post.caption && (
             <p className="text-xs text-gray-400 italic mt-1 px-1 mb-3">{post.caption}</p>

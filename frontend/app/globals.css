@@ -625,6 +625,32 @@ html[class*="theme-"] :focus-visible {
   outline: none;
 }
 
+/* Explicit component sizing overrides the mobile form default. */
+html[class] .fxzone-heatmap-filter select {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  min-height: 2rem;
+  max-width: 8rem;
+}
+.fxzone-heatmap-filter { font-size: 0.75rem; }
+html[class] .fxzone-post-composer textarea,
+html[class] .fxzone-post-composer input:not([type="checkbox"]):not([type="file"]) {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* White labels belong on solid actions, not translucent tinted surfaces. */
+html.theme-minimal-light :is([class*="bg-blue-500/"], [class*="bg-purple-500/"], [class*="bg-rose-500/"], [class*="bg-emerald-500/"]) .text-white,
+html.theme-minimal-light :is([class*="bg-blue-500/"], [class*="bg-purple-500/"], [class*="bg-rose-500/"], [class*="bg-emerald-500/"]).text-white {
+  color: var(--color-text) !important;
+}
+html.theme-minimal-light .fxzone-heatmap-tile .text-white {
+  color: #fff !important;
+}
+html.theme-minimal-light .fxzone-post-composer :is(.text-gray-300, .text-gray-400) {
+  color: var(--color-text) !important;
+}
+
 .fxzone-heatmap-group {
   background: color-mix(in srgb, var(--color-background) 72%, var(--color-card));
 }

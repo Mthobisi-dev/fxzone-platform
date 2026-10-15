@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, syncAuthProfiles } from '@/lib/supabase';
 import { isHiddenSystemAccount } from '@/lib/systemAccounts';
+import { mutualConnectionIds } from '@/lib/mutualConnections';
 
 // These were seeded as blog demonstrations and must not be suggested as live
 // community accounts while the deliberate maintenance script removes them.
@@ -22,6 +23,21 @@ export async function GET(request: NextRequest) {
     const { user: currentUser } = await getUserFromRequest(request);
     const db = getSupabaseAdmin(request);
 
+    // Messages only suggests mutual connections; filter before pagination.
+    const mutualOnly = searchParams.get('mutual') === 'true';
+    let mutualIds: string[] = [];
+    if (mutualOnly) {
+      if (!currentUser) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      const [outgoing, incoming] = await Promise.all([
+        db.from('follows').select('following_id').eq('follower_id', currentUser.id),
+        db.from('follows').select('follower_id').eq('following_id', currentUser.id),
+      ]);
+      if (outgoing.error) throw outgoing.error;
+      if (incoming.error) throw incoming.error;
+      mutualIds = mutualConnectionIds(currentUser.id, outgoing.data || [], incoming.data || []);
+      if (!mutualIds.length) return NextResponse.json([], { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
     // 1. Query registered accounts from public.users table
     const loadUsers = () => {
       let query = db
@@ -32,6 +48,7 @@ export async function GET(request: NextRequest) {
         // short Discover page when they are newest records.
         .limit(Math.min(limit + LEGACY_DEMO_USERNAMES.size + 1, 100));
 
+      if (mutualOnly) query = query.in('id', mutualIds);
       if (q.trim()) {
         const safeQuery = q.trim().replace(/[^\w .-]/g, '').slice(0, 80);
         if (safeQuery) {
@@ -44,7 +61,7 @@ export async function GET(request: NextRequest) {
     let { data: usersData, error } = await loadUsers();
     // A legacy installation can have real auth.accounts but only the current
     // user's public profile. Repair that gap before returning Discover data.
-    if (!error && !q.trim() && (usersData || []).length <= 1) {
+    if (!mutualOnly && !error && !q.trim() && (usersData || []).length <= 1) {
       try {
         await syncAuthProfiles();
       } catch (syncError) {
@@ -84,6 +101,8 @@ export async function GET(request: NextRequest) {
       ]);
       const followings = followingsResult.data;
       const followers = followersResult.data;
+      if (followingsResult.error) throw followingsResult.error;
+      if (followersResult.error) throw followersResult.error;
 
       const followingSet = new Set((followings || []).map((f: any) => f.following_id));
       const followerSet = new Set((followers || []).map((f: any) => f.follower_id));
@@ -100,11 +119,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json(users);
+    return NextResponse.json(mutualOnly ? users.filter(account => account.is_mutual) : users, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error: any) {
     console.error('Error fetching social users:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch users', detail: error?.message },
+      { error: 'Failed to fetch users' },
       { status: 500 }
     );
   }
