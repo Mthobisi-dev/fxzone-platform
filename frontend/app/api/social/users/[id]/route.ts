@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 import { getFollowCounts } from '@/lib/server/socialCounters';
+import { isHiddenSystemAccount } from '@/lib/systemAccounts';
 
 // Fetch a profile by UUID or username with legacy-schema compatibility.
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     if (result.error) throw result.error;
     const data: any = result.data;
     if (!data) return NextResponse.json({ detail: 'Trader not found' }, { status: 404 });
+    if (isHiddenSystemAccount(data.username)) return NextResponse.json({ detail: 'Trader not found' }, { status: 404 });
 
     const counts = await getFollowCounts(db, data.id);
     const { data: follow } = viewer && viewer.id !== data.id

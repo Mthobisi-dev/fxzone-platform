@@ -17,7 +17,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -50,7 +51,7 @@ interface ChatWindowProps {
   members?: any[];
   conversationData?: any;
   onSendMessage: (text: string, messageType?: 'text' | 'image' | 'video' | 'audio') => Promise<void>;
-  onDeleteMessage?: (messageId: string) => void;
+  onDeleteMessage?: (messageId: string) => Promise<void>;
   onStartLiveCall?: () => void;
   onTyping?: () => void;
   typingUsers?: string[];
@@ -84,6 +85,21 @@ export function ChatWindow({
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [addedMembers, setAddedMembers] = useState<string[]>([]);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!onDeleteMessage || deletingMessageId) return;
+    if (!window.confirm('Delete this message for everyone in the conversation?')) return;
+    setDeletingMessageId(messageId);
+    try {
+      await onDeleteMessage(messageId);
+    } catch (error) {
+      console.error('Unable to delete chat message:', error);
+      window.alert('The message could not be deleted. Please try again.');
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
 
   const fetchUsersForGroup = async () => {
     setLoadingUsers(true);
@@ -125,8 +141,8 @@ export function ChatWindow({
   return (
     <div className="flex-1 h-full flex flex-col justify-between bg-[#070b13] fxzone-chat-surface relative overflow-hidden">
       {/* ─── CHAT & TRADINGVIEW HEADER ─── */}
-      <div className="h-14 px-3 sm:px-4 border-b border-zinc-850 flex items-center justify-between bg-[#0a0f1d] fxzone-chat-header select-none shrink-0 z-20">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      <div className="min-h-14 px-3 py-2 sm:py-0 sm:h-14 sm:px-4 border-b border-zinc-850 flex flex-wrap items-center justify-between gap-y-2 bg-[#0a0f1d] fxzone-chat-header select-none shrink-0 z-20">
+        <div className="flex flex-1 items-center gap-2 sm:gap-3 min-w-0">
           {onBack && (
             <button
               onClick={onBack}
@@ -156,7 +172,7 @@ export function ChatWindow({
         </div>
 
         {/* Middle Control: View Mode Switcher (Chat vs Split View vs TradingView Chart) */}
-        <div className="flex bg-zinc-900/90 border border-zinc-800 rounded-xl p-0.5 gap-0.5">
+        <div className="order-3 w-full justify-center flex bg-zinc-900/90 border border-zinc-800 rounded-xl p-0.5 gap-0.5 sm:order-none sm:w-auto">
           <button
             onClick={() => setViewMode('chat')}
             className={cn(
@@ -274,7 +290,7 @@ export function ChatWindow({
                   <div
                     key={msg.id}
                     className={cn(
-                      'flex gap-2 max-w-[88%] sm:max-w-[75%]',
+                      'group flex gap-2 max-w-[88%] sm:max-w-[75%]',
                       isSelf ? 'self-end flex-row-reverse' : 'self-start'
                     )}
                   >
@@ -433,7 +449,7 @@ export function ChatWindow({
                         ) : msg.messageType === 'audio' || legacyVoiceUrl ? (
                           <audio src={legacyVoiceUrl || msg.content} controls preload="metadata" className="max-w-full" onPlay={(event) => playExclusive(event.currentTarget)} onEnded={(event) => releaseMedia(event.currentTarget)} />
                         ) : (
-                          <p>{msg.content}</p>
+                          <p className="[overflow-wrap:anywhere]">{msg.content}</p>
                         )}
 
                         <div className="flex justify-between items-center gap-2 mt-1 text-[8px] text-zinc-500 select-none">
@@ -443,6 +459,18 @@ export function ChatWindow({
                               minute: '2-digit',
                             })}
                           </span>
+                          {isSelf && onDeleteMessage && !String(msg.id).startsWith('temp-') && (
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteMessage(msg.id)}
+                              disabled={Boolean(deletingMessageId)}
+                              aria-label="Delete sent message"
+                              title="Delete this message"
+                              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[var(--fxzone-text-muted)] transition hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                            >
+                              <Trash2 size={14} className={cn(deletingMessageId === msg.id && 'animate-pulse')} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

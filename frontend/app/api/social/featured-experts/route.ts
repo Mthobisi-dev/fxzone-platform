@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { isHiddenSystemAccount } from '@/lib/systemAccounts';
 
 // GET /api/social/featured-experts — fetch top active users from database
 export async function GET(request: NextRequest) {
@@ -9,11 +10,11 @@ export async function GET(request: NextRequest) {
       .from('users')
       .select('id, username, display_name, avatar_url, role')
       .order('created_at', { ascending: false })
-      .limit(5);
+      .limit(6);
 
     if (error) throw error;
 
-    const experts = (users || []).map((u: any) => ({
+    const experts = (users || []).filter((u) => !isHiddenSystemAccount(u.username)).slice(0, 5).map((u: any) => ({
       id: u.id,
       username: u.username,
       display_name: u.display_name || u.username,

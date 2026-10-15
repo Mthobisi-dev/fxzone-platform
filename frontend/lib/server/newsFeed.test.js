@@ -50,3 +50,42 @@ test('parses Yahoo Finance RSS entries as source-linked provider articles', asyn
   assert.equal(articles[0].url, 'https://finance.example/article');
   assert.equal(articles[0].content, '');
 });
+
+test('normalizes a bounded news search query', async () => {
+  const { parseNewsSearchQuery } = await loadNewsFeed();
+
+  assert.equal(parseNewsSearchQuery('  gold   market  '), 'gold market');
+  assert.equal(parseNewsSearchQuery('x'.repeat(120)).length, 80);
+  assert.equal(parseNewsSearchQuery('  '), '');
+});
+
+test('parses Yahoo Finance search news without inventing article fields', async () => {
+  const { parseYahooFinanceSearch } = await loadNewsFeed();
+  const articles = parseYahooFinanceSearch({
+    news: [{
+      uuid: 'provider-id',
+      title: 'Gold advances after provider-reported market move',
+      publisher: 'Reuters',
+      link: 'https://finance.example/gold',
+      providerPublishTime: 1791547200,
+      relatedTickers: ['GC=F'],
+    }],
+  });
+
+  assert.equal(articles.length, 1);
+  assert.equal(articles[0].source, 'Reuters');
+  assert.equal(articles[0].url, 'https://finance.example/gold');
+  assert.deepEqual(articles[0].asset_tags, ['GC=F']);
+  assert.equal(articles[0].content, '');
+});
+
+test('filters stored news by title, source, content, category, or asset tag', async () => {
+  const { filterRelevantNews } = await loadNewsFeed();
+  const articles = [
+    { id: '1', title: 'Equity update', content: '', source: 'Provider', url: null, published_at: null, category: 'stocks', asset_tags: ['NVDA'] },
+    { id: '2', title: 'Currency update', content: '', source: 'Provider', url: null, published_at: null, category: 'forex', asset_tags: ['EURUSD'] },
+  ];
+
+  assert.deepEqual(filterRelevantNews(articles, 'nvda').map((item) => item.id), ['1']);
+  assert.deepEqual(filterRelevantNews(articles, 'forex').map((item) => item.id), ['2']);
+});

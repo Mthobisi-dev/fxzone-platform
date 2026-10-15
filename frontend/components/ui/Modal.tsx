@@ -29,7 +29,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -45,8 +45,10 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.3 }}
+            role="dialog"
+            aria-modal="true"
             className={cn(
-              'relative w-full max-w-lg overflow-hidden glass-strong rounded-xl border border-zinc-800/80 shadow-2xl flex flex-col',
+              'relative w-full max-w-lg max-h-[calc(100dvh-1rem)] overflow-hidden glass-strong rounded-xl border border-zinc-800/80 shadow-2xl flex flex-col',
               className
             )}
           >

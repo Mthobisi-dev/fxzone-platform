@@ -59,6 +59,37 @@ test('maps Yahoo Finance fallback data as explicitly delayed provider data', asy
   assert.equal(quotes.NVDA.volume, 59_800_587);
 });
 
+test('calculates equity market cap from a provider quote and shares outstanding', async () => {
+  const { calculateEquityMarketCap, addYahooSharesOutstanding } = await loadMarketService();
+
+  assert.equal(calculateEquityMarketCap(140, 24_000_000_000), 3_360_000_000_000);
+  assert.equal(calculateEquityMarketCap(0, 24_000_000_000), null);
+  assert.equal(calculateEquityMarketCap(140, null), null);
+  assert.equal(calculateEquityMarketCap(true, 10), null);
+  assert.equal(calculateEquityMarketCap(140, [10]), null);
+
+  const enriched = addYahooSharesOutstanding({ NVDA: {
+    symbol: 'NVDA', price: 140, change: 1, change_pct: 0.72,
+    market_cap: null, data_source: 'yahoo_finance', freshness: 'delayed',
+    is_live: false, is_stale: false,
+  } }, [{ symbol: 'NVDA', sharesOutstanding: 24_000_000_000 }]);
+
+  assert.equal(enriched.NVDA.market_cap, 3_360_000_000_000);
+  assert.equal(enriched.NVDA.market_cap_method, 'calculated');
+});
+
+test('does not invent equity market cap when provider shares are missing or invalid', async () => {
+  const { addYahooSharesOutstanding } = await loadMarketService();
+  const quotes = { NVDA: {
+    symbol: 'NVDA', price: 140, change: 1, change_pct: 0.72,
+    market_cap: null, data_source: 'yahoo_finance', freshness: 'delayed',
+    is_live: false, is_stale: false,
+  } };
+
+  assert.equal(addYahooSharesOutstanding(quotes, [{ symbol: 'NVDA', sharesOutstanding: 0 }]).NVDA.market_cap, null);
+  assert.equal(addYahooSharesOutstanding(quotes, []).NVDA.market_cap, null);
+});
+
 test('parses complete Yahoo Finance candles without generating missing values', async () => {
   const { parseYahooFinanceCandles } = await loadMarketService();
   const candles = parseYahooFinanceCandles({
@@ -97,4 +128,35 @@ test('splits Yahoo Finance symbol requests into provider-safe batches', async ()
     ['MSFT', 'GOOGL'],
     ['AMZN'],
   ]);
+});
+
+test('keeps successful Yahoo batches when another batch or company metadata fails', async () => {
+  const { fetchYahooFinanceQuotes } = await loadMarketService();
+  const quotes = await fetchYahooFinanceQuotes(async (input) => {
+    const url = new URL(input);
+    const symbols = url.searchParams.get('symbols').split(',');
+    if (url.pathname.endsWith('/quote')) return { ok: false, status: 401 };
+    if (!symbols.includes('NVDA')) throw new Error('One provider batch is unavailable');
+    return { ok: true, json: async () => ({ spark: { result: [{ symbol: 'NVDA', response: [{ meta: {
+      regularMarketPrice: 140, regularMarketChange: 1, regularMarketChangePercent: 0.72,
+      regularMarketTime: 1_791_573_529,
+    } }] }] } }) };
+  });
+  assert.equal(quotes.NVDA.price, 140);
+  assert.equal(quotes.NVDA.market_cap, null);
+  assert.equal(quotes.NVDA.freshness, 'delayed');
+});
+
+test('malformed market-cap metadata cannot remove otherwise valid quotes', async () => {
+  const { fetchYahooFinanceQuotes } = await loadMarketService();
+  const quotes = await fetchYahooFinanceQuotes(async (input) => {
+    const url = new URL(input);
+    if (url.pathname.endsWith('/quote')) return { ok: true, json: async () => ({ quoteResponse: { result: {} } }) };
+    return { ok: true, json: async () => ({ spark: { result: [{ symbol: 'NVDA', response: [{ meta: {
+      regularMarketPrice: 140, regularMarketChange: 1, regularMarketChangePercent: 0.72,
+      regularMarketTime: 1_791_573_529,
+    } }] }] } }) };
+  });
+  assert.equal(quotes.NVDA.price, 140);
+  assert.equal(quotes.NVDA.market_cap, null);
 });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, syncAuthProfiles } from '@/lib/supabase';
+import { isHiddenSystemAccount } from '@/lib/systemAccounts';
 
 // These were seeded as blog demonstrations and must not be suggested as live
 // community accounts while the deliberate maintenance script removes them.
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
         .order('created_at', { ascending: false })
         // Overscan lets us hide legacy demonstrations without returning a
         // short Discover page when they are newest records.
-        .limit(Math.min(limit + LEGACY_DEMO_USERNAMES.size, 100));
+        .limit(Math.min(limit + LEGACY_DEMO_USERNAMES.size + 1, 100));
 
       if (q.trim()) {
         const safeQuery = q.trim().replace(/[^\w .-]/g, '').slice(0, 80);
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     let users = (usersData || [])
-      .filter((account: any) => !LEGACY_DEMO_USERNAMES.has(String(account.username || '').toLowerCase()))
+      .filter((account: any) => !LEGACY_DEMO_USERNAMES.has(String(account.username || '').toLowerCase()) && !isHiddenSystemAccount(account.username))
       .slice(0, limit)
       .map((account: any) => ({
       ...account,
@@ -127,6 +128,13 @@ export async function POST(request: NextRequest) {
     if (following_id) {
       if (following_id === user.id) {
         return NextResponse.json({ detail: 'Cannot follow yourself' }, { status: 400 });
+      }
+      const { data: target, error: targetError } = await db.from('users')
+        .select('id, username, role').eq('id', following_id).maybeSingle();
+      if (targetError) throw targetError;
+      if (!target) return NextResponse.json({ detail: 'Trader not found' }, { status: 404 });
+      if (isHiddenSystemAccount(target.username) || ['jackbot_analysis', 'fxzone_bot', 'fxzone_admin'].includes(String(target.username).toLowerCase()) || target.role === 'admin') {
+        return NextResponse.json({ detail: 'This system account cannot be followed.' }, { status: 403 });
       }
       const { data, error } = await db
         .from('follows')

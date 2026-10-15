@@ -461,6 +461,7 @@ test('an explicit follow intent never toggles an existing follow off during a br
     },
     '@/lib/server/notifications': { createNotification: async () => {} },
     '@/lib/server/socialCounters': { getFollowCounts: async () => ({ followers_count: 1, following_count: 2 }) },
+    '@/lib/systemAccounts': { isHiddenSystemAccount: () => false },
   });
 
   const response = await POST({ json: async () => ({ following: true }) }, { params: Promise.resolve({ id: 'host' }) });

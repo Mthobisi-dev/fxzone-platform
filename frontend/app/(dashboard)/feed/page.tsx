@@ -12,6 +12,45 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, RefreshCw, TrendingUp } from 'lucide-react';
 
+interface TrendingSymbolView {
+  symbol: string;
+  posts: number;
+  basis: 'community' | 'market_movement';
+  change: string;
+  price: number | null;
+  freshness?: string;
+  dataSource?: string;
+}
+
+function TrendingSymbolsCard({ items }: { items: TrendingSymbolView[] }) {
+  return (
+    <Card className="p-4 border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <h4 className="text-xs font-bold text-[var(--color-text)] mb-3 uppercase tracking-wider flex items-center gap-1.5">
+        <TrendingUp size={14} className="text-emerald-500" /> Trending Symbols
+      </h4>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+        {items.length === 0 ? (
+          <p className="col-span-full text-[10px] text-[var(--color-text-muted)] italic">Verified trend data is temporarily unavailable.</p>
+        ) : items.map((item) => (
+          <div key={item.symbol} className="flex justify-between items-center gap-3 rounded-lg border border-[var(--color-border)] p-2 lg:border-0 lg:p-0">
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-[var(--color-text)] block">{item.symbol}</span>
+              <span className="text-[8px] text-[var(--color-text-muted)] block truncate">
+                {item.basis === 'community'
+                  ? `${item.posts} ${item.posts === 1 ? 'discussion' : 'discussions'}`
+                  : `${item.freshness || 'provider'} market mover`}
+              </span>
+            </div>
+            <span className={`text-[10px] font-bold ${item.change.startsWith('+') ? 'text-emerald-500' : item.change.startsWith('-') ? 'text-red-500' : 'text-[var(--color-text-muted)]'}`}>
+              {item.change}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function SocialFeedPage() {
   const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
@@ -27,35 +66,23 @@ export default function SocialFeedPage() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   // Sidebar dynamic real data
-  const [trendingSymbols, setTrendingSymbols] = useState<any[]>([]);
+  const [trendingSymbols, setTrendingSymbols] = useState<TrendingSymbolView[]>([]);
 
   const fetchSidebarData = async () => {
     try {
-      const [trendRes, quotesRes] = await Promise.allSettled([
-        api.get('/api/social/trending-symbols', { public: true }),
-        api.get('/api/market/quotes', { public: true }),
-      ]);
-
-      const quotesMap = new Map<string, any>();
-      if (quotesRes.status === 'fulfilled') {
-        const quoteRows = Array.isArray(quotesRes.value)
-          ? quotesRes.value
-          : Object.values(quotesRes.value || {});
-        quoteRows.forEach((q: any) => {
-          if (q?.symbol) quotesMap.set(q.symbol, q);
-        });
-      }
-
-      if (trendRes.status === 'fulfilled' && Array.isArray(trendRes.value)) {
+      const trendResponse = await api.get('/api/social/trending-symbols', { public: true });
+      if (Array.isArray(trendResponse)) {
         setTrendingSymbols(
-          trendRes.value.map((t: any) => {
-            const q = quotesMap.get(t.symbol);
-            const changePercent = q?.change_pct ?? q?.change_percent ?? q?.changePercent;
+          trendResponse.map((trend: any) => {
+            const changePercent = trend.change_pct;
             return {
-              symbol: t.symbol,
-              posts: t.posts ?? 0,
+              symbol: trend.symbol,
+              posts: trend.posts ?? 0,
+              basis: trend.basis,
               change: typeof changePercent === 'number' ? `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%` : 'Unavailable',
-              price: q?.price ?? null,
+              price: trend.price ?? null,
+              freshness: trend.freshness,
+              dataSource: trend.data_source,
             };
           })
         );
@@ -199,6 +226,10 @@ export default function SocialFeedPage() {
           void fetchSidebarData();
         }} />
 
+        <div className="lg:hidden">
+          <TrendingSymbolsCard items={trendingSymbols} />
+        </div>
+
         {/* Refresh Feed & Start Fresh Action */}
         <div className="flex justify-between items-center px-1">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
@@ -256,39 +287,7 @@ export default function SocialFeedPage() {
 
       {/* Right 1 Column: Sticky Trending Sidebar */}
       <div className="lg:col-span-1 space-y-4 hidden lg:block sticky top-0 h-fit">
-        {/* Trending Symbols Widget */}
-        <Card className="p-4 border border-zinc-900 bg-zinc-950/40">
-          <h4 className="text-xs font-bold text-white mb-3 uppercase tracking-wider flex items-center gap-1.5">
-            <TrendingUp size={14} className="text-emerald-400" /> Trending Symbols
-          </h4>
-          <div className="space-y-3">
-            {trendingSymbols.length === 0 ? (
-              <p className="text-[10px] text-zinc-500 italic">Loading market symbols...</p>
-            ) : (
-              trendingSymbols.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center">
-                  <div>
-                    <span className="text-xs font-bold text-white block">
-                      {item.symbol}
-                    </span>
-                    <span className="text-[8px] text-zinc-500">
-                      {item.posts > 0 ? `${item.posts} discussions` : 'Market Active'}
-                    </span>
-                  </div>
-                  <span
-                    className={`text-[10px] font-bold ${
-                      item.change?.startsWith('+')
-                        ? 'text-emerald-400'
-                        : 'text-red-400'
-                    }`}
-                  >
-                    {item.change}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+        <TrendingSymbolsCard items={trendingSymbols} />
 
       </div>
 

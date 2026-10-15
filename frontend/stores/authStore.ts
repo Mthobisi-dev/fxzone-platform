@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { buildOAuthRedirectUrl } from '@/lib/oauthRedirect';
 import type { Session } from '@supabase/supabase-js';
 
 export interface FxUser {
@@ -287,13 +288,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginWithGoogle: async () => {
     set({ isLoading: true, error: null });
     try {
-      const redirectTo =
-        typeof window !== 'undefined' ? `${window.location.origin}/auth/callback?next=/dashboard` : '/auth/callback?next=/dashboard';
-      const { error } = await supabase.auth.signInWithOAuth({
+      if (typeof window === 'undefined') throw new Error('Google sign-in must be started in a browser.');
+      const redirectTo = buildOAuthRedirectUrl(
+        window.location.origin,
+        process.env.NEXT_PUBLIC_SITE_URL,
+        '/dashboard'
+      );
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo },
+        options: {
+          redirectTo,
+          scopes: 'openid email profile',
+          queryParams: { prompt: 'select_account' },
+        },
       });
       if (error) throw error;
+      if (!data.url) throw new Error('Google did not return a sign-in URL.');
     } catch (err: any) {
       const msg = err?.message || 'Google sign-in failed. Please try email login.';
       set({ error: msg, isLoading: false, isInitialized: true });

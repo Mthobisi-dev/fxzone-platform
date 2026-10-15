@@ -9,6 +9,7 @@ export interface DashboardQuote {
   change_pct: number;
   volume?: number | null;
   market_cap?: number | null;
+  market_cap_method?: 'provider' | 'calculated' | null;
   timestamp?: string;
   data_source?: string;
   freshness?: 'live' | 'delayed' | 'cached' | 'stale';

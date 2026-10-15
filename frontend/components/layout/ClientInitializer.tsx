@@ -19,44 +19,28 @@ import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { supabase } from '@/lib/supabase';
+import { initializeClientBootstrap } from '@/lib/clientBootstrap';
 
 export function ClientInitializer() {
   useEffect(() => {
-    // Subscribe to Supabase auth events — handles:
-    //  - INITIAL_SESSION: fires immediately with current session or null
-    //  - SIGNED_IN: user logged in
-    //  - SIGNED_OUT: user logged out
-    //  - TOKEN_REFRESHED: Supabase auto-refreshed the JWT
-    //  - USER_UPDATED: profile metadata changed
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Drive auth state from Supabase events, not from ad-hoc initialize() calls
-        // Pass event so _setFromSession can skip expensive DB sync on TOKEN_REFRESHED
-        useAuthStore.getState()._setFromSession(session, event);
-
-        // After sign-in or initial session, load notifications
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-          if (session) {
-            // Defer to avoid blocking auth state update
-            setTimeout(() => {
-              useNotificationStore.getState().fetchNotifications();
-            }, 500);
+    return initializeClientBootstrap({
+      initializeTheme: () => useThemeStore.getState().initialize(),
+      subscribeAuth: () => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          (event, session) => {
+            useAuthStore.getState()._setFromSession(session, event);
+            if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+              setTimeout(() => useNotificationStore.getState().fetchNotifications(), 500);
+            }
+            if (event === 'SIGNED_OUT') {
+              useNotificationStore.setState({ notifications: [], unreadCount: 0 });
+            }
           }
-        }
-
-        // On sign-out, clear notifications
-        if (event === 'SIGNED_OUT') {
-          useNotificationStore.setState({ notifications: [], unreadCount: 0 });
-        }
-      }
-    );
-
-    // Initialize theme (safe, no auth needed)
-    useThemeStore.getState().initialize();
-
-    return () => {
-      subscription.unsubscribe();
-    };
+        );
+        return () => subscription.unsubscribe();
+      },
+      onAuthError: (error) => console.error('[Auth] Supabase browser initialization failed:', error),
+    });
   }, []);
 
   return null;

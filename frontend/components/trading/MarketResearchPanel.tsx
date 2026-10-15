@@ -101,8 +101,8 @@ export function MarketResearchPanel() {
         ) : (
           <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
             {articles.map((article) => (
-              <article key={article.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
-                <div className="flex items-center justify-between gap-2 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+              <article key={article.id} className="min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3 [overflow-wrap:anywhere]">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
                   <span className="truncate">{article.source}</span>
                   <span className="shrink-0 normal-case tracking-normal">{dateLabel(article.published_at)}</span>
                 </div>

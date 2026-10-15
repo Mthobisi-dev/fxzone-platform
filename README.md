@@ -67,6 +67,12 @@ Server-only values:
 
 The client receives short-lived TURN credentials from `/api/webrtc/credentials` only after it has authenticated and joined the requested live session. Do not add permanent TURN credentials under a `NEXT_PUBLIC_` name.
 
+Google sign-in uses a browser PKCE flow. Configure the Google OAuth client with
+the exact Supabase callback `https://<project-ref>.supabase.co/auth/v1/callback`,
+allow the application `/auth/callback` URL in Supabase Auth, and set
+`NEXT_PUBLIC_SITE_URL` to the stable production origin. A Google client secret
+or Supabase secret/service-role key must never be stored under `NEXT_PUBLIC_*`.
+
 The selected-instrument explanation always starts with provider data and deterministic indicators. When the optional AI Gateway configuration is absent or unavailable, it remains a labelled verified-data briefing. Gateway wording is limited to qualitative research context and is never a source of prices, confidence scores, targets, or recommendations.
 
 ## Supabase setup and migrations

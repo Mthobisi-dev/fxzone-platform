@@ -11,3 +11,38 @@ test('theme compatibility preserves custom blue component backgrounds', () => {
   assert.doesNotMatch(styles, /\[class\*="bg-\[#0"\]/);
   assert.match(styles, /\[class\*="bg-\[#05070d\]"\]/);
 });
+
+test('all themes define the shared background alias and mobile-safe control sizing', () => {
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  assert.match(styles, /--color-bg:\s*#0a0e17/);
+  assert.match(styles, /\.theme-neon-cyber\s*\{[\s\S]*?--color-bg:/);
+  assert.match(styles, /\.theme-minimal-light\s*\{[\s\S]*?--color-bg:/);
+  assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?font-size:\s*16px/);
+});
+
+test('market screener uses the broader Markets title', () => {
+  const screener = fs.readFileSync(path.join(__dirname, '..', 'components', 'trading', 'LiveMarketScreener.tsx'), 'utf8');
+  assert.match(screener, />Markets</);
+  assert.doesNotMatch(screener, />Stock screener</);
+  const legacyScreener = fs.readFileSync(path.join(__dirname, '..', 'components', 'trading', 'StockScreenerDashboard.tsx'), 'utf8');
+  assert.doesNotMatch(legacyScreener, />Stock Screener</);
+});
+
+test('theme preference rejects invalid saved values and synchronizes the root color scheme', async () => {
+  const { applyThemePreference, normalizeThemePreference } = await import('../lib/themePreferences.ts');
+  const classes = new Set(['theme-minimal-light', 'dark']);
+  const root = {
+    classList: {
+      add: (...names) => names.forEach((name) => classes.add(name)),
+      remove: (...names) => names.forEach((name) => classes.delete(name)),
+    },
+    style: {},
+  };
+
+  assert.equal(normalizeThemePreference('unknown-theme'), 'dark-terminal');
+  assert.equal(applyThemePreference(root, 'minimal-light'), 'minimal-light');
+  assert.equal(classes.has('theme-minimal-light'), true);
+  assert.equal(classes.has('dark'), false);
+  assert.equal(root.style.colorScheme, 'light');
+});

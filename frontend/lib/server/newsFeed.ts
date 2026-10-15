@@ -16,6 +16,25 @@ export function parseNewsLimit(value: string | null): number {
   return Math.min(parsed, 50);
 }
 
+export function parseNewsSearchQuery(value: string | null): string {
+  return (value ?? '').trim().replace(/\s+/g, ' ').slice(0, 80);
+}
+
+export function filterRelevantNews(articles: StoredNewsArticle[], query: string): StoredNewsArticle[] {
+  const terms = parseNewsSearchQuery(query).toLowerCase().split(' ').filter(Boolean);
+  if (terms.length === 0) return articles;
+  return articles.filter((article) => {
+    const searchable = [
+      article.title,
+      article.content,
+      article.source,
+      article.category,
+      ...(article.asset_tags ?? []),
+    ].filter(Boolean).join(' ').toLowerCase();
+    return terms.every((term) => searchable.includes(term));
+  });
+}
+
 /**
  * Passes through provider-supplied article fields. No sentiment or summary is
  * created by this service because neither can be inferred from a headline.
@@ -93,8 +112,63 @@ export function parseYahooFinanceRss(xml: string): StoredNewsArticle[] {
   return articles;
 }
 
+interface YahooFinanceSearchNews {
+  uuid?: unknown;
+  title?: unknown;
+  publisher?: unknown;
+  link?: unknown;
+  providerPublishTime?: unknown;
+  relatedTickers?: unknown;
+}
+
+interface YahooFinanceSearchPayload {
+  news?: YahooFinanceSearchNews[];
+}
+
+export function parseYahooFinanceSearch(payload: YahooFinanceSearchPayload): StoredNewsArticle[] {
+  if (!Array.isArray(payload?.news)) return [];
+  const seen = new Set<string>();
+  const articles: StoredNewsArticle[] = [];
+  for (const item of payload.news) {
+    const title = typeof item.title === 'string' ? item.title.trim() : '';
+    const url = safeExternalUrl(typeof item.link === 'string' ? item.link : null);
+    const providerId = typeof item.uuid === 'string' ? item.uuid.trim() : '';
+    const id = providerId || url;
+    if (!id || !title || seen.has(id)) continue;
+    seen.add(id);
+    const publishSeconds = typeof item.providerPublishTime === 'number' ? item.providerPublishTime : Number(item.providerPublishTime);
+    articles.push({
+      id,
+      title,
+      content: '',
+      source: typeof item.publisher === 'string' && item.publisher.trim() ? item.publisher.trim() : 'Yahoo Finance',
+      url,
+      published_at: Number.isFinite(publishSeconds) && publishSeconds > 0 ? new Date(publishSeconds * 1_000).toISOString() : null,
+      category: 'markets',
+      asset_tags: Array.isArray(item.relatedTickers)
+        ? item.relatedTickers.filter((ticker): ticker is string => typeof ticker === 'string').slice(0, 12)
+        : [],
+    });
+  }
+  return articles;
+}
+
 /** Returns current headlines from a trusted provider when ingestion is absent. */
-export async function fetchYahooFinanceNews(limit: number): Promise<StoredNewsArticle[]> {
+export async function fetchYahooFinanceNews(limit: number, query = ''): Promise<StoredNewsArticle[]> {
+  const normalizedQuery = parseNewsSearchQuery(query);
+  if (normalizedQuery) {
+    const searchUrl = new URL('https://query1.finance.yahoo.com/v1/finance/search');
+    searchUrl.searchParams.set('q', normalizedQuery);
+    searchUrl.searchParams.set('quotesCount', '0');
+    searchUrl.searchParams.set('newsCount', String(Math.min(Math.max(limit, 1), 50)));
+    const response = await fetch(searchUrl, {
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(5_000),
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`Yahoo Finance search returned ${response.status}.`);
+    return parseYahooFinanceSearch(await response.json()).slice(0, limit);
+  }
   const url = 'https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EDJI%2C%5EGSPC%2C%5EIXIC&region=US&lang=en-US';
   const response = await fetch(url, {
     next: { revalidate: 300 },

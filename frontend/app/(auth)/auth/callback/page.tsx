@@ -1,30 +1,38 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { safeOAuthDestination } from '@/lib/oauthRedirect';
+import { useAuthStore } from '@/stores/authStore';
 
 /** Completes Supabase OAuth PKCE redirects before entering the dashboard. */
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [message, setMessage] = useState('Completing secure sign-in…');
+  const started = useRef(false);
 
   useEffect(() => {
     const finishSignIn = async () => {
+      if (started.current) return;
+      started.current = true;
       const query = new URLSearchParams(window.location.search);
-      const next = query.get('next');
-      const destination = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+      const destination = safeOAuthDestination(query.get('next'));
       const code = query.get('code');
-      const errorDescription = query.get('error_description');
+      const flowId = query.get('sb_flow_id');
+      const errorDescription = query.get('error_description') || query.get('error');
       if (errorDescription) {
-        setMessage(decodeURIComponent(errorDescription));
+        setMessage(errorDescription);
         return;
       }
-      const result = code ? await supabase.auth.exchangeCodeForSession(code) : await supabase.auth.getSession();
+      const result = code
+        ? await supabase.auth.exchangeCodeForSession(code, flowId ? { flowId } : undefined)
+        : await supabase.auth.getSession();
       if (result.error || !result.data.session) {
         setMessage(result.error?.message || 'Google sign-in could not be completed. Please try again.');
         return;
       }
+      useAuthStore.getState()._setFromSession(result.data.session, 'SIGNED_IN');
       router.replace(destination);
       router.refresh();
     };

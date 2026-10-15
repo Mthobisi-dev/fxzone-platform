@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
+import { normalizeDiscoverQuery, shouldSearchDiscover } from '@/lib/discoverSearch';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -15,11 +16,12 @@ import {
   MessageCircle,
   Users,
   Loader2,
-  Sparkles,
   Shield,
   TrendingUp,
   X,
   Check,
+  Newspaper,
+  ExternalLink,
 } from 'lucide-react';
 
 interface DiscoverUser {
@@ -35,12 +37,23 @@ interface DiscoverUser {
   is_mutual?: boolean;
 }
 
+interface DiscoverNewsArticle {
+  id: string;
+  title: string;
+  source: string;
+  url: string | null;
+  published_at: string | null;
+  asset_tags: string[];
+}
+
 export default function DiscoverPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [users, setUsers] = useState<DiscoverUser[]>([]);
+  const [news, setNews] = useState<DiscoverNewsArticle[]>([]);
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const requestSequence = useRef(0);
   const [followLoading, setFollowLoading] = useState<string | null>(null);
 
   // Group creation state
@@ -49,31 +62,60 @@ export default function DiscoverPage() {
   const [selectedMembers, setSelectedMembers] = useState<DiscoverUser[]>([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
 
-  const fetchUsers = useCallback(async (query = '') => {
+  const fetchDiscovery = useCallback(async (rawQuery: string) => {
+    const query = normalizeDiscoverQuery(rawQuery);
+    if (!shouldSearchDiscover(query)) {
+      requestSequence.current += 1;
+      setUsers([]);
+      setNews([]);
+      setLoading(false);
+      return;
+    }
+    const requestId = ++requestSequence.current;
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (query) params.set('q', query);
-      params.set('limit', '100');
-      const response = await api.get(`/api/social/users?${params.toString()}`);
-      if (Array.isArray(response)) {
-        setUsers(response.filter((u: DiscoverUser) => u.id !== user?.id));
-      }
+      const [usersResult, newsResult] = await Promise.allSettled([
+        api.get(`/api/social/users?${new URLSearchParams({ q: query, limit: '40' }).toString()}`),
+        api.get(`/api/news/feed?${new URLSearchParams({ q: query, limit: '8' }).toString()}`, { public: true }),
+      ]);
+      if (requestId !== requestSequence.current) return;
+      setUsers(usersResult.status === 'fulfilled' && Array.isArray(usersResult.value)
+        ? usersResult.value.filter((candidate: DiscoverUser) => candidate.id !== user?.id)
+        : []);
+      setNews(newsResult.status === 'fulfilled' && Array.isArray(newsResult.value)
+        ? newsResult.value
+        : []);
     } catch (err) {
-      console.error('Failed to fetch users:', err);
-      setUsers([]);
+      console.error('Failed to search Discover:', err);
+      if (requestId === requestSequence.current) {
+        setUsers([]);
+        setNews([]);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
   }, [user?.id]);
 
-  // Fetch immediately when the page opens, then debounce subsequent searches.
+  // Accounts remain hidden until a useful search is entered. Sequence IDs
+  // prevent a late response from replacing results for a newer query.
   useEffect(() => {
+    const query = normalizeDiscoverQuery(search);
+    if (!shouldSearchDiscover(query)) return;
     const timer = setTimeout(() => {
-      fetchUsers(search);
-    }, search ? 300 : 0);
+      void fetchDiscovery(query);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [search, fetchUsers]);
+  }, [search, fetchDiscovery]);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    if (!shouldSearchDiscover(normalizeDiscoverQuery(value))) {
+      requestSequence.current += 1;
+      setUsers([]);
+      setNews([]);
+      setLoading(false);
+    }
+  };
 
   const handleFollow = async (targetUser: DiscoverUser) => {
     setFollowLoading(targetUser.id);
@@ -163,7 +205,7 @@ export default function DiscoverPage() {
       case 'admin':
         return (
           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-bold bg-red-500/15 text-red-400 border border-red-500/20">
-            <Sparkles size={8} /> Admin
+            <Shield size={8} /> Admin
           </span>
         );
       default:
@@ -206,7 +248,7 @@ export default function DiscoverPage() {
       setNewTraderRole('trader');
       setNewTraderBio('');
       setNewTraderAvatar('');
-      await fetchUsers(search);
+      await fetchDiscovery(search);
     } catch (err: any) {
       console.error('Failed to add trader:', err);
       setAddError(err?.detail || err?.message || 'Failed to add trader to network.');
@@ -215,17 +257,19 @@ export default function DiscoverPage() {
     }
   };
 
+  const normalizedSearch = normalizeDiscoverQuery(search);
+  const hasSearch = shouldSearchDiscover(normalizedSearch);
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="mx-auto max-w-5xl space-y-5 p-3 sm:space-y-6 sm:p-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-            <Sparkles size={20} className="text-blue-400" />
+          <h1 className="text-lg font-bold text-[var(--color-text)] tracking-tight flex items-center gap-2">
             Discover Traders
           </h1>
           <p className="text-[11px] text-zinc-500 mt-0.5">
-            Find and follow top traders, analysts, and educators to grow your network.
+            Search by username or find verified market reporting from real providers.
           </p>
         </div>
 
@@ -250,21 +294,26 @@ export default function DiscoverPage() {
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search traders by username or display name..."
-          className="w-full h-10 bg-zinc-900/60 border border-zinc-850 rounded-xl pl-9 pr-4 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 transition-colors"
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Search a username or market news topic..."
+          className="w-full h-10 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl pl-9 pr-4 text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 transition-colors"
         />
       </div>
 
       {/* User grid */}
-      {loading ? (
+      {!hasSearch ? (
+        <div className="text-center py-14 rounded-xl border border-dashed border-[var(--color-border)]">
+          <Search className="mx-auto mb-3 text-[var(--color-text-muted)]" size={22} aria-hidden="true" />
+          <p className="text-xs text-[var(--color-text-muted)]">Enter at least two characters to search traders and verified market news.</p>
+        </div>
+      ) : loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="animate-spin text-blue-500" size={24} />
         </div>
       ) : users.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-xs text-zinc-500">
-            No traders found{search ? ` matching "${search}"` : ''}. Try a different search.
+          <p className="text-xs text-[var(--color-text-muted)]">
+            No traders found matching &quot;{normalizedSearch}&quot;.
           </p>
         </div>
       ) : (
@@ -354,6 +403,40 @@ export default function DiscoverPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {hasSearch && !loading && (
+        <section className="space-y-3" aria-labelledby="discover-news-heading">
+          <div className="flex items-center gap-2">
+            <Newspaper size={16} className="text-blue-500" aria-hidden="true" />
+            <h2 id="discover-news-heading" className="text-sm font-bold text-[var(--color-text)]">Verified market news</h2>
+          </div>
+          {news.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-xs text-[var(--color-text-muted)]">
+              No verified news matched &quot;{normalizedSearch}&quot;.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {news.map((article) => (
+                <article key={article.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
+                    <span className="font-semibold text-blue-500">{article.source}</span>
+                    {article.published_at && <time dateTime={article.published_at}>{new Date(article.published_at).toLocaleDateString()}</time>}
+                  </div>
+                  <h3 className="text-xs font-semibold leading-relaxed text-[var(--color-text)]">{article.title}</h3>
+                  {article.asset_tags?.length > 0 && (
+                    <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">{article.asset_tags.slice(0, 4).join(' · ')}</p>
+                  )}
+                  {article.url && (
+                    <a href={article.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-500 hover:text-blue-400">
+                      Read source <ExternalLink size={10} aria-hidden="true" />
+                    </a>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {/* Create Group Modal */}

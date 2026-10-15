@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import {
   fetchYahooFinanceNews,
+  filterRelevantNews,
   parseNewsLimit,
+  parseNewsSearchQuery,
   toPublicNewsArticle,
   type StoredNewsArticle,
 } from '@/lib/server/newsFeed';
@@ -20,7 +22,9 @@ function respond(articles: StoredNewsArticle[]) {
  * permanent empty error panel to users.
  */
 export async function GET(request: Request) {
-  const limit = parseNewsLimit(new URL(request.url).searchParams.get('limit'));
+  const searchParams = new URL(request.url).searchParams;
+  const limit = parseNewsLimit(searchParams.get('limit'));
+  const query = parseNewsSearchQuery(searchParams.get('q'));
   let storedArticles: StoredNewsArticle[] = [];
 
   try {
@@ -29,7 +33,7 @@ export async function GET(request: Request) {
       .from('news_articles')
       .select('id, title, content, source, url, published_at, category, asset_tags')
       .order('published_at', { ascending: false, nullsFirst: false })
-      .limit(limit);
+      .limit(query ? 50 : limit);
 
     // Older FxZone schemas named the article body `summary`. Preserve their
     // real persisted data without reintroducing generated headlines.
@@ -38,7 +42,7 @@ export async function GET(request: Request) {
         .from('news_articles')
         .select('id, title, summary, source, url, published_at, category, asset_tags')
         .order('published_at', { ascending: false, nullsFirst: false })
-        .limit(limit);
+        .limit(query ? 50 : limit);
       data = (fallback.data ?? []).map((article) => ({
         ...article,
         content: typeof article.summary === 'string' ? article.summary : null,
@@ -49,20 +53,25 @@ export async function GET(request: Request) {
     if (error) {
       console.error('News feed query failed:', error);
     } else {
-      storedArticles = (data ?? []) as StoredNewsArticle[];
+      storedArticles = filterRelevantNews((data ?? []) as StoredNewsArticle[], query).slice(0, limit);
     }
   } catch (error) {
     console.error('News feed route error:', error);
   }
 
-  if (storedArticles.length > 0) return respond(storedArticles);
+  if (!query && storedArticles.length > 0) return respond(storedArticles);
 
   try {
-    const providerArticles = await fetchYahooFinanceNews(limit);
-    if (providerArticles.length > 0) return respond(providerArticles);
+    const providerArticles = await fetchYahooFinanceNews(limit, query);
+    const merged = [...storedArticles, ...providerArticles].filter(
+      (article, index, all) => all.findIndex((candidate) => candidate.id === article.id || (candidate.url && candidate.url === article.url)) === index
+    ).slice(0, limit);
+    if (merged.length > 0) return respond(merged);
   } catch (error) {
     console.error('Yahoo Finance news fallback failed:', error);
   }
+
+  if (query) return respond([]);
 
   return apiError('SERVICE_UNAVAILABLE', 'Verified market news is temporarily unavailable.', 503);
 }

@@ -35,6 +35,16 @@ function formatPrice(price: number): string {
   return price.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
 }
 
+function formatMarketCap(value: number): string {
+  const units = [
+    { threshold: 1_000_000_000_000, suffix: 'T' },
+    { threshold: 1_000_000_000, suffix: 'B' },
+    { threshold: 1_000_000, suffix: 'M' },
+  ];
+  const unit = units.find(({ threshold }) => value >= threshold);
+  return unit ? `$${(value / unit.threshold).toFixed(2)}${unit.suffix}` : `$${value.toLocaleString()}`;
+}
+
 function quoteQuality(quote: { freshness?: string; is_live?: boolean; is_stale?: boolean } | null): string {
   if (!quote) return 'Unavailable';
   if (quote.is_stale || quote.freshness === 'stale') return 'Stale';
@@ -129,7 +139,7 @@ export function LiveMarketScreener() {
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex min-w-0 items-center gap-2 pr-1">
             <Grid2X2 size={15} className="shrink-0 text-cyan-400" />
-            <h1 className="truncate text-xs font-semibold tracking-tight text-[var(--color-text)] sm:text-sm">Stock screener</h1>
+            <h1 className="truncate text-xs font-semibold tracking-tight text-[var(--color-text)] sm:text-sm">Markets</h1>
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
             {FILTERS.map((item) => (
@@ -273,7 +283,7 @@ export function LiveMarketScreener() {
                     const isSelected = selectedAssetId === row.id;
                     const positive = (quote?.change_pct ?? 0) >= 0;
                     const title = quote
-                      ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · ${row.sector} · updated ${quote.timestamp ? new Date(quote.timestamp).toLocaleString() : 'time unavailable'}`
+                      ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)} · ${row.sector}${quote.market_cap ? ` · market cap ${formatMarketCap(quote.market_cap)}${quote.market_cap_method === 'calculated' ? ' (calculated)' : ''}` : ''} · updated ${quote.timestamp ? new Date(quote.timestamp).toLocaleString() : 'time unavailable'}`
                       : `${row.symbol} is unavailable`;
 
                     return (
@@ -341,6 +351,11 @@ export function LiveMarketScreener() {
                         <span className="min-w-0">
                           <span className="block truncate text-xs font-semibold text-[var(--color-text)]">{row.symbol}</span>
                           <span className="block truncate text-[10px] text-[var(--color-text-muted)]">{row.name}</span>
+                          {quote?.market_cap != null && (
+                            <span className="block truncate text-[10px] text-[var(--color-text-muted)]">
+                              Mkt cap {formatMarketCap(quote.market_cap)}{quote.market_cap_method === 'calculated' ? ' · calculated' : ''}
+                            </span>
+                          )}
                         </span>
                         <span className="hidden truncate text-right text-[10px] text-[var(--color-text-muted)] sm:block">{quote ? `${providerLabel(quote.data_source)} · ${quoteQuality(quote)}` : 'Unavailable'}</span>
                         <span className="text-right text-xs font-medium tabular-nums text-[var(--color-text)]">{quote ? formatPrice(quote.price) : 'Unavailable'}</span>

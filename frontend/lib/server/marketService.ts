@@ -29,8 +29,9 @@ export interface PriceData {
   high: number | null;
   low: number | null;
   volume: number | null;
-  /** Provider-supplied market capitalization, when the selected provider exposes it. */
+  /** Market capitalization supplied by a provider or calculated from its share count and quote. */
   market_cap: number | null;
+  market_cap_method?: 'provider' | 'calculated' | null;
   open: number | null;
   /** Original provider timestamp where available. */
   timestamp: string;
@@ -149,9 +150,19 @@ const STALE_CACHE_TTL_MS = 5 * 60 * 1_000;
 const PROVIDER_TIMEOUT_MS = 5_000;
 
 function asFiniteNumber(value: unknown): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Calculates equity value only from a verified provider price and share count. */
+export function calculateEquityMarketCap(price: unknown, sharesOutstanding: unknown): number | null {
+  const numericPrice = asFiniteNumber(price);
+  const numericShares = asFiniteNumber(sharesOutstanding);
+  if (numericPrice === null || numericShares === null || numericPrice <= 0 || numericShares <= 0) return null;
+  const marketCap = numericPrice * numericShares;
+  return Number.isFinite(marketCap) && marketCap > 0 ? marketCap : null;
 }
 
 function quoteTimestamp(value: unknown): string {
@@ -197,6 +208,7 @@ function createCoinGeckoQuote(symbol: string, item: Record<string, unknown>): Pr
     open: null,
     volume: asFiniteNumber(item.usd_24h_vol),
     market_cap: asFiniteNumber(item.usd_market_cap),
+    market_cap_method: asFiniteNumber(item.usd_market_cap) === null ? null : 'provider',
     timestamp: quoteTimestamp(item.last_updated_at),
     is_indicative: false,
     data_source: 'coingecko',
@@ -224,6 +236,7 @@ function createTwelveDataQuote(symbol: string, quote: Record<string, unknown>): 
     open: asFiniteNumber(quote.open),
     volume: asFiniteNumber(quote.volume),
     market_cap: asFiniteNumber(quote.market_cap),
+    market_cap_method: asFiniteNumber(quote.market_cap) === null ? null : 'provider',
     timestamp: quoteTimestamp(quote.timestamp ?? quote.datetime),
     is_indicative: false,
     data_source: 'twelve_data',
@@ -263,6 +276,44 @@ type YahooSparkPayload = {
     }>;
   };
 };
+
+type YahooEquityQuote = {
+  symbol?: unknown;
+  marketCap?: unknown;
+  sharesOutstanding?: unknown;
+};
+
+/** Uses provider shares outstanding with the provider quote to calculate equity market cap. */
+export function addYahooSharesOutstanding(
+  quotes: Record<string, PriceData>,
+  providerQuotes: YahooEquityQuote[],
+): Record<string, PriceData> {
+  const providerToInternal = new Map(
+    Object.entries(YAHOO_FINANCE_MAP).map(([internal, provider]) => [provider.toUpperCase(), internal]),
+  );
+  const result = { ...quotes };
+
+  for (const providerQuote of providerQuotes) {
+    if (typeof providerQuote.symbol !== 'string') continue;
+    const internalSymbol = providerToInternal.get(providerQuote.symbol.toUpperCase());
+    if (!internalSymbol || !ASSET_SECTORS[internalSymbol]) continue;
+    const quote = result[internalSymbol];
+    if (!quote) continue;
+
+    const calculated = calculateEquityMarketCap(quote.price, providerQuote.sharesOutstanding);
+    if (calculated !== null) {
+      result[internalSymbol] = { ...quote, market_cap: calculated, market_cap_method: 'calculated' };
+      continue;
+    }
+
+    const providerMarketCap = asFiniteNumber(providerQuote.marketCap);
+    if (providerMarketCap !== null && providerMarketCap > 0 && quote.market_cap === null) {
+      result[internalSymbol] = { ...quote, market_cap: providerMarketCap, market_cap_method: 'provider' };
+    }
+  }
+
+  return result;
+}
 
 /** Converts Yahoo Finance provider values to transparently delayed quotes. */
 export function buildYahooFinanceQuotes(payload: YahooSparkPayload): Record<string, PriceData> {
@@ -305,6 +356,7 @@ export function buildYahooFinanceQuotes(payload: YahooSparkPayload): Record<stri
       open: asFiniteNumber(meta.regularMarketOpen),
       volume: asFiniteNumber(meta.regularMarketVolume),
       market_cap: asFiniteNumber(meta.marketCap),
+      market_cap_method: asFiniteNumber(meta.marketCap) === null ? null : 'provider',
       timestamp: quoteTimestamp(meta.regularMarketTime ?? lastFiniteNumber(response.timestamp)),
       is_indicative: false,
       data_source: 'yahoo_finance',
@@ -326,18 +378,45 @@ export function splitYahooFinanceSymbols(symbols: string[], size = 10): string[]
   return batches;
 }
 
-async function fetchYahooFinanceQuotes(): Promise<Record<string, PriceData>> {
+export async function fetchYahooFinanceQuotes(fetcher: typeof fetch = fetch): Promise<Record<string, PriceData>> {
   const providerSymbols = Array.from(new Set(Object.values(YAHOO_FINANCE_MAP)));
-  const payloads = await Promise.all(splitYahooFinanceSymbols(providerSymbols).map(async (symbols) => {
+  const equitySymbols = Object.keys(ASSET_SECTORS);
+  const [payloads, equityQuotePayloads] = await Promise.all([
+    Promise.allSettled(splitYahooFinanceSymbols(providerSymbols).map(async (symbols) => {
     const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(symbols.join(','))}&range=5d&interval=1d`;
-    const response = await fetch(url, {
+    const response = await fetcher(url, {
       next: { revalidate: 60 },
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
     if (!response.ok) throw new MarketDataUnavailableError(`Yahoo Finance returned ${response.status}.`);
     return response.json() as Promise<YahooSparkPayload>;
-  }));
-  return Object.assign({}, ...payloads.map((payload) => buildYahooFinanceQuotes(payload)));
+    })),
+    (async () => {
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(equitySymbols.join(','))}`;
+      const response = await fetcher(url, {
+        headers: { accept: 'application/json' },
+        next: { revalidate: 60 * 60 },
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      });
+      if (!response.ok) throw new MarketDataUnavailableError(`Yahoo Finance market-cap metadata returned ${response.status}.`);
+      const payload = await response.json() as { quoteResponse?: { result?: YahooEquityQuote[] } };
+      const results = payload.quoteResponse?.result;
+      return Array.isArray(results) ? results.filter((item) => item && typeof item === 'object') : [];
+    })().catch((error: unknown) => {
+      // Quote delivery stays available when Yahoo's separate company metadata is unavailable.
+      console.warn('Yahoo Finance share-count data unavailable; equity market cap may be omitted:', error);
+      return [] as YahooEquityQuote[];
+    }),
+  ]);
+  const quotes: Record<string, PriceData> = {};
+  for (const result of payloads) {
+    if (result.status === 'fulfilled') {
+      Object.assign(quotes, buildYahooFinanceQuotes(result.value));
+    } else {
+      console.warn('Yahoo Finance quote batch unavailable:', result.reason);
+    }
+  }
+  return addYahooSharesOutstanding(quotes, equityQuotePayloads);
 }
 
 async function fetchCoinGeckoQuotes(): Promise<Record<string, PriceData>> {

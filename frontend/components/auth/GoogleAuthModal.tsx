@@ -13,7 +13,7 @@ interface GoogleAuthModalProps {
 }
 
 export function GoogleAuthModal({ isOpen, onClose }: GoogleAuthModalProps) {
-  const { loginWithGoogle, isLoading } = useAuth();
+  const { loginWithGoogle, isLoading, error } = useAuth();
 
   const handleGoogleSignIn = async () => {
     try {
@@ -65,6 +65,12 @@ export function GoogleAuthModal({ isOpen, onClose }: GoogleAuthModalProps) {
             </>
           )}
         </Button>
+
+        {error && (
+          <p className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300" role="alert">
+            {error}
+          </p>
+        )}
 
         <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 justify-center pt-1 border-t border-zinc-800">
           <Shield size={12} className="text-emerald-400" />

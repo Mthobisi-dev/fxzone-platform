@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChatRequestGuard } from '@/lib/chatRequestGuard';
 import { ChatSidebar, Conversation, SuggestedUser } from '@/components/chat/ChatSidebar';
 import { ChatWindow, ChatMessage } from '@/components/chat/ChatWindow';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +19,7 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messageRequests = useRef(new ChatRequestGuard());
   const [loading, setLoading] = useState(true);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [targetUsername, setTargetUsername] = useState('');
@@ -57,6 +59,7 @@ export default function ChatPage() {
         if (String(senderId) === String(user?.id)) return;
 
         if (String(convId) === String(activeConvId)) {
+          messageRequests.current.invalidate(String(convId));
           setMessages((prev) => {
             // Deduplicate: skip if already exists
             if (prev.some((m) => String(m.id) === String(msg.id))) return prev;
@@ -67,6 +70,7 @@ export default function ChatPage() {
                 conversationId: convId,
                 senderId: senderId,
                 content: msg.content,
+                messageType: msg.message_type || msg.messageType || 'text',
                 createdAt: msg.created_at || msg.createdAt,
                 sender: msg.sender,
               },
@@ -109,7 +113,10 @@ export default function ChatPage() {
               }))
             : [],
         }));
-        setConversations(mapped);
+        setConversations((previous) => mapped.map((conversation) => ({
+          ...conversation,
+          lastMessage: previous.find((item) => item.id === conversation.id)?.lastMessage,
+        })));
       } else {
         setConversations([]);
       }
@@ -121,8 +128,10 @@ export default function ChatPage() {
   };
 
   const fetchMessages = async (convId: string) => {
+    const isCurrentRequest = messageRequests.current.begin(convId);
     try {
       const response = await api.get(`/api/chat/conversations/${convId}/messages`);
+      if (!isCurrentRequest()) return;
       if (Array.isArray(response)) {
         const mapped = response.map((m: any) => ({
           id: m.id,
@@ -198,6 +207,8 @@ export default function ChatPage() {
   const [wsConnected, setWsConnected] = useState(false);
 
   useEffect(() => {
+    messageRequests.current.activate(activeConvId);
+    setMessages([]);
     if (activeConvId) {
       fetchMessages(activeConvId);
       // If conversation is not in list, fetch its metadata directly
@@ -233,7 +244,21 @@ export default function ChatPage() {
         prev.map((c) => (String(c.id) === String(activeConvId) ? { ...c, unreadCount: 0 } : c))
       );
     }
-  }, [activeConvId]);
+    return () => messageRequests.current.activate(null);
+  }, [activeConvId, user?.id]);
+
+  // Derive the preview from the latest state, including messages received while
+  // a deletion is in flight. Never rebuild messages from a captured snapshot.
+  useEffect(() => {
+    if (!activeConvId) return;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && String(lastMessage.conversationId) !== String(activeConvId)) return;
+    setConversations((previous) => previous.map((conversation) => (
+      conversation.id === activeConvId
+        ? { ...conversation, lastMessage: lastMessage ? { content: lastMessage.content, createdAt: lastMessage.createdAt } : undefined }
+        : conversation
+    )));
+  }, [activeConvId, messages]);
 
   // Active chat polling is a fallback for message delivery. Avoid requests while
   // hidden and keep the cadence moderate to prevent read/write contention.
@@ -253,6 +278,7 @@ export default function ChatPage() {
 
   const handleSendMessage = async (text: string, messageType: 'text' | 'image' | 'video' | 'audio' = 'text') => {
     if (!activeConvId || !user) return;
+    messageRequests.current.invalidate(activeConvId);
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMsg = {
@@ -284,8 +310,9 @@ export default function ChatPage() {
         message_type: messageType,
       });
       if (res && res.id) {
+        messageRequests.current.invalidate(activeConvId);
         setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? {
+          prev.filter((m) => m.id !== res.id).map((m) => (m.id === tempId ? {
             ...m,
             id: res.id,
             createdAt: res.created_at || res.createdAt || m.createdAt,
@@ -296,6 +323,16 @@ export default function ChatPage() {
     } catch (err) {
       console.error('Failed to send message:', err);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!activeConvId || messageId.startsWith('temp-')) return;
+    const conversationId = activeConvId;
+    await api.delete(`/api/chat/conversations/${conversationId}/messages/${messageId}`);
+    messageRequests.current.invalidate(conversationId);
+    if (messageRequests.current.isActive(conversationId)) {
+      setMessages((previous) => previous.filter((message) => message.id !== messageId));
     }
   };
 
@@ -428,7 +465,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-64px-32px)] flex overflow-hidden">
+    <div className="h-full min-h-0 min-w-0 flex overflow-hidden">
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="animate-spin text-blue-500" size={24} />
@@ -454,7 +491,7 @@ export default function ChatPage() {
 
           {/* Active Window (Full width on mobile when active chat is open, hidden on mobile when no chat) */}
           {activeConvId && activeDetails ? (
-            <div className="flex-1 h-full flex flex-col w-full">
+            <div className="flex-1 min-h-0 min-w-0 h-full flex flex-col w-full">
               <ChatWindow
                 messages={messages}
                 currentUserId={user?.id || ''}
@@ -464,6 +501,7 @@ export default function ChatPage() {
                 members={activeConv?.members || []}
                 conversationData={activeConv}
                 onSendMessage={handleSendMessage}
+                onDeleteMessage={handleDeleteMessage}
                 onStartLiveCall={handleStartLiveCall}
                 onBack={() => setActiveConvId(null)}
               />

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import { applyThemePreference, normalizeThemePreference, type ThemePreference } from '@/lib/themePreferences';
 
-type ThemeType = 'dark-terminal' | 'neon-cyber' | 'minimal-light';
+type ThemeType = ThemePreference;
 type DensityType = 'scalper' | 'beginner';
 
 interface ThemeState {
@@ -11,29 +12,22 @@ interface ThemeState {
   initialize: () => void;
 }
 
-export const useThemeStore = create<ThemeState>((set, get) => ({
+export const useThemeStore = create<ThemeState>((set) => ({
   theme: 'dark-terminal',
   density: 'beginner',
 
   setTheme: (theme) => {
+    const normalizedTheme = normalizeThemePreference(theme);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('fxzone_theme', theme);
-      
-      // Remove all theme classes and apply current
-      const root = document.documentElement;
-      root.classList.remove('theme-dark-terminal', 'theme-neon-cyber', 'theme-minimal-light', 'dark');
-      
-      root.classList.add(`theme-${theme}`);
-      if (theme !== 'minimal-light') {
-        root.classList.add('dark'); // Support standard Tailwind dark utility
-      }
+      try { localStorage.setItem('fxzone_theme', normalizedTheme); } catch { /* Theme still applies for this page view. */ }
+      applyThemePreference(document.documentElement, normalizedTheme);
     }
-    set({ theme });
+    set({ theme: normalizedTheme });
   },
 
   setDensity: (density) => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('fxzone_density', density);
+      try { localStorage.setItem('fxzone_density', density); } catch { /* Keep the preference for this page view. */ }
     }
     set({ density });
   },
@@ -41,18 +35,19 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   initialize: () => {
     if (typeof window === 'undefined') return;
     
-    const savedTheme = localStorage.getItem('fxzone_theme') as ThemeType || 'dark-terminal';
-    const savedDensity = localStorage.getItem('fxzone_density') as DensityType || 'beginner';
+    let savedTheme: ThemeType = 'dark-terminal';
+    let savedDensity: DensityType = 'beginner';
+    try {
+      savedTheme = normalizeThemePreference(localStorage.getItem('fxzone_theme'));
+      const density = localStorage.getItem('fxzone_density');
+      if (density === 'scalper' || density === 'beginner') savedDensity = density;
+    } catch {
+      // Private browsing modes can deny storage access; use safe defaults.
+    }
     
     set({ density: savedDensity });
     
-    // Apply theme
-    const root = document.documentElement;
-    root.classList.remove('theme-dark-terminal', 'theme-neon-cyber', 'theme-minimal-light', 'dark');
-    root.classList.add(`theme-${savedTheme}`);
-    if (savedTheme !== 'minimal-light') {
-      root.classList.add('dark');
-    }
+    applyThemePreference(document.documentElement, savedTheme);
     
     set({ theme: savedTheme });
   },

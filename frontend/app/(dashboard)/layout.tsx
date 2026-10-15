@@ -41,7 +41,7 @@ export default function DashboardLayout({
   const showLoadingOverlay = mounted && isLoading && !timedOut;
 
   return (
-    <div className="h-screen bg-zinc-950 flex flex-col overflow-hidden text-zinc-200 relative selection:bg-blue-600 selection:text-white">
+    <div className="h-screen supports-[height:100dvh]:h-dvh bg-[var(--color-background)] flex flex-col overflow-hidden text-[var(--color-text)] relative selection:bg-blue-600 selection:text-white">
       {/* Smooth Loading Shield to prevent flashing during session hydration */}
       {showLoadingOverlay && (
         <div className="absolute inset-0 z-50 bg-[#05070d] flex flex-col items-center justify-center gap-3 transition-opacity duration-300">
@@ -59,12 +59,12 @@ export default function DashboardLayout({
       <Navbar onToggleAI={() => setIsAIOpen(!isAIOpen)} isAIOpen={isAIOpen} />
 
       {/* 3. Main Workspace */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden relative">
         {/* Left Side: Sidebar */}
         <Sidebar />
 
         {/* Center: Main Dashboard Viewport */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full min-h-0 bg-zinc-950/40 relative pb-20 md:pb-0 overscroll-contain">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden w-full max-w-full min-h-0 bg-[var(--color-background)] relative pb-20 md:pb-0 overscroll-contain">
           {children}
         </main>
 

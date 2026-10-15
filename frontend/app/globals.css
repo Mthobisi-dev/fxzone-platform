@@ -9,6 +9,7 @@
      ========================================== */
   :root, .theme-dark-terminal {
     --color-background: #0a0e17;
+    --color-bg: #0a0e17;
     --color-surface: #111827;
     --color-card: #182232;
     --color-border: #1f2937;
@@ -30,6 +31,7 @@
      ========================================== */
   .theme-neon-cyber {
     --color-background: #0d001a;
+    --color-bg: #0d001a;
     --color-surface: #1a0033;
     --color-card: #28004d;
     --color-border: #3b0066;
@@ -51,6 +53,7 @@
      ========================================== */
   .theme-minimal-light {
     --color-background: #f8fafc;
+    --color-bg: #f8fafc;
     --color-surface: #ffffff;
     --color-card: #ffffff;
     --color-border: #e2e8f0;
@@ -257,6 +260,34 @@ html[class*="theme-"] select {
 html[class*="theme-"] :focus-visible {
   outline: 2px solid var(--fxzone-focus);
   outline-offset: 2px;
+}
+
+/* Shared phone defaults: fit the viewport, respect device safe areas, and stop
+   iOS from zooming the whole page when a small input receives focus. */
+@media (max-width: 639px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body {
+    min-width: 320px;
+    overflow-x: clip;
+  }
+
+  html input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html[class] select,
+  html[class] textarea {
+    font-size: 16px;
+  }
+
+  img,
+  video,
+  iframe,
+  canvas {
+    max-width: 100%;
+  }
 }
 
 .theme-minimal-light [class*="hover:bg-white/"]:hover {

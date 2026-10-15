@@ -11,6 +11,22 @@ Create a project in the Supabase dashboard and configure the Auth providers
 used by the application. Add the deployed site URL and local development URL
 to **Authentication → URL Configuration**.
 
+For Google sign-in:
+
+1. Enable Google under **Authentication → Providers → Google** and supply the
+   Google web client ID and secret.
+2. In Google Auth Platform, set the authorized redirect URI to the exact
+   Supabase callback shown on that provider page:
+   `https://<project-ref>.supabase.co/auth/v1/callback`.
+3. In Supabase **Authentication → URL Configuration**, set the production Site
+   URL and allow both `https://<production-domain>/auth/callback` and
+   `http://localhost:3000/auth/callback` as redirect URLs.
+4. Set `NEXT_PUBLIC_SITE_URL` to the same production origin in Vercel. FxZone
+   uses PKCE and exchanges the returned code at `/auth/callback`.
+
+Google client secrets and Supabase secret/service-role keys must never use a
+`NEXT_PUBLIC_` variable name.
+
 ## 2. Apply the database migrations
 
 In the Supabase SQL editor, run the tracked files in numerical order:
@@ -48,6 +64,7 @@ Copy `frontend/.env.example` to `frontend/.env.local` and set:
 ```dotenv
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+NEXT_PUBLIC_SITE_URL=https://<production-domain>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
 ```
 

@@ -18,7 +18,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className="antialiased min-h-screen bg-zinc-950 relative overflow-x-hidden text-zinc-100">
+      <body className="antialiased min-h-screen bg-[var(--color-background)] relative overflow-x-hidden text-[var(--color-text)]">
         {/* Lightweight background keeps navigation and scrolling responsive. */}
         <ColorBendsBackground />
 

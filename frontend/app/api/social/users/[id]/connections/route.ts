@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
 import { apiError } from '@/lib/api-error';
+import { isHiddenSystemAccount } from '@/lib/systemAccounts';
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { user } = await getUserFromRequest(request);
@@ -21,6 +22,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     if (!ids.length) return NextResponse.json({ users: [], has_more: false });
     const profiles = await db.from('users').select('id,username,display_name,avatar_url').in('id',ids);
     if (profiles.error) throw profiles.error;
-    return NextResponse.json({users: ids.map(id => profiles.data?.find(person => person.id === id)).filter(Boolean),has_more:rows.length > 50}, {headers:{'Cache-Control':'no-store'}});
+    return NextResponse.json({users: ids.map(id => profiles.data?.find(person => person.id === id)).filter(person => person && !isHiddenSystemAccount(person.username)),has_more:rows.length > 50}, {headers:{'Cache-Control':'no-store'}});
   } catch (error) { console.error('Profile connections:', error); return apiError('INTERNAL_SERVER_ERROR','Unable to load connections.',500); }
 }

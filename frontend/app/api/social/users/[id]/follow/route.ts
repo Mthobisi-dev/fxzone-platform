@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 import { createNotification } from '@/lib/server/notifications';
 import { getFollowCounts } from '@/lib/server/socialCounters';
+import { isHiddenSystemAccount } from '@/lib/systemAccounts';
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -17,9 +18,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (targetError) throw targetError;
     if (!target) return NextResponse.json({ detail: 'Trader not found' }, { status: 404 });
     if (target.id === user.id) return NextResponse.json({ detail: 'Cannot follow yourself' }, { status: 400 });
-    if (['jackbot_analysis', 'fxzone_bot', 'fxzone_admin'].includes(target.username.toLowerCase()) || target.role === 'admin') {
-      return NextResponse.json({ detail: 'This is a protected system account and cannot be followed.' }, { status: 403 });
-    }
     const { data: existing, error: existingError } = await db.from('follows').select('id').eq('follower_id', user.id).eq('following_id', target.id).maybeSingle();
     if (existingError) throw existingError;
     // Existing profile controls use this endpoint as a toggle. A caller may
@@ -35,6 +33,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       // Empty request bodies retain the backwards-compatible toggle behavior.
     }
     const is_following = requestedFollowing ?? !existing;
+    if (is_following && (isHiddenSystemAccount(target.username) || ['jackbot_analysis', 'fxzone_bot', 'fxzone_admin'].includes(target.username.toLowerCase()) || target.role === 'admin')) {
+      return NextResponse.json({ detail: 'This is a protected system account and cannot be followed.' }, { status: 403 });
+    }
     if (existing && !is_following) {
       const { error } = await db.from('follows').delete().eq('id', existing.id);
       if (error) throw error;

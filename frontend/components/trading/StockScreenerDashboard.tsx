@@ -475,7 +475,7 @@ export function StockScreenerDashboard() {
               )}
             >
               <BarChart2 size={13} />
-              <span>Stock Screener</span>
+              <span>Markets</span>
             </button>
 
             <button
