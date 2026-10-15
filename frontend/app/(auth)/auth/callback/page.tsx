@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { safeOAuthDestination } from '@/lib/oauthRedirect';
+import { getOAuthSupabaseClient } from '@/lib/supabaseOAuth';
 import { useAuthStore } from '@/stores/authStore';
 
 /** Completes Supabase OAuth PKCE redirects before entering the dashboard. */
@@ -25,14 +26,28 @@ export default function AuthCallbackPage() {
         setMessage(errorDescription);
         return;
       }
+      const oauthClient = getOAuthSupabaseClient();
       const result = code
-        ? await supabase.auth.exchangeCodeForSession(code, flowId ? { flowId } : undefined)
-        : await supabase.auth.getSession();
+        ? await oauthClient.auth.exchangeCodeForSession(code, flowId ? { flowId } : undefined)
+        : await oauthClient.auth.getSession();
       if (result.error || !result.data.session) {
         setMessage(result.error?.message || 'Google sign-in could not be completed. Please try again.');
         return;
       }
-      useAuthStore.getState()._setFromSession(result.data.session, 'SIGNED_IN');
+
+      // The rest of FxZone currently uses the established browser client. Copy
+      // the verified OAuth session into that client so existing API auth,
+      // realtime subscriptions, and auth listeners continue to work unchanged.
+      const persisted = await supabase.auth.setSession({
+        access_token: result.data.session.access_token,
+        refresh_token: result.data.session.refresh_token,
+      });
+      if (persisted.error || !persisted.data.session) {
+        setMessage(persisted.error?.message || 'Google sign-in could not be saved. Please try again.');
+        return;
+      }
+
+      useAuthStore.getState()._setFromSession(persisted.data.session, 'SIGNED_IN');
       router.replace(destination);
       router.refresh();
     };

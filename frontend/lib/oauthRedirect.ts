@@ -21,7 +21,11 @@ export function buildOAuthRedirectUrl(
   configuredSiteUrl?: string,
   destination = DEFAULT_DESTINATION
 ): string {
-  const origin = validHttpOrigin(configuredSiteUrl) ?? validHttpOrigin(browserOrigin);
+  // PKCE verifiers are scoped to the browser origin that starts the flow. Keep
+  // the callback on that same origin (including Vercel preview deployments),
+  // otherwise the callback cannot read the verifier written before redirecting
+  // to Google. The configured site remains a fallback for non-browser callers.
+  const origin = validHttpOrigin(browserOrigin) ?? validHttpOrigin(configuredSiteUrl);
   if (!origin) throw new Error('A valid application URL is required for Google sign-in.');
   const callback = new URL('/auth/callback', origin);
   callback.searchParams.set('next', safeOAuthDestination(destination));

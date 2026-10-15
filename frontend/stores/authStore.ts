@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { getOAuthSupabaseClient } from '@/lib/supabaseOAuth';
 import { buildOAuthRedirectUrl } from '@/lib/oauthRedirect';
 import type { Session } from '@supabase/supabase-js';
 
@@ -294,7 +295,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         process.env.NEXT_PUBLIC_SITE_URL,
         '/dashboard'
       );
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await getOAuthSupabaseClient().auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo,
