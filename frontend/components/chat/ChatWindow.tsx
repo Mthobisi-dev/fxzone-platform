@@ -141,7 +141,7 @@ export function ChatWindow({
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col justify-between overflow-hidden bg-[var(--color-background)] fxzone-chat-surface">
       {/* ─── CHAT & TRADINGVIEW HEADER ─── */}
-      <div className="min-h-14 px-2.5 py-2 sm:py-0 sm:h-14 sm:px-4 border-b border-[var(--color-border)] flex flex-wrap items-center justify-between gap-y-2 bg-[var(--color-surface)] fxzone-chat-header select-none shrink-0 z-20">
+      <div className="fxzone-chat-mobile-header fxzone-chat-header z-20 flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-1.5 gap-y-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 select-none sm:h-14 sm:flex-nowrap sm:gap-x-3 sm:px-4 sm:py-0">
         <div className="flex flex-1 items-center gap-2 sm:gap-3 min-w-0">
           {onBack && (
             <button
@@ -152,9 +152,9 @@ export function ChatWindow({
               <ArrowLeft size={18} />
             </button>
           )}
-          <Avatar src={conversationAvatar} alt={conversationName} size="sm" />
+          <Avatar src={conversationAvatar} alt={conversationName} size="sm" className="h-8 w-8 aspect-square" />
           <div className="min-w-0">
-            <h4 className="text-xs font-semibold text-white flex items-center gap-1.5 truncate">
+            <h4 className="flex truncate text-[11px] font-semibold text-[var(--color-text)] items-center gap-1.5 sm:text-xs">
               <span className="truncate">{conversationName}</span>
               {isGroup && (
                 <button
@@ -172,7 +172,7 @@ export function ChatWindow({
         </div>
 
         {/* Middle Control: View Mode Switcher (Chat vs Split View vs TradingView Chart) */}
-        <div className="order-3 w-full justify-center flex bg-zinc-900/90 border border-zinc-800 rounded-xl p-0.5 gap-0.5 sm:order-none sm:w-auto">
+        <div className="order-3 flex w-full justify-center gap-0.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-0.5 sm:order-none sm:w-auto">
           <button
             onClick={() => setViewMode('chat')}
             className={cn(
@@ -217,7 +217,7 @@ export function ChatWindow({
         </div>
 
         {/* Right Header Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {isGroup && (
             <button
               onClick={() => setShowGroupProfile(true)}
@@ -231,7 +231,7 @@ export function ChatWindow({
           {onStartLiveCall && (
             <button
               onClick={onStartLiveCall}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600/15 border border-purple-500/30 text-purple-300 hover:bg-purple-600 hover:text-white transition-all text-xs font-semibold"
+              className="flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-600/15 px-2 py-1.5 text-xs font-semibold text-purple-400 transition-all hover:bg-purple-600 hover:text-white sm:px-3"
               title="Start 1-on-1 Trading Room"
             >
               <Video size={14} className="text-purple-400" />

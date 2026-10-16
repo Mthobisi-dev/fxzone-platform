@@ -125,6 +125,10 @@ export function isAllowedPostMedia(mimeType: string, size: number): boolean {
   return Number.isSafeInteger(size) && size > 0 && limit > 0 && size <= limit;
 }
 
-export function shouldUseDirectPostUpload(size: number): boolean {
-  return Number.isSafeInteger(size) && size > DIRECT_POST_UPLOAD_THRESHOLD_BYTES;
+export function shouldUseDirectPostUpload(size: number, mimeType = ''): boolean {
+  if (!Number.isSafeInteger(size) || size <= 0) return false;
+  // Video files are always sent straight to Storage. Even two individually
+  // small videos can make concurrent multipart Vercel Functions slow enough
+  // to hit their request deadline on a mobile connection.
+  return mimeType.startsWith('video/') || size > DIRECT_POST_UPLOAD_THRESHOLD_BYTES;
 }

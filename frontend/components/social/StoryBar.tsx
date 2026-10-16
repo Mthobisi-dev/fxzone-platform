@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
-import { Plus, X, ArrowLeft, ArrowRight, Upload, Image as ImageIcon } from 'lucide-react';
+import { Plus, X, ArrowLeft, ArrowRight, Upload, Heart } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { uploadSocialMedia } from '@/lib/uploadSocialMedia';
@@ -24,6 +24,8 @@ export interface Story {
   imageUrl?: string;
   createdAt: string;
   expiresAt: string;
+  likesCount: number;
+  isLiked: boolean;
 }
 
 export function StoryBar() {
@@ -54,6 +56,8 @@ export function StoryBar() {
           imageUrl: s.imageUrl || s.image_url,
           createdAt: s.createdAt || s.created_at,
           expiresAt: s.expiresAt || s.expires_at,
+          likesCount: Number(s.likesCount ?? s.likes_count ?? 0),
+          isLiked: Boolean(s.isLiked ?? s.is_liked_by_user),
         }));
         setStories(mapped);
       }
@@ -141,6 +145,31 @@ export function StoryBar() {
   const prevStory = () => {
     if (activeStoryIdx > 0) {
       setActiveStoryIdx(activeStoryIdx - 1);
+    }
+  };
+
+  const toggleStoryLike = async (storyId: string) => {
+    const current = stories.find((story) => story.id === storyId);
+    if (!current) return;
+    const optimisticLiked = !current.isLiked;
+    const optimisticCount = Math.max(0, current.likesCount + (optimisticLiked ? 1 : -1));
+    const applyLike = (story: Story, isLiked: boolean, likesCount: number) => (
+      story.id === storyId ? { ...story, isLiked, likesCount } : story
+    );
+
+    setStories((previous) => previous.map((story) => applyLike(story, optimisticLiked, optimisticCount)));
+    setActiveStoryGroup((previous) => previous?.map((story) => applyLike(story, optimisticLiked, optimisticCount)) ?? null);
+
+    try {
+      const result = await api.post(`/api/social/posts/${storyId}/react`, { reaction_type: 'like' });
+      const confirmedCount = Number(result?.likes_count ?? optimisticCount);
+      const confirmedLiked = Boolean(result?.active);
+      setStories((previous) => previous.map((story) => applyLike(story, confirmedLiked, confirmedCount)));
+      setActiveStoryGroup((previous) => previous?.map((story) => applyLike(story, confirmedLiked, confirmedCount)) ?? null);
+    } catch (error) {
+      console.error('Failed to like story:', error);
+      setStories((previous) => previous.map((story) => applyLike(story, current.isLiked, current.likesCount)));
+      setActiveStoryGroup((previous) => previous?.map((story) => applyLike(story, current.isLiked, current.likesCount)) ?? null);
     }
   };
 
@@ -287,7 +316,7 @@ export function StoryBar() {
               <X size={20} />
             </button>
 
-            <div className="relative w-full max-w-sm aspect-[9/16] bg-zinc-950 rounded-2xl border border-zinc-850 overflow-hidden flex flex-col justify-between shadow-2xl">
+            <div className="relative h-[min(86dvh,720px)] w-[min(92vw,405px)] bg-zinc-950 rounded-2xl border border-zinc-850 overflow-hidden flex flex-col justify-between shadow-2xl">
               {/* Progress Bar Indicators */}
               <div className="absolute top-3 left-3 right-3 flex gap-1 z-20">
                 {activeStoryGroup.map((_, i) => (
@@ -358,6 +387,20 @@ export function StoryBar() {
                   <ArrowRight size={16} />
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => void toggleStoryLike(activeStoryGroup[activeStoryIdx].id)}
+                className="absolute bottom-4 left-1/2 z-20 inline-flex min-h-10 -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/60 px-4 text-xs font-semibold text-white backdrop-blur-md transition-colors hover:bg-black/80"
+                aria-pressed={activeStoryGroup[activeStoryIdx].isLiked}
+                aria-label={activeStoryGroup[activeStoryIdx].isLiked ? 'Unlike story' : 'Like story'}
+              >
+                <Heart
+                  size={17}
+                  className={activeStoryGroup[activeStoryIdx].isLiked ? 'fill-rose-500 text-rose-500' : 'text-white'}
+                />
+                <span>{activeStoryGroup[activeStoryIdx].likesCount}</span>
+              </button>
             </div>
           </div>
         )}

@@ -6,6 +6,8 @@ const { test } = require('node:test');
 test('Discover shows trending provider news and no longer exposes group creation', () => {
   const source = fs.readFileSync(path.join(__dirname, '(dashboard)', 'discover', 'page.tsx'), 'utf8');
 
+  assert.match(source, /<h1[^>]*>Discover<\/h1>/);
+  assert.match(source, /\/api\/social\/users\?limit=12/);
   assert.match(source, /\/api\/news\/feed\?limit=8/);
   assert.match(source, /Trending market news/);
   assert.match(source, /\/api\/news\/explanation/);
@@ -15,6 +17,19 @@ test('Discover shows trending provider news and no longer exposes group creation
   assert.match(source, /article\.media_type\s*===\s*['"]video['"]/);
   assert.doesNotMatch(source, /Discover Traders/);
   assert.doesNotMatch(source, /Create Group/);
+  assert.doesNotMatch(source, /Enter at least two characters to search for a trader/);
+});
+
+test('Messages uses a mobile viewport shell and compact responsive controls', () => {
+  const page = fs.readFileSync(path.join(__dirname, '(dashboard)', 'chat', 'page.tsx'), 'utf8');
+  const sidebar = fs.readFileSync(path.join(__dirname, '..', 'components', 'chat', 'ChatSidebar.tsx'), 'utf8');
+  const window = fs.readFileSync(path.join(__dirname, '..', 'components', 'chat', 'ChatWindow.tsx'), 'utf8');
+  const input = fs.readFileSync(path.join(__dirname, '..', 'components', 'chat', 'MessageInput.tsx'), 'utf8');
+
+  assert.match(page, /fxzone-mobile-chat/);
+  assert.match(sidebar, /max-w-full/);
+  assert.match(window, /fxzone-chat-mobile-header/);
+  assert.match(input, /fxzone-chat-composer/);
 });
 
 test('system navigation keeps accessible icon links without visible page labels or mobile profile', () => {

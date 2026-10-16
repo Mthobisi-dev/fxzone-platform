@@ -75,6 +75,28 @@ export default function DiscoverPage() {
   const requestSequence = useRef(0);
   const [followLoading, setFollowLoading] = useState<string | null>(null);
 
+  const loadSuggestedUsers = useCallback(async () => {
+    const requestId = ++requestSequence.current;
+    setLoading(true);
+    try {
+      const result = await api.get('/api/social/users?limit=12');
+      if (requestId !== requestSequence.current) return;
+      setUsers(Array.isArray(result)
+        ? result.filter((candidate: DiscoverUser) => candidate.id !== user?.id)
+        : []);
+    } catch (error) {
+      if (requestId !== requestSequence.current) return;
+      console.error('Failed to load Discover traders:', error);
+      setUsers([]);
+    } finally {
+      if (requestId === requestSequence.current) setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void loadSuggestedUsers();
+  }, [loadSuggestedUsers]);
+
   useEffect(() => {
     let active = true;
     setTrendingLoading(true);
@@ -132,8 +154,8 @@ export default function DiscoverPage() {
     }
   }, [user?.id]);
 
-  // Accounts remain hidden until a useful search is entered. Sequence IDs
-  // prevent a late response from replacing results for a newer query.
+  // Default suggestions remain visible until a useful search is entered.
+  // Sequence IDs prevent a late response from replacing newer results.
   useEffect(() => {
     const query = normalizeDiscoverQuery(search);
     if (!shouldSearchDiscover(query)) return;
@@ -145,11 +167,12 @@ export default function DiscoverPage() {
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
-    if (!shouldSearchDiscover(normalizeDiscoverQuery(value))) {
+    const query = normalizeDiscoverQuery(value);
+    if (!shouldSearchDiscover(query)) {
       requestSequence.current += 1;
-      setUsers([]);
       setNews([]);
       setLoading(false);
+      if (!query) void loadSuggestedUsers();
     }
   };
 
@@ -292,6 +315,7 @@ export default function DiscoverPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-3 sm:space-y-6 sm:p-6">
+      <h1 className="text-base font-bold tracking-tight text-[var(--color-text)] sm:text-lg">Discover</h1>
       {/* Search bar */}
       <div className="relative mx-auto w-full max-w-2xl">
         <Search
@@ -309,30 +333,25 @@ export default function DiscoverPage() {
       </div>
 
       {/* User grid */}
-      {!hasSearch ? (
-        <div className="rounded-xl border border-dashed border-[var(--color-border)] py-8 text-center sm:py-10">
-          <Search className="mx-auto mb-2 text-[var(--color-text-muted)]" size={18} aria-hidden="true" />
-          <p className="px-4 text-[11px] text-[var(--color-text-muted)] sm:text-xs">Enter at least two characters to search for a trader. Trending provider news appears below.</p>
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="animate-spin text-blue-500" size={24} />
         </div>
       ) : users.length === 0 ? (
-        <div className="text-center py-20">
+        <div className="rounded-xl border border-dashed border-[var(--color-border)] py-10 text-center">
           <p className="text-xs text-[var(--color-text-muted)]">
-            No traders found matching &quot;{normalizedSearch}&quot;.
+            {hasSearch ? `No traders found matching “${normalizedSearch}”.` : 'No traders are available yet.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-2 min-[460px]:grid-cols-2 lg:grid-cols-3">
           {users.map((u) => (
             <Card
               key={u.id}
-              className="p-4 border border-zinc-850 bg-zinc-900/30 hover:bg-zinc-900/50 transition-colors group"
+              className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-blue-500/40"
             >
               <div
-                className="flex items-start gap-3 cursor-pointer hover:opacity-90 transition-opacity"
+                className="flex cursor-pointer items-start gap-2.5 transition-opacity hover:opacity-90"
                 onClick={() => {
                   if (u.username !== 'fxzone_bot') {
                     router.push(`/profile/${u.id || u.username}`);
@@ -343,11 +362,11 @@ export default function DiscoverPage() {
                 <Avatar
                   src={u.avatar_url || undefined}
                   name={u.display_name || u.username}
-                  size="md"
+                  size="sm"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <h3 className="text-xs font-bold text-white truncate hover:text-blue-400 transition-colors">
+                    <h3 className="truncate text-[11px] font-bold text-[var(--color-text)] transition-colors hover:text-blue-500">
                       {u.display_name || u.username}
                     </h3>
                     {getRoleBadge(u.role)}
@@ -359,7 +378,7 @@ export default function DiscoverPage() {
                   </div>
                   <p className="text-[10px] text-zinc-500 truncate">@{u.username}</p>
                   {u.bio && (
-                    <p className="text-[10px] text-zinc-400 mt-1.5 line-clamp-2 leading-relaxed">
+                    <p className="mt-1 line-clamp-1 text-[9px] leading-relaxed text-[var(--color-text-muted)]">
                       {u.bio}
                     </p>
                   )}
@@ -375,7 +394,7 @@ export default function DiscoverPage() {
 
               {/* Actions */}
               {u.username !== 'fxzone_bot' && u.role !== 'bot' && (
-                <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-850/50">
+                <div className="mt-2.5 flex gap-2 border-t border-[var(--color-border)] pt-2.5">
                   <Button
                     onClick={() => handleFollow(u)}
                     size="sm"

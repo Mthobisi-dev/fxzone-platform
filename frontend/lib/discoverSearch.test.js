@@ -5,7 +5,7 @@ async function loadDiscoverSearch() {
   return import('./discoverSearch.ts');
 }
 
-test('keeps Discover empty until a useful search is entered', async () => {
+test('requires a useful query before switching Discover from suggestions to search results', async () => {
   const { normalizeDiscoverQuery, shouldSearchDiscover } = await loadDiscoverSearch();
 
   assert.equal(shouldSearchDiscover(normalizeDiscoverQuery('')), false);

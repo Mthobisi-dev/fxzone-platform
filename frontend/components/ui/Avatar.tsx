@@ -32,7 +32,7 @@ export const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
       <div
         ref={ref}
         className={cn(
-          'relative rounded-full flex items-center justify-center bg-zinc-800 border border-zinc-700 overflow-visible select-none shrink-0',
+          'relative aspect-square rounded-full flex items-center justify-center bg-zinc-800 border border-zinc-700 overflow-visible select-none shrink-0',
           {
             'h-6 w-6 text-[10px]': size === 'xs',
             'h-8 w-8 text-xs': size === 'sm',

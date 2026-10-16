@@ -466,7 +466,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-full min-h-0 min-w-0 flex overflow-hidden">
+    <div className="fxzone-mobile-chat flex h-full min-h-0 min-w-0 max-w-full overflow-hidden">
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="animate-spin text-blue-500" size={24} />
@@ -492,7 +492,7 @@ export default function ChatPage() {
 
           {/* Active Window (Full width on mobile when active chat is open, hidden on mobile when no chat) */}
           {activeConvId && activeDetails ? (
-            <div className="flex-1 min-h-0 min-w-0 h-full flex flex-col w-full">
+            <div className="flex h-full min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden">
               <ChatWindow
                 messages={messages}
                 currentUserId={user?.id || ''}

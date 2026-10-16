@@ -106,10 +106,10 @@ export function ChatSidebar({
   });
 
   return (
-    <div className={cn('w-full md:w-80 border-r border-zinc-850 h-full flex flex-col bg-zinc-950/20 shrink-0', className)}>
+    <div className={cn('flex h-full w-full max-w-full shrink-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface)] md:w-80', className)}>
       {/* Header */}
-      <div className="p-4 border-b border-zinc-850 flex items-center justify-between select-none">
-        <h3 className="text-sm font-bold text-white tracking-wide">Messages</h3>
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] p-3 select-none sm:p-4">
+        <h3 className="text-sm font-bold tracking-wide text-[var(--color-text)]">Messages</h3>
         <button
           onClick={onNewChat}
           className="p-1.5 bg-blue-600/10 border border-blue-500/30 text-blue-400 hover:bg-blue-600/20 rounded-lg transition-colors focus:outline-none flex items-center gap-1 text-[11px] font-semibold px-2"
@@ -240,7 +240,7 @@ export function ChatSidebar({
                     key={conv.id}
                     onClick={() => onSelectConversation(conv.id)}
                     className={cn(
-                      'flex items-center gap-3 p-3 cursor-pointer transition-colors',
+                      'flex min-w-0 cursor-pointer items-center gap-2.5 p-2.5 transition-colors sm:gap-3 sm:p-3',
                       isActive ? 'bg-zinc-900/70' : 'hover:bg-zinc-900/30'
                     )}
                   >
@@ -254,7 +254,7 @@ export function ChatSidebar({
                           src={details.avatarUrl}
                           alt={details.name}
                           size="sm"
-                          className="h-9 w-9"
+                          className="h-9 w-9 aspect-square"
                         />
                       )}
                       {details.isOnline && (
@@ -330,7 +330,7 @@ export function ChatSidebar({
                     src={u.avatarUrl || (u as any).avatar_url}
                     alt={u.displayName || (u as any).display_name || u.username}
                     size="sm"
-                    className="h-9 w-9 shrink-0"
+                    className="h-9 w-9 shrink-0 aspect-square"
                   />
                   <div className="flex-1 min-w-0">
                     <span className="text-[11px] font-bold text-white block truncate leading-tight">

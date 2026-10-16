@@ -8,8 +8,16 @@ async function loadPostUpload() {
 test('routes files over the Vercel request-body limit to a direct signed upload', async () => {
   const { DIRECT_POST_UPLOAD_THRESHOLD_BYTES, shouldUseDirectPostUpload } = await loadPostUpload();
 
-  assert.equal(shouldUseDirectPostUpload(DIRECT_POST_UPLOAD_THRESHOLD_BYTES), false);
-  assert.equal(shouldUseDirectPostUpload(DIRECT_POST_UPLOAD_THRESHOLD_BYTES + 1), true);
+  assert.equal(shouldUseDirectPostUpload(DIRECT_POST_UPLOAD_THRESHOLD_BYTES, 'image/jpeg'), false);
+  assert.equal(shouldUseDirectPostUpload(DIRECT_POST_UPLOAD_THRESHOLD_BYTES + 1, 'image/jpeg'), true);
+});
+
+test('routes every video directly to Storage so multi-video posts bypass function body and duration limits', async () => {
+  const { shouldUseDirectPostUpload } = await loadPostUpload();
+
+  assert.equal(shouldUseDirectPostUpload(256_000, 'video/mp4'), true);
+  assert.equal(shouldUseDirectPostUpload(256_000, 'video/webm'), true);
+  assert.equal(shouldUseDirectPostUpload(0, 'video/mp4'), false);
 });
 
 test('uses media-specific post attachment limits', async () => {

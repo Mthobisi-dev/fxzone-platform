@@ -225,11 +225,11 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
   const uploadFile = async (media: MediaFile): Promise<{ url: string | null; error: string | null }> => {
     try {
-      if (shouldUseDirectPostUpload(media.file.size)) {
+      if (shouldUseDirectPostUpload(media.file.size, media.file.type)) {
         const signedUpload = await api.post('/api/social/posts/upload-url', {
           type: media.file.type,
           size: media.file.size,
-        }, { timeoutMs: 15_000 });
+        }, { timeoutMs: 30_000 });
 
         if (!isSignedPostUpload(signedUpload)) {
           throw new Error('The upload service returned an invalid response. Please try again.');
