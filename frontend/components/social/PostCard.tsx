@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Card } from '../ui/Card';
 import { Avatar } from '../ui/Avatar';
 import {
@@ -35,6 +35,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { PostGallery } from './PostGallery';
 import { readPostAttachments } from '@/lib/postAttachments';
+import { isPostTap, nextPostLikeState, registerPostTap, type TapPoint } from '@/lib/postGesture';
 
 export interface Post {
   id: string;
@@ -133,6 +134,19 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   const [likeLoading, setLikeLoading] = useState(false);
   const [repostLoading, setRepostLoading] = useState(false);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
+  const [showDoubleTapHeart, setShowDoubleTapHeart] = useState(false);
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTapRef = useRef<TapPoint | null>(null);
+  const likeRequestRef = useRef(false);
+  const selectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressNextClickRef = useRef(false);
+  const lastPointerTypeRef = useRef('mouse');
+
+  useEffect(() => () => {
+    if (selectTimerRef.current) clearTimeout(selectTimerRef.current);
+    if (heartTimerRef.current) clearTimeout(heartTimerRef.current);
+  }, []);
 
   const isOwner = String(user?.id) === String(userId) || String(user?.id) === String(postUser.id);
   const isAdmin = user?.role === 'admin';
@@ -179,13 +193,12 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     }
   };
 
-  // Like / Unlike Post
-  const handleLike = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (likeLoading) return;
+  const updateLike = async (forceLike = false) => {
+    const nextLiked = nextPostLikeState(isLiked, forceLike);
+    if (likeRequestRef.current || nextLiked === isLiked) return;
+    likeRequestRef.current = true;
     setLikeLoading(true);
 
-    const nextLiked = !isLiked;
     setIsLiked(nextLiked);
     setLikes((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
 
@@ -200,8 +213,66 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
       setIsLiked(!nextLiked);
       setLikes((prev) => (!nextLiked ? prev + 1 : Math.max(0, prev - 1)));
     } finally {
+      likeRequestRef.current = false;
       setLikeLoading(false);
     }
+  };
+
+  // Like / Unlike Post
+  const handleLike = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    void updateLike();
+  };
+
+  const isInteractiveTarget = (target: EventTarget | null) =>
+    target instanceof Element && Boolean(target.closest('button, a, input, textarea, select, video, audio, iframe, [role="button"]'));
+
+  const handlePostPointerDown = (event: React.PointerEvent) => {
+    lastPointerTypeRef.current = event.pointerType;
+    if (!['touch', 'pen'].includes(event.pointerType) || isInteractiveTarget(event.target)) {
+      pointerDownRef.current = null;
+      return;
+    }
+    pointerDownRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handlePostPointerUp = (event: React.PointerEvent) => {
+    const start = pointerDownRef.current;
+    pointerDownRef.current = null;
+    if (!start || !['touch', 'pen'].includes(event.pointerType) || isInteractiveTarget(event.target)) {
+      lastTapRef.current = null;
+      return;
+    }
+    const end = { x: event.clientX, y: event.clientY };
+    if (!isPostTap(start, end)) {
+      lastTapRef.current = null;
+      return;
+    }
+
+    const tap = registerPostTap(lastTapRef.current, { at: Date.now(), ...end });
+    lastTapRef.current = tap.nextTap;
+    if (!tap.isDoubleTap) return;
+
+    if (selectTimerRef.current) clearTimeout(selectTimerRef.current);
+    const target = event.target instanceof Element ? event.target : null;
+    suppressNextClickRef.current = !target?.closest('[data-post-gallery]');
+    setShowDoubleTapHeart(true);
+    if (heartTimerRef.current) clearTimeout(heartTimerRef.current);
+    heartTimerRef.current = setTimeout(() => setShowDoubleTapHeart(false), 650);
+    void updateLike(true);
+  };
+
+  const handlePostClick = () => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+    if (lastPointerTypeRef.current === 'touch' || lastPointerTypeRef.current === 'pen') {
+      if (selectTimerRef.current) clearTimeout(selectTimerRef.current);
+      selectTimerRef.current = setTimeout(() => onSelect?.(post), 330);
+      return;
+    }
+    onSelect?.(post);
   };
 
   const [repostModalOpen, setRepostModalOpen] = useState(false);
@@ -407,9 +478,25 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     <Card
       id={`post-${post.id}`}
       onClick={() => onSelect?.(post)}
-      className="p-0 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer rounded-xl overflow-hidden"
+      className="relative p-0 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer rounded-xl overflow-hidden"
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 280px' }}
     >
+      <AnimatePresence>
+        {showDoubleTapHeart && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.55 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.2 }}
+            transition={{ duration: 0.18 }}
+            className="pointer-events-none absolute inset-0 z-30 grid place-items-center"
+            aria-hidden="true"
+          >
+            <span className="grid h-20 w-20 place-items-center rounded-full bg-black/35 shadow-2xl backdrop-blur-sm">
+              <Heart size={48} className="fill-rose-500 text-rose-500 drop-shadow-lg" />
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Repost Banner */}
       {repostedBy && (
         <div className="flex items-center gap-1.5 px-4 pt-2.5 pb-1 bg-emerald-500/5 border-b border-emerald-500/10">
@@ -551,6 +638,15 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             </div>
           </div>
 
+          <div
+            onClick={(event) => {
+              event.stopPropagation();
+              handlePostClick();
+            }}
+            onPointerDown={handlePostPointerDown}
+            onPointerUp={handlePostPointerUp}
+            onPointerCancel={() => { pointerDownRef.current = null; }}
+          >
           {/* Text Content with Viewable Link Highlights */}
           <div className="text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap mb-3 break-words">
             {attachments.text.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
@@ -591,6 +687,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
           {post.caption && (
             <p className="text-xs text-gray-400 italic mt-1 px-1 mb-3">{post.caption}</p>
           )}
+          </div>
 
           {/* Asset Tags */}
           {assetTags && assetTags.length > 0 && (

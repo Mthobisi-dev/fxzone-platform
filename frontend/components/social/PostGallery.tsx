@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { playExclusive, releaseMedia } from '@/lib/mediaPlayback';
+import { galleryIndicators } from '@/lib/postGesture';
 
 function FeedVideo({ src, active }: { src: string; active: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -36,7 +37,7 @@ export function PostGallery({ urls }: { urls: string[] }) {
   const [index, setIndex] = useState(0);
   if (!urls.length) return null;
   const go = (next: number) => track.current?.scrollTo({ left: next * track.current.clientWidth, behavior: 'smooth' });
-  return <div className="mb-3 overflow-hidden rounded-xl border border-border" onClick={e => e.stopPropagation()}>
+  return <div data-post-gallery className="mb-3 overflow-hidden rounded-xl border border-border" onClick={e => e.stopPropagation()}>
     <div ref={track} className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none]" onScroll={e => {
       const el = e.currentTarget;
       setIndex(Math.round(el.scrollLeft / (el.clientWidth || 1)));
@@ -52,10 +53,21 @@ export function PostGallery({ urls }: { urls: string[] }) {
         </div>;
       })}
     </div>
-    {urls.length > 1 && <div className="flex items-center justify-between bg-[var(--color-card)] px-3 py-1 text-xs text-[var(--color-text)]">
-      <button type="button" aria-label="Previous attachment" disabled={index === 0} onClick={() => go(index - 1)} className="min-h-10 px-3 disabled:opacity-30">←</button>
-      <span aria-live="polite">{index + 1} / {urls.length} · Swipe to view</span>
-      <button type="button" aria-label="Next attachment" disabled={index === urls.length - 1} onClick={() => go(index + 1)} className="min-h-10 px-3 disabled:opacity-30">→</button>
-    </div>}
+    {urls.length > 1 && (
+      <div className="flex min-h-8 items-center justify-center gap-1.5 bg-[var(--color-card)] px-3" role="group" aria-label={`${urls.length} post attachments`}>
+        {galleryIndicators(urls.length, index).map((active, dotIndex) => (
+          <button
+            key={dotIndex}
+            type="button"
+            aria-label={`Show attachment ${dotIndex + 1} of ${urls.length}`}
+            aria-current={active ? 'true' : undefined}
+            onClick={() => go(dotIndex)}
+            className="group grid h-8 w-8 place-items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <span className={`h-2 rounded-full transition-all ${active ? 'w-4 bg-blue-500' : 'w-2 bg-[var(--color-text-muted)] opacity-45 group-hover:opacity-80'}`} />
+          </button>
+        ))}
+      </div>
+    )}
   </div>;
 }
