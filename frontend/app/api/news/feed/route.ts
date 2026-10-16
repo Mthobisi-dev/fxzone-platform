@@ -17,9 +17,9 @@ function respond(articles: StoredNewsArticle[]) {
 }
 
 /**
- * Returns stored trusted articles first. If ingestion or its database access is
- * unavailable, use the Yahoo Finance provider RSS feed rather than showing a
- * permanent empty error panel to users.
+ * Combines stored trusted articles with current Yahoo Finance provider results.
+ * Provider results carry article media when Yahoo supplies it; no image or
+ * video is fabricated when the provider does not include one.
  */
 export async function GET(request: Request) {
   const searchParams = new URL(request.url).searchParams;
@@ -59,18 +59,18 @@ export async function GET(request: Request) {
     console.error('News feed route error:', error);
   }
 
-  if (!query && storedArticles.length > 0) return respond(storedArticles);
-
   try {
     const providerArticles = await fetchYahooFinanceNews(limit, query);
-    const merged = [...storedArticles, ...providerArticles].filter(
+    const merged = [...providerArticles, ...storedArticles].filter(
       (article, index, all) => all.findIndex((candidate) => candidate.id === article.id || (candidate.url && candidate.url === article.url)) === index
-    ).slice(0, limit);
+    ).sort((left, right) => Date.parse(right.published_at ?? '') - Date.parse(left.published_at ?? ''))
+      .slice(0, limit);
     if (merged.length > 0) return respond(merged);
   } catch (error) {
     console.error('Yahoo Finance news fallback failed:', error);
   }
 
+  if (storedArticles.length > 0) return respond(storedArticles);
   if (query) return respond([]);
 
   return apiError('SERVICE_UNAVAILABLE', 'Verified market news is temporarily unavailable.', 503);

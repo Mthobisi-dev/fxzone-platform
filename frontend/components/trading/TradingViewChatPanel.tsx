@@ -27,9 +27,11 @@ import {
   AreaChart,
   Crosshair,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getTradingViewChartUrl } from '@/lib/tradingView';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 
@@ -48,11 +50,17 @@ export function TradingViewChatPanel({
 }: TradingViewChatPanelProps) {
   const { selectedAsset, setSelectedAsset, assets, prices, fetchAssets, fetchPrices } = useMarketStore();
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [themeRevision, setThemeRevision] = useState(0);
   useEffect(() => {
     void fetchAssets(); void fetchPrices();
     const timer = setInterval(() => { if (!document.hidden) void fetchPrices(); }, 60_000);
     return () => clearInterval(timer);
   }, [fetchAssets, fetchPrices]);
+  useEffect(() => {
+    const observer = new MutationObserver(() => setThemeRevision((value) => value + 1));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+    return () => observer.disconnect();
+  }, []);
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -76,7 +84,9 @@ export function TradingViewChatPanel({
   // Active Tool state
   const [activeTool, setActiveTool] = useState<'select' | 'trendline' | 'horizontal'>('select');
   const activeToolRef = useRef(activeTool);
-  activeToolRef.current = activeTool;
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
 
   // Drawing tracking refs
   const horizontalLinesRef = useRef<any[]>([]);
@@ -98,6 +108,7 @@ export function TradingViewChatPanel({
   const currentSymbol = selectedAsset?.symbol || '';
   const currentPriceObj = prices[currentSymbol];
   const livePrice = Number.isFinite(currentPriceObj?.price) && currentPriceObj.price > 0 ? currentPriceObj.price : null;
+  const tradingViewUrl = getTradingViewChartUrl(currentSymbol);
 
   useEffect(() => {
     setSignalEntry(''); setSignalTP(''); setSignalSL('');
@@ -114,18 +125,24 @@ export function TradingViewChatPanel({
     smaSeriesRef.current = null; emaSeriesRef.current = null;
     horizontalLinesRef.current = []; trendLinesRef.current = []; trendlineStartRef.current = null;
 
+    const rootStyles = getComputedStyle(document.documentElement);
+    const chartBackground = rootStyles.getPropertyValue('--color-background').trim() || '#090d16';
+    const chartText = rootStyles.getPropertyValue('--color-text-muted').trim() || '#94a3b8';
+    const chartGrid = rootStyles.getPropertyValue('--color-border').trim() || '#1e293b';
+    const responsiveHeight = () => chartContainerRef.current?.clientHeight
+      || (window.innerWidth < 640 ? 240 : isCompact ? 320 : 420);
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight || (isCompact ? 320 : 420),
+      height: responsiveHeight(),
       layout: {
-        background: { color: '#090d16' },
-        textColor: '#94a3b8',
+        background: { color: chartBackground },
+        textColor: chartText,
         fontSize: 11,
         fontFamily: 'Inter, sans-serif',
       },
       grid: {
-        vertLines: { color: '#1e293b', style: 1 },
-        horzLines: { color: '#1e293b', style: 1 },
+        vertLines: { color: chartGrid, style: 1 },
+        horzLines: { color: chartGrid, style: 1 },
       },
       crosshair: {
         mode: 1,
@@ -321,7 +338,7 @@ export function TradingViewChatPanel({
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({
           width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight || (isCompact ? 320 : 420),
+          height: responsiveHeight(),
         });
       }
     };
@@ -336,7 +353,7 @@ export function TradingViewChatPanel({
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [currentSymbol, timeframe, chartType, activeIndicators, isCompact]);
+  }, [currentSymbol, timeframe, chartType, activeIndicators, isCompact, themeRevision]);
 
   // Clear Drawings
   const handleClearDrawings = () => {
@@ -359,7 +376,7 @@ export function TradingViewChatPanel({
   // Generate & Share Chart Snapshot into Chat
   const handleShareSnapshot = () => {
     if (livePrice === null) return;
-    const formattedText = `[TradingView Chart] Symbol: ${currentSymbol} | Timeframe: ${timeframe} | Price: ${livePrice} | Source: ${currentPriceObj?.data_source} | Status: ${currentPriceObj?.freshness} | As of: ${currentPriceObj?.timestamp}`;
+    const formattedText = `[Market Chart] Symbol: ${currentSymbol} | Timeframe: ${timeframe} | Price: ${livePrice} | Source: ${currentPriceObj?.data_source} | Status: ${currentPriceObj?.freshness} | As of: ${currentPriceObj?.timestamp}`;
     if (onShareSnapshot) {
       onShareSnapshot(formattedText);
     }
@@ -387,9 +404,9 @@ export function TradingViewChatPanel({
   };
 
   return (
-    <div className={cn("w-full bg-[#060911] border border-zinc-850 rounded-2xl flex flex-col overflow-hidden shadow-2xl relative select-none", className)}>
+    <div className={cn("w-full min-h-0 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl sm:rounded-2xl flex flex-col overflow-hidden shadow-2xl relative select-none", className)}>
       {/* ─── TRADINGVIEW TOP BAR ─── */}
-      <div className="bg-[#0b0f19] border-b border-zinc-850 px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+      <div className="bg-[var(--color-surface)] border-b border-[var(--color-border)] px-2 py-2 sm:px-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
         {/* Left Controls: Symbol Selector & Timeframe */}
         <div className="flex items-center flex-wrap gap-2">
           {/* Symbol Select */}
@@ -466,6 +483,21 @@ export function TradingViewChatPanel({
 
         {/* Right Controls: Indicators & Chat Sharing Integrations */}
         <div className="flex items-center flex-wrap gap-1.5">
+          <span className="hidden lg:inline text-[9px] font-semibold text-[var(--color-text-muted)]">
+            {currentPriceObj?.data_source ? String(currentPriceObj.data_source).replace(/_/g, ' ') : 'Provider unavailable'}
+            {currentPriceObj?.freshness ? ` · ${currentPriceObj.freshness}` : ''}
+          </span>
+          {tradingViewUrl && (
+            <a
+              href={tradingViewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1.5 text-[9px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              title="Open this instrument in TradingView"
+            >
+              TradingView <ExternalLink size={10} />
+            </a>
+          )}
           {/* Indicators Dropdown Toggle */}
           <div className="flex items-center gap-1 bg-zinc-900/80 border border-zinc-850 rounded-lg px-2 py-1 text-[10px] text-zinc-300">
             <Sliders size={12} className="text-zinc-400" />
@@ -521,9 +553,9 @@ export function TradingViewChatPanel({
       </div>
 
       {/* ─── MAIN WORKSPACE (LEFT DRAWING TOOLBAR + CHART CANVAS) ─── */}
-      <div className="flex-1 flex min-h-[300px] relative">
+      <div className="flex min-h-[240px] flex-1 relative sm:min-h-[340px]">
         {/* TradingView Left Drawing Tools Sidebar */}
-        <div className="w-10 bg-[#090d16] border-r border-zinc-850 flex flex-col items-center py-3 gap-2 shrink-0 z-10">
+        <div className="hidden w-10 bg-[var(--color-surface)] border-r border-[var(--color-border)] sm:flex flex-col items-center py-3 gap-2 shrink-0 z-10">
           <button
             onClick={() => setActiveTool('select')}
             title="Crosshair / Select"
@@ -569,7 +601,7 @@ export function TradingViewChatPanel({
         </div>
 
         {/* Chart Canvas Area */}
-        <div className="flex-1 relative bg-[#060911]">
+        <div className="min-w-0 flex-1 relative bg-[var(--color-background)]">
           {isLoading && (
             <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-20">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-blue-400 font-bold">
@@ -585,7 +617,7 @@ export function TradingViewChatPanel({
             <span className="text-xs text-zinc-400 font-semibold">{selectedAsset?.name || 'Trading Pair'}</span>
           </div>
 
-          <div ref={chartContainerRef} className="w-full h-full min-h-[300px]" />
+          <div ref={chartContainerRef} className="h-full min-h-[240px] w-full sm:min-h-[340px]" />
         </div>
       </div>
 

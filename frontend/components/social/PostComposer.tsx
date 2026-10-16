@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { isAllowedPostVideoDuration, MAX_POST_VIDEO_DURATION_SECONDS, readLocalVideoDuration } from '@/lib/postMedia';
-import { getPostMediaSizeLimit, POST_MEDIA_BUCKET, shouldUseDirectPostUpload } from '@/lib/postUpload';
+import { getPostMediaSizeLimit, normalizePostMediaFile, POST_MEDIA_BUCKET, shouldUseDirectPostUpload } from '@/lib/postUpload';
 import { supabase } from '@/lib/supabase';
 
 interface PostComposerProps {
@@ -92,6 +92,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     'image/png': 'image',
     'image/gif': 'image',
     'image/webp': 'image',
+    'image/avif': 'image',
     'video/mp4': 'video',
     'video/quicktime': 'video',
     'video/webm': 'video',
@@ -101,6 +102,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
     'audio/mpeg': 'audio',
     'audio/wav': 'audio',
     'audio/ogg': 'audio',
+    'audio/mp4': 'audio',
     'application/pdf': 'document',
   };
 
@@ -111,7 +113,14 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const newMedia: MediaFile[] = [];
     let firstError: string | null = null;
-    for (const file of Array.from(files)) {
+    for (const selectedFile of Array.from(files)) {
+      let file: File;
+      try {
+        file = await normalizePostMediaFile(selectedFile);
+      } catch (error) {
+        firstError ||= error instanceof Error ? error.message : 'This attachment could not be verified.';
+        continue;
+      }
       const type = getFileType(file);
       if (!type) {
         firstError ||= 'Choose an image, video, audio file, or PDF supported by FxZone.';

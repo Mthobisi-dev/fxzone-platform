@@ -139,9 +139,9 @@ export function ChatWindow({
   };
 
   return (
-    <div className="flex-1 h-full flex flex-col justify-between bg-[#070b13] fxzone-chat-surface relative overflow-hidden">
+    <div className="relative flex h-full min-h-0 flex-1 flex-col justify-between overflow-hidden bg-[var(--color-background)] fxzone-chat-surface">
       {/* ─── CHAT & TRADINGVIEW HEADER ─── */}
-      <div className="min-h-14 px-3 py-2 sm:py-0 sm:h-14 sm:px-4 border-b border-zinc-850 flex flex-wrap items-center justify-between gap-y-2 bg-[#0a0f1d] fxzone-chat-header select-none shrink-0 z-20">
+      <div className="min-h-14 px-2.5 py-2 sm:py-0 sm:h-14 sm:px-4 border-b border-[var(--color-border)] flex flex-wrap items-center justify-between gap-y-2 bg-[var(--color-surface)] fxzone-chat-header select-none shrink-0 z-20">
         <div className="flex flex-1 items-center gap-2 sm:gap-3 min-w-0">
           {onBack && (
             <button
@@ -242,11 +242,11 @@ export function ChatWindow({
       </div>
 
       {/* ─── MAIN BODY WORKSPACE (SUPPORTING CHAT, CHART, & SPLIT VIEW) ─── */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* TradingView Chart Panel (Visible in 'chart' mode OR 'split' mode on laptop/desktop) */}
         <div
           className={cn(
-            "h-full p-2 transition-all duration-300 flex flex-col",
+            "h-full min-h-0 p-1 sm:p-2 transition-all duration-300 flex flex-col",
             viewMode === 'chart'
               ? "w-full"
               : viewMode === 'split'
@@ -269,7 +269,7 @@ export function ChatWindow({
           )}
         >
           {/* Messages Feed */}
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 min-h-0">
+          <div className="flex-1 overflow-y-auto px-2.5 py-3 sm:p-4 flex flex-col gap-3 min-h-0 overscroll-contain">
             {messages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 p-6 select-none">
                 <div className="h-10 w-10 bg-zinc-900 border border-zinc-850 rounded-xl flex items-center justify-center text-zinc-500">

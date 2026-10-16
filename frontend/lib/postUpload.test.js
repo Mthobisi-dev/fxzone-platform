@@ -23,3 +23,26 @@ test('uses media-specific post attachment limits', async () => {
   assert.equal(isAllowedPostMedia('video/mp4', 100 * 1024 * 1024 + 1), false);
   assert.equal(isAllowedPostMedia('text/plain', 10), false);
 });
+
+test('detects supported attachment content and normalizes inaccurate browser media types', async () => {
+  const { detectPostMediaType, resolvePostMediaType } = await loadPostUpload();
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+  assert.equal(detectPostMediaType(png), 'image/png');
+  assert.equal(resolvePostMediaType('image/jpeg', png), 'image/png');
+  assert.equal(resolvePostMediaType('application/octet-stream', png), 'image/png');
+});
+
+test('accepts valid MP4 and PDF signatures beyond byte zero while rejecting unsupported content', async () => {
+  const { detectPostMediaType } = await loadPostUpload();
+  const leadingBoxMp4 = Uint8Array.from([
+    0x00, 0x00, 0x00, 0x08, 0x66, 0x72, 0x65, 0x65,
+    0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+    0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x00, 0x00,
+  ]);
+  const pdfWithLeadingComment = new TextEncoder().encode('% generated\n%PDF-1.7\n');
+
+  assert.equal(detectPostMediaType(leadingBoxMp4), 'video/mp4');
+  assert.equal(detectPostMediaType(pdfWithLeadingComment), 'application/pdf');
+  assert.equal(detectPostMediaType(new TextEncoder().encode('plain text')), null);
+});

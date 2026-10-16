@@ -69,6 +69,13 @@ test('parses Yahoo Finance search news without inventing article fields', async 
       link: 'https://finance.example/gold',
       providerPublishTime: 1791547200,
       relatedTickers: ['GC=F'],
+      type: 'VIDEO',
+      thumbnail: {
+        resolutions: [
+          { url: 'https://media.example/small.jpg', width: 140, height: 140 },
+          { url: 'https://media.example/original.jpg', width: 1280, height: 720, tag: 'original' },
+        ],
+      },
     }],
   });
 
@@ -77,6 +84,23 @@ test('parses Yahoo Finance search news without inventing article fields', async 
   assert.equal(articles[0].url, 'https://finance.example/gold');
   assert.deepEqual(articles[0].asset_tags, ['GC=F']);
   assert.equal(articles[0].content, '');
+  assert.equal(articles[0].media_url, 'https://media.example/original.jpg');
+  assert.equal(articles[0].media_type, 'video');
+});
+
+test('rejects unsafe provider media URLs', async () => {
+  const { parseYahooFinanceSearch } = await loadNewsFeed();
+  const [article] = parseYahooFinanceSearch({
+    news: [{
+      uuid: 'unsafe-media',
+      title: 'Provider article',
+      link: 'https://finance.example/article',
+      thumbnail: { resolutions: [{ url: 'javascript:alert(1)', width: 1280, height: 720 }] },
+    }],
+  });
+
+  assert.equal(article.media_url, null);
+  assert.equal(article.media_type, null);
 });
 
 test('filters stored news by title, source, content, category, or asset tag', async () => {

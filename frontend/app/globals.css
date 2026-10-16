@@ -71,6 +71,7 @@
   }
 
   html {
+    font-size: 15px;
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -271,6 +272,10 @@ html[class*="theme-"] :focus-visible {
 /* Shared phone defaults: fit the viewport, respect device safe areas, and stop
    iOS from zooming the whole page when a small input receives focus. */
 @media (max-width: 639px) {
+  html {
+    font-size: 14px;
+  }
+
   html,
   body {
     width: 100%;
@@ -280,6 +285,7 @@ html[class*="theme-"] :focus-visible {
   body {
     min-width: 320px;
     overflow-x: clip;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
 
   html input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),

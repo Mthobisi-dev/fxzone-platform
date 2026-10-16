@@ -7,6 +7,8 @@ export interface StoredNewsArticle {
   published_at: string | null;
   category: string | null;
   asset_tags: string[] | null;
+  media_url?: string | null;
+  media_type?: 'image' | 'video' | null;
 }
 
 export function parseNewsLimit(value: string | null): number {
@@ -49,6 +51,8 @@ export function toPublicNewsArticle(article: StoredNewsArticle) {
     published_at: article.published_at,
     category: article.category,
     asset_tags: Array.isArray(article.asset_tags) ? article.asset_tags : [],
+    media_url: safeExternalUrl(article.media_url ?? null),
+    media_type: article.media_type === 'video' || article.media_type === 'image' ? article.media_type : null,
   };
 }
 
@@ -119,6 +123,15 @@ interface YahooFinanceSearchNews {
   link?: unknown;
   providerPublishTime?: unknown;
   relatedTickers?: unknown;
+  type?: unknown;
+  thumbnail?: {
+    resolutions?: Array<{
+      url?: unknown;
+      width?: unknown;
+      height?: unknown;
+      tag?: unknown;
+    }>;
+  };
 }
 
 interface YahooFinanceSearchPayload {
@@ -137,6 +150,25 @@ export function parseYahooFinanceSearch(payload: YahooFinanceSearchPayload): Sto
     if (!id || !title || seen.has(id)) continue;
     seen.add(id);
     const publishSeconds = typeof item.providerPublishTime === 'number' ? item.providerPublishTime : Number(item.providerPublishTime);
+    const thumbnails = Array.isArray(item.thumbnail?.resolutions)
+      ? item.thumbnail.resolutions.flatMap((resolution) => {
+          const url = safeExternalUrl(typeof resolution.url === 'string' ? resolution.url : null);
+          if (!url) return [];
+          const width = Number(resolution.width);
+          const height = Number(resolution.height);
+          return [{
+            url,
+            area: Number.isFinite(width) && Number.isFinite(height) ? width * height : 0,
+            original: resolution.tag === 'original',
+          }];
+        })
+      : [];
+    const preferredThumbnail = thumbnails.find((thumbnail) => thumbnail.original)
+      ?? thumbnails.sort((left, right) => right.area - left.area)[0]
+      ?? null;
+    const mediaType = preferredThumbnail
+      ? (item.type === 'VIDEO' ? 'video' : 'image')
+      : null;
     articles.push({
       id,
       title,
@@ -148,6 +180,8 @@ export function parseYahooFinanceSearch(payload: YahooFinanceSearchPayload): Sto
       asset_tags: Array.isArray(item.relatedTickers)
         ? item.relatedTickers.filter((ticker): ticker is string => typeof ticker === 'string').slice(0, 12)
         : [],
+      media_url: preferredThumbnail?.url ?? null,
+      media_type: mediaType,
     });
   }
   return articles;
@@ -156,9 +190,10 @@ export function parseYahooFinanceSearch(payload: YahooFinanceSearchPayload): Sto
 /** Returns current headlines from a trusted provider when ingestion is absent. */
 export async function fetchYahooFinanceNews(limit: number, query = ''): Promise<StoredNewsArticle[]> {
   const normalizedQuery = parseNewsSearchQuery(query);
-  if (normalizedQuery) {
+  const providerQuery = normalizedQuery || 'markets';
+  try {
     const searchUrl = new URL('https://query1.finance.yahoo.com/v1/finance/search');
-    searchUrl.searchParams.set('q', normalizedQuery);
+    searchUrl.searchParams.set('q', providerQuery);
     searchUrl.searchParams.set('quotesCount', '0');
     searchUrl.searchParams.set('newsCount', String(Math.min(Math.max(limit, 1), 50)));
     const response = await fetch(searchUrl, {
@@ -167,8 +202,16 @@ export async function fetchYahooFinanceNews(limit: number, query = ''): Promise<
       headers: { Accept: 'application/json' },
     });
     if (!response.ok) throw new Error(`Yahoo Finance search returned ${response.status}.`);
-    return parseYahooFinanceSearch(await response.json()).slice(0, limit);
+    const providerArticles = parseYahooFinanceSearch(await response.json())
+      .sort((left, right) => Date.parse(right.published_at ?? '') - Date.parse(left.published_at ?? ''))
+      .slice(0, limit);
+    if (providerArticles.length > 0 || normalizedQuery) return providerArticles;
+  } catch (error) {
+    if (normalizedQuery) throw error;
   }
+
+  // The provider RSS feed is retained as a latest-news fallback. It contains
+  // no media, so the UI simply renders those entries without a preview.
   const url = 'https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EDJI%2C%5EGSPC%2C%5EIXIC&region=US&lang=en-US';
   const response = await fetch(url, {
     next: { revalidate: 300 },

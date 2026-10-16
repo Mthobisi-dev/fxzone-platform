@@ -20,6 +20,7 @@ import {
   Newspaper,
   ExternalLink,
   FileText,
+  PlayCircle,
 } from 'lucide-react';
 
 interface DiscoverUser {
@@ -43,6 +44,8 @@ interface DiscoverNewsArticle {
   url: string | null;
   published_at: string | null;
   asset_tags: string[];
+  media_url: string | null;
+  media_type: 'image' | 'video' | null;
 }
 
 interface NewsExplanationResult {
@@ -414,7 +417,7 @@ export default function DiscoverPage() {
         <div className="flex items-center gap-2">
           <Newspaper size={15} className="text-blue-500" aria-hidden="true" />
           <h2 id="discover-news-heading" className="text-xs font-bold text-[var(--color-text)] sm:text-sm">
-            {hasSearch ? 'Market news results' : 'Trending market news'}
+            {hasSearch ? 'Market news results' : 'Latest market news'}
           </h2>
         </div>
         {newsLoading ? (
@@ -432,7 +435,31 @@ export default function DiscoverPage() {
             {visibleNews.map((article) => {
               const explanation = newsExplanations[article.id];
               return (
-                <article key={article.id} className="min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4">
+                <article key={article.id} className="min-w-0 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+                  {article.media_url && (
+                    <a
+                      href={article.url ?? article.media_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group relative block aspect-video overflow-hidden bg-[var(--color-background)]"
+                      aria-label={`${article.media_type === 'video' ? 'Open video report' : 'Open article'}: ${article.title}`}
+                    >
+                      {/* Provider URLs vary by article, so this deliberately avoids a broad Next Image allowlist. */}
+                      <img
+                        src={article.media_url}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                      {article.media_type === 'video' && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/20 text-white" aria-hidden="true">
+                          <PlayCircle size={34} className="drop-shadow-lg" />
+                        </span>
+                      )}
+                    </a>
+                  )}
+                  <div className="p-3 sm:p-4">
                   <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
                     <span className="font-semibold text-blue-500">{article.source}</span>
                     {article.published_at && <time dateTime={article.published_at}>{new Date(article.published_at).toLocaleDateString()}</time>}
@@ -472,6 +499,7 @@ export default function DiscoverPage() {
                       <p className="mt-2 text-[9px] leading-4 text-[var(--color-text-muted)]">{explanation.result.limitation}</p>
                     </div>
                   )}
+                  </div>
                 </article>
               );
             })}

@@ -30,6 +30,9 @@ test('mobile typography prevents browser inflation and caps legacy oversized hea
   assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?\.text-4xl\s*\{[\s\S]*?font-size:\s*1\.75rem/);
   assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?\.text-3xl\s*\{[\s\S]*?font-size:\s*1\.5rem/);
   assert.match(styles, /overflow-wrap:\s*anywhere/);
+  assert.match(styles, /html\s*\{[\s\S]*?font-size:\s*15px/);
+  assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?html\s*\{[\s\S]*?font-size:\s*14px/);
+  assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?body\s*\{[\s\S]*?-apple-system[\s\S]*?BlinkMacSystemFont[\s\S]*?Segoe UI/);
 });
 
 test('market screener uses the broader Markets title', () => {

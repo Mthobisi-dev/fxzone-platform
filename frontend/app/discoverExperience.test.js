@@ -10,6 +10,9 @@ test('Discover shows trending provider news and no longer exposes group creation
   assert.match(source, /Trending market news/);
   assert.match(source, /\/api\/news\/explanation/);
   assert.match(source, /Explain news/);
+  assert.match(source, /Latest market news/);
+  assert.match(source, /article\.media_url/);
+  assert.match(source, /article\.media_type\s*===\s*['"]video['"]/);
   assert.doesNotMatch(source, /Discover Traders/);
   assert.doesNotMatch(source, /Create Group/);
 });
