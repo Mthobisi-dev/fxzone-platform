@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/Input';
@@ -91,9 +92,11 @@ export default function RegisterPage() {
         <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:24px_24px]" />
         
         <div className="flex items-center gap-3 z-10">
-          <img
+          <Image
             src="/fxzone-logo.jpg"
             alt="FxZone Logo"
+            width={44}
+            height={44}
             className="h-11 w-11 rounded-xl object-cover shadow-[0_0_20px_rgba(255,255,255,0.15)] border border-zinc-700"
           />
           <span className="text-xl font-black tracking-tight text-white">FxZone</span>

@@ -21,7 +21,9 @@ export function WatchlistPanel() {
     removeFromWatchlist,
   } = useMarketStore();
 
-  const [activeWatchlistId, setActiveWatchlistId] = useState<string | null>(null);
+  const [chosenWatchlistId, setActiveWatchlistId] = useState<string | null>(null);
+  const activeWatchlistId = watchlists.find((list) => list.id === chosenWatchlistId)?.id
+    ?? watchlists[0]?.id ?? null;
   const [newWatchlistName, setNewWatchlistName] = useState('');
   const [isCreatingList, setIsCreatingList] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,13 +32,6 @@ export function WatchlistPanel() {
   useEffect(() => {
     fetchWatchlists();
   }, [fetchWatchlists]);
-
-  // Set default active watchlist
-  useEffect(() => {
-    if (watchlists.length > 0 && !activeWatchlistId) {
-      setActiveWatchlistId(watchlists[0].id);
-    }
-  }, [watchlists, activeWatchlistId]);
 
   const activeWatchlist = watchlists.find((wl) => wl.id === activeWatchlistId);
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image, Smile, Loader2, Mic, MicOff, Radio, Users } from 'lucide-react';
+import { Send, Image as ImageIcon, Smile, Loader2, Mic, MicOff, Radio, Users } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { api } from '@/lib/api';
 import { Modal } from '../ui/Modal';
@@ -152,7 +152,7 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="fxzone-chat-composer flex w-full max-w-full items-center gap-1 border-t border-[var(--color-border)] bg-[var(--color-surface)] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] select-none sm:gap-1.5 sm:p-3">
+      <form onSubmit={handleSubmit} className="fxzone-chat-composer flex w-full max-w-full shrink-0 items-center gap-1 border-t border-[var(--color-border)] bg-[var(--color-surface)] p-2 select-none sm:gap-1.5 sm:p-3">
         {/* Hidden File Input */}
         <input
           type="file"
@@ -170,7 +170,7 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
           disabled={disabled || uploadingImage || uploadingVoice}
           title="Share a picture or video"
         >
-          {uploadingImage ? <Loader2 size={15} className="animate-spin text-blue-400" /> : <Image size={15} />}
+          {uploadingImage ? <Loader2 size={15} className="animate-spin text-blue-400" /> : <ImageIcon size={15} aria-hidden="true" />}
         </button>
 
         {/* Voice Note Button */}

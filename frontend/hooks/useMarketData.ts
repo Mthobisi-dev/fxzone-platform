@@ -26,6 +26,8 @@ export function useMarketData(symbols: string[] = [], options: MarketDataOptions
   } = useMarketStore();
 
   const loadPortfolio = options.loadPortfolio ?? true;
+  // Depend on the requested values, rather than a caller's array identity.
+  const symbolsKey = JSON.stringify(symbols);
 
   useEffect(() => {
     if (!loadPortfolio) return;
@@ -37,7 +39,8 @@ export function useMarketData(symbols: string[] = [], options: MarketDataOptions
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (symbols.length === 0) return;
+    const subscribedSymbols: string[] = JSON.parse(symbolsKey);
+    if (subscribedSymbols.length === 0) return;
 
     // Create a market websocket connection
     const socket = new FxZoneWebSocket('/ws/market');
@@ -46,14 +49,14 @@ export function useMarketData(symbols: string[] = [], options: MarketDataOptions
       // Subscribe to requested symbols
       socket.send({
         action: 'subscribe',
-        symbols,
+        symbols: subscribedSymbols,
       });
     });
 
     // Fetch initial prices via HTTP REST API to populate the UI instantly
     const fetchInitialPrices = async () => {
       try {
-        const queryParams = symbols.join(',');
+        const queryParams = subscribedSymbols.join(',');
         const res = await api.get(`/api/market/prices?symbols=${queryParams}`);
         if (res) {
           updateBulkPrices(res);
@@ -94,7 +97,7 @@ export function useMarketData(symbols: string[] = [], options: MarketDataOptions
     return () => {
       socket.close();
     };
-  }, [JSON.stringify(symbols), updatePrice]);
+  }, [symbolsKey, updatePrice, updateBulkPrices]);
 
   return {
     assets,

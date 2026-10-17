@@ -62,7 +62,7 @@ export function GhostCursor({
   const currentMouseRef = useRef(new THREE.Vector2(0.5, 0.5));
   const velocityRef = useRef(new THREE.Vector2(0, 0));
   const fadeOpacityRef = useRef(1.0);
-  const lastMoveTimeRef = useRef(typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const lastMoveTimeRef = useRef(0);
   const pointerActiveRef = useRef(false);
   const runningRef = useRef(false);
   const hasValidSizeRef = useRef(false);
@@ -361,6 +361,7 @@ export function GhostCursor({
     ro.observe(host);
 
     const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    lastMoveTimeRef.current = start;
     const animate = () => {
       if (!active) return;
 
@@ -526,16 +527,6 @@ export function GhostCursor({
       filmPassRef.current.uniforms.intensity.value = grainIntensity;
     }
   }, [grainIntensity]);
-
-  useEffect(() => {
-    const el = rendererRef.current?.domElement;
-    if (!el) return;
-    if (mixBlendMode) {
-      el.style.mixBlendMode = String(mixBlendMode);
-    } else {
-      el.style.removeProperty('mix-blend-mode');
-    }
-  }, [mixBlendMode]);
 
   const mergedStyle = useMemo(() => ({ zIndex, ...style }), [zIndex, style]);
 

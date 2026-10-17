@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
+import { useHydrated } from '@/hooks/useHydrated';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { NotificationDropdown } from './NotificationDropdown';
@@ -32,11 +34,7 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
   const { user, logout } = useAuth();
   const { theme } = useTheme();
   const [isThemeOpen, setIsThemeOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHydrated();
 
   const broker = getBrokerDestination(user?.preferred_broker);
 
@@ -78,9 +76,12 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
       <nav className="h-14 border-b border-zinc-850 bg-zinc-950/80 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between shrink-0 select-none z-40 relative">
         {/* Left Side: Brand Logo */}
         <div className="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onClick={() => router.push('/dashboard')}>
-          <img
+          <Image
             src="/fxzone-logo.jpg"
             alt="FxZone Logo"
+            width={36}
+            height={36}
+            sizes="(max-width: 639px) 32px, 36px"
             className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg object-cover shadow-[0_0_14px_rgba(255,255,255,0.12)] border border-zinc-800"
           />
           <div>

@@ -33,32 +33,39 @@ interface CommentThreadProps {
 
 export function CommentThread({
   postId,
+  ...props
+}: CommentThreadProps) {
+  return <PostComments key={postId} postId={postId} {...props} />;
+}
+
+function PostComments({
+  postId,
   initialComments = [],
   onCommentAdded,
   onCommentDeleted,
 }: CommentThreadProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<Comment[]>(initialComments);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [commentInput, setCommentInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchComments = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/api/social/posts/${postId}/comments`);
-      if (Array.isArray(response)) {
-        setComments(response);
-      }
-    } catch (err) {
-      console.error('Failed to load comments:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchComments();
+    let cancelled = false;
+    const fetchComments = async () => {
+      try {
+        const response = await api.get(`/api/social/posts/${postId}/comments`);
+        if (!cancelled && Array.isArray(response)) {
+          setComments(response);
+        }
+      } catch (err) {
+        console.error('Failed to load comments:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void fetchComments();
+    return () => { cancelled = true; };
   }, [postId]);
 
   const handleDeleteComment = async (commentId: string) => {

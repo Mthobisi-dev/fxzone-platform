@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { playExclusive, releaseMedia } from '@/lib/mediaPlayback';
 import { galleryIndicators } from '@/lib/postGesture';
 
@@ -49,7 +50,7 @@ export function PostGallery({ urls }: { urls: string[] }) {
           {!isAudio && /\.(mp4|mov|webm|mkv|m4v)$/i.test(path) ? <FeedVideo src={url} active={i === index} />
             : isAudio ? <audio src={url} controls preload="none" className="w-full" onPlay={e => playExclusive(e.currentTarget)} />
             : /\.pdf$/i.test(path) ? <a href={url} target="_blank" rel="noopener noreferrer" className="p-6 text-blue-600 dark:text-blue-400 underline">Open document</a>
-            : <img src={url} alt={`Post attachment ${i + 1}`} loading="lazy" className="w-full max-h-[65svh] object-contain" />}
+            : <Image src={url} alt={`Post attachment ${i + 1}`} width={1200} height={800} sizes="(max-width: 767px) 100vw, 800px" unoptimized loading="lazy" className="h-auto w-full max-h-[65svh] object-contain" />}
         </div>;
       })}
     </div>

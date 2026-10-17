@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { Avatar } from '../ui/Avatar';
 import { MessageInput } from './MessageInput';
 import {
@@ -73,6 +75,7 @@ export function ChatWindow({
   typingUsers = [],
   onBack,
 }: ChatWindowProps) {
+  const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showGroupProfile, setShowGroupProfile] = useState(false);
   
@@ -421,7 +424,7 @@ export function ChatWindow({
                                 </span>
                                 <h5 className="text-[11px] font-bold text-white mt-1 leading-snug">{sTitle}</h5>
                                 <button
-                                  onClick={() => (window.location.href = `/session/${sId}`)}
+                                  onClick={() => router.push(`/session/${encodeURIComponent(sId)}`)}
                                   className="w-full h-7 mt-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
                                 >
                                   Join Session
@@ -430,10 +433,13 @@ export function ChatWindow({
                             );
                           })()
                         ) : msg.messageType === 'image' ? (
-                          <img
+                          <Image
                             src={msg.content}
                             alt="Shared image"
-                            className="max-h-72 max-w-full rounded-lg object-contain"
+                            width={720}
+                            height={720}
+                            unoptimized
+                            className="h-auto w-auto max-h-72 max-w-full rounded-lg object-contain"
                             loading="lazy"
                           />
                         ) : msg.messageType === 'video' ? (

@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useRef, useCallback } from 'react';
+import NextImage from 'next/image';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  Image,
+  Image as ImageIcon,
   Tag,
   Send,
   X,
@@ -87,30 +88,26 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<any>(null);
 
-  const ALLOWED_TYPES: Record<string, 'image' | 'video' | 'audio' | 'document'> = {
-    'image/jpeg': 'image',
-    'image/png': 'image',
-    'image/gif': 'image',
-    'image/webp': 'image',
-    'image/avif': 'image',
-    'video/mp4': 'video',
-    'video/quicktime': 'video',
-    'video/webm': 'video',
-    'video/x-matroska': 'video',
-    'audio/webm': 'audio',
-    'audio/mp3': 'audio',
-    'audio/mpeg': 'audio',
-    'audio/wav': 'audio',
-    'audio/ogg': 'audio',
-    'audio/mp4': 'audio',
-    'application/pdf': 'document',
-  };
-
-  const getFileType = (file: File): 'image' | 'video' | 'audio' | 'document' | null => {
-    return ALLOWED_TYPES[file.type] || null;
-  };
-
   const addFiles = useCallback(async (files: FileList | File[]) => {
+    const allowedTypes: Record<string, MediaFile['type']> = {
+      'image/jpeg': 'image',
+      'image/png': 'image',
+      'image/gif': 'image',
+      'image/webp': 'image',
+      'image/avif': 'image',
+      'video/mp4': 'video',
+      'video/quicktime': 'video',
+      'video/webm': 'video',
+      'video/x-matroska': 'video',
+      'audio/webm': 'audio',
+      'audio/mp3': 'audio',
+      'audio/mpeg': 'audio',
+      'audio/wav': 'audio',
+      'audio/ogg': 'audio',
+      'audio/mp4': 'audio',
+      'application/pdf': 'document',
+    };
+
     const newMedia: MediaFile[] = [];
     let firstError: string | null = null;
     for (const selectedFile of Array.from(files)) {
@@ -121,7 +118,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
         firstError ||= error instanceof Error ? error.message : 'This attachment could not be verified.';
         continue;
       }
-      const type = getFileType(file);
+      const type = allowedTypes[file.type];
       if (!type) {
         firstError ||= 'Choose an image, video, audio file, or PDF supported by FxZone.';
         continue;
@@ -464,10 +461,14 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                       className="relative group rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 shadow-md"
                     >
                       {media.type === 'image' && (
-                        <img
+                        <NextImage
                           src={media.previewUrl}
                           alt="Preview"
-                          className="max-h-32 max-w-40 object-contain"
+                          width={160}
+                          height={128}
+                          sizes="160px"
+                          unoptimized
+                          className="h-auto w-auto max-h-32 max-w-40 object-contain"
                         />
                       )}
                       {media.type === 'video' && (
@@ -574,7 +575,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                     className="p-2 sm:p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0"
                     title="Upload Photo / Chart"
                   >
-                    <Image size={15} className="text-blue-400" />
+                    <ImageIcon size={15} className="text-blue-400" aria-hidden="true" />
                     <span>Image</span>
                   </button>
 

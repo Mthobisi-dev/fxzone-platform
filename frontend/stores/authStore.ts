@@ -273,7 +273,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isInitialized: true,
         error: null,
       });
-      if (typeof window !== 'undefined') window.location.href = '/dashboard';
     } catch (err: any) {
       const msg =
         err?.message === 'Invalid login credentials'
@@ -347,7 +346,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isInitialized: true,
         error: null,
       });
-      if (typeof window !== 'undefined') window.location.href = '/dashboard';
     } catch (err: any) {
       const msg = err?.message || 'Registration failed.';
       set({ error: msg, isLoading: false, isInitialized: true });
@@ -398,7 +396,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     await supabase.auth.signOut().catch(() => {});
-    if (typeof window !== 'undefined') window.location.href = '/login';
   },
 
   deleteAccount: async () => {
@@ -442,7 +439,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     await supabase.auth.signOut().catch(() => {});
-    if (typeof window !== 'undefined') window.location.href = '/login';
   },
 
   updateProfile: async (profileData) => {

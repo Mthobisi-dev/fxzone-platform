@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import {
   Sparkles,
   Globe,
@@ -112,10 +112,20 @@ const ALL_STOCKS: HeatmapStock[] = [
   { symbol: 'DOGEUSD', name: 'Dogecoin / USD', sector: 'Payments & Memes', marketCap: '15B', marketCapNum: 915, price: 0.104, changePct: 6.40, peRatio: 0, country: 'CRYPTO', assetType: 'crypto', logoBg: '#c2a633', logoType: 'generic' },
 ];
 
+function subscribeToPreferences(onChange: () => void) {
+  window.addEventListener('storage', onChange);
+  return () => window.removeEventListener('storage', onChange);
+}
+
+function useSavedPreference(key: string) {
+  return useSyncExternalStore(subscribeToPreferences, () => {
+    try { return localStorage.getItem(key); } catch { return null; }
+  }, () => null);
+}
+
 export function StockScreenerDashboard() {
   const router = useRouter();
   const { assets, prices, fetchAssets, fetchPrices, setSelectedAsset, toggleWatchlist, isAssetInWatchlist, watchlists } = useMarketStore();
-  const [stocks, setStocks] = useState<HeatmapStock[]>(ALL_STOCKS);
 
   // Top Category Tab Switcher ('all' | 'stock' | 'crypto' | 'forex')
   const [activeMarketTab, setActiveMarketTab] = useState<'all' | 'stock' | 'crypto' | 'forex'>('all');
@@ -132,11 +142,17 @@ export function StockScreenerDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // View Mode & Customizations
-  const [viewMode, setViewMode] = useState<'heatmap' | 'grid' | 'table'>('heatmap');
+  const savedView = useSavedPreference('fxzone_screener_view_mode');
+  const savedLogos = useSavedPreference('fxzone_screener_brand_logos');
+  const savedScheme = useSavedPreference('fxzone_screener_color_scheme');
+  const [viewOverride, setViewMode] = useState<'heatmap' | 'grid' | 'table' | null>(null);
+  const viewMode = viewOverride ?? (savedView === 'grid' || savedView === 'table' ? savedView : 'heatmap');
   const [sizeMetric, setSizeMetric] = useState<'mktcap' | 'volume'>('mktcap');
   const [colorMetric, setColorMetric] = useState<'1d' | 'pe'>('1d');
-  const [showBrandLogos, setShowBrandLogos] = useState<boolean>(true);
-  const [colorScheme, setColorScheme] = useState<'standard' | 'high_contrast'>('standard');
+  const [logosOverride, setShowBrandLogos] = useState<boolean | null>(null);
+  const showBrandLogos = logosOverride ?? savedLogos !== 'false';
+  const [schemeOverride, setColorScheme] = useState<'standard' | 'high_contrast' | null>(null);
+  const colorScheme = schemeOverride ?? (savedScheme === 'high_contrast' ? 'high_contrast' : 'standard');
   const [resetToast, setResetToast] = useState<string | null>(null);
   const [selectedStock, setSelectedStock] = useState<HeatmapStock | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -147,53 +163,21 @@ export function StockScreenerDashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Hydrate settings from localStorage
-  useEffect(() => {
-    try {
-      const savedView = localStorage.getItem('fxzone_screener_view_mode');
-      if (savedView) setViewMode(savedView as any);
-      const savedLogos = localStorage.getItem('fxzone_screener_brand_logos');
-      if (savedLogos !== null) setShowBrandLogos(savedLogos === 'true');
-      const savedScheme = localStorage.getItem('fxzone_screener_color_scheme');
-      if (savedScheme) setColorScheme(savedScheme as any);
-    } catch {}
-  }, []);
-
   // Load real API assets and live prices
   useEffect(() => {
     fetchAssets();
     fetchPrices();
   }, [fetchAssets, fetchPrices]);
 
-  // Merge real market prices from API into heatmap stocks
-  useEffect(() => {
-    if (!prices || Object.keys(prices).length === 0) return;
-
-    setStocks((prevStocks) =>
-      prevStocks.map((stock) => {
-        const live = prices[stock.symbol.toUpperCase()];
-        if (live) {
-          return {
-            ...stock,
-            price: live.price,
-            changePct: live.change_pct,
-          };
-        }
-        return stock;
-      })
-    );
-  }, [prices]);
-
-  // Sync assets from API into heatmap
-  useEffect(() => {
-    if (!assets || assets.length === 0) return;
-
-    const existingSymbols = new Set(stocks.map((s) => s.symbol.toUpperCase()));
+  // Derive the current universe and quotes together, without a stale state copy.
+  const stocks = useMemo(() => {
+    const existingSymbols = new Set(ALL_STOCKS.map((s) => s.symbol.toUpperCase()));
     const newItems: HeatmapStock[] = [];
 
     assets.forEach((a) => {
       const sym = a.symbol.toUpperCase();
       if (!existingSymbols.has(sym)) {
+        existingSymbols.add(sym);
         const type = (a.asset_type || 'stock') as any;
         let country: 'US' | 'EU' | 'GLOBAL' | 'CRYPTO' = 'US';
         let sector = 'Other Equities';
@@ -238,9 +222,10 @@ export function StockScreenerDashboard() {
       }
     });
 
-    if (newItems.length > 0) {
-      setStocks((prev) => [...prev, ...newItems]);
-    }
+    return [...ALL_STOCKS, ...newItems].map((stock) => {
+      const live = prices[stock.symbol.toUpperCase()];
+      return live ? { ...stock, price: live.price, changePct: live.change_pct } : stock;
+    });
   }, [assets, prices]);
 
   // Optimized Filter Pipeline using useMemo
@@ -260,7 +245,7 @@ export function StockScreenerDashboard() {
       if (aiFilterActive && !s.aiTag) return false;
 
       // Watchlist Filter
-      if (watchlistOnly && !isAssetInWatchlist(s.symbol)) return false;
+      if (watchlistOnly && !watchlists[0]?.items.some((item) => item.symbol.toUpperCase() === s.symbol.toUpperCase())) return false;
 
       // Price Range Filter
       if (priceRange === 'under50' && s.price >= 50) return false;
@@ -293,6 +278,7 @@ export function StockScreenerDashboard() {
     selectedCountry,
     aiFilterActive,
     watchlistOnly,
+    watchlists,
     priceRange,
     changePctFilter,
     mktCapFilter,

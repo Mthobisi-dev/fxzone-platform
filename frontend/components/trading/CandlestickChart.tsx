@@ -126,7 +126,7 @@ export function CandlestickChart() {
     const gridColor = isDark ? '#1f2937' : '#e2e8f0';
 
     // Calculate height dynamically
-    const initialHeight = isMaximized ? window.innerHeight - 150 : 380;
+    const initialHeight = 380;
 
     // Create chart
     const chart = createChart(chartContainerRef.current, {
@@ -292,18 +292,8 @@ export function CandlestickChart() {
 
     chart.subscribeClick(clickHandler);
 
-    // Resize observer
-    const handleResize = () => {
-      if (isMounted && chartContainerRef.current && chartRef.current) {
-        const height = isMaximized ? window.innerHeight - 150 : 380;
-        chartRef.current.resize(chartContainerRef.current.clientWidth, height);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-
     return () => {
       isMounted = false;
-      window.removeEventListener('resize', handleResize);
       if (chartRef.current) {
         chartRef.current.unsubscribeClick(clickHandler);
       }
@@ -372,14 +362,16 @@ export function CandlestickChart() {
     };
 
     doResize();
+    window.addEventListener('resize', doResize);
     // Schedule a secondary resize to catch the end of the Tailwind transition
     timerId = setTimeout(doResize, 100);
 
     return () => {
       active = false;
+      window.removeEventListener('resize', doResize);
       if (timerId) clearTimeout(timerId);
     };
-  }, [isMaximized]);
+  }, [isMaximized, selectedAsset, timeframe, theme]);
 
   if (isMinimized) {
     return (

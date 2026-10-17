@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { normalizeDiscoverQuery, shouldSearchDiscover } from '@/lib/discoverSearch';
@@ -71,18 +72,17 @@ export default function DiscoverPage() {
   const [trendingError, setTrendingError] = useState<string | null>(null);
   const [newsExplanations, setNewsExplanations] = useState<Record<string, NewsExplanationState>>({});
   const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const requestSequence = useRef(0);
   const [followLoading, setFollowLoading] = useState<string | null>(null);
 
   const loadSuggestedUsers = useCallback(async () => {
     const requestId = ++requestSequence.current;
-    setLoading(true);
     try {
-      const result = await api.get('/api/social/users?limit=12');
+      const result = await api.get('/api/social/users?limit=3');
       if (requestId !== requestSequence.current) return;
       setUsers(Array.isArray(result)
-        ? result.filter((candidate: DiscoverUser) => candidate.id !== user?.id)
+        ? result.filter((candidate: DiscoverUser) => candidate.id !== user?.id).slice(0, 3)
         : []);
     } catch (error) {
       if (requestId !== requestSequence.current) return;
@@ -95,6 +95,7 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     void loadSuggestedUsers();
+    return () => { requestSequence.current += 1; };
   }, [loadSuggestedUsers]);
 
   useEffect(() => {
@@ -123,11 +124,8 @@ export default function DiscoverPage() {
   const fetchDiscovery = useCallback(async (rawQuery: string) => {
     const query = normalizeDiscoverQuery(rawQuery);
     if (!shouldSearchDiscover(query)) {
-      requestSequence.current += 1;
-      setUsers([]);
       setNews([]);
-      setLoading(false);
-      return;
+      return loadSuggestedUsers();
     }
     const requestId = ++requestSequence.current;
     setLoading(true);
@@ -152,7 +150,7 @@ export default function DiscoverPage() {
     } finally {
       if (requestId === requestSequence.current) setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, loadSuggestedUsers]);
 
   // Default suggestions remain visible until a useful search is entered.
   // Sequence IDs prevent a late response from replacing newer results.
@@ -167,12 +165,13 @@ export default function DiscoverPage() {
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
+    requestSequence.current += 1;
+    setLoading(true);
     const query = normalizeDiscoverQuery(value);
     if (!shouldSearchDiscover(query)) {
       requestSequence.current += 1;
       setNews([]);
-      setLoading(false);
-      if (!query) void loadSuggestedUsers();
+      void loadSuggestedUsers();
     }
   };
 
@@ -310,6 +309,7 @@ export default function DiscoverPage() {
 
   const normalizedSearch = normalizeDiscoverQuery(search);
   const hasSearch = shouldSearchDiscover(normalizedSearch);
+  const visibleUsers = hasSearch ? users : users.slice(0, 3);
   const visibleNews = hasSearch ? news : trendingNews;
   const newsLoading = hasSearch ? loading : trendingLoading;
 
@@ -345,7 +345,7 @@ export default function DiscoverPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-2 min-[460px]:grid-cols-2 lg:grid-cols-3">
-          {users.map((u) => (
+          {visibleUsers.map((u) => (
             <Card
               key={u.id}
               className="group border border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-colors hover:border-blue-500/40"
@@ -464,9 +464,11 @@ export default function DiscoverPage() {
                       aria-label={`${article.media_type === 'video' ? 'Open video report' : 'Open article'}: ${article.title}`}
                     >
                       {/* Provider URLs vary by article, so this deliberately avoids a broad Next Image allowlist. */}
-                      <img
+                      <Image
                         src={article.media_url}
                         alt=""
+                        fill
+                        unoptimized
                         loading="lazy"
                         referrerPolicy="no-referrer"
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"

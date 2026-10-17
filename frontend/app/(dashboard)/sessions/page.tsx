@@ -42,7 +42,7 @@ export default function SessionsPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -57,11 +57,9 @@ export default function SessionsPage() {
 
   const isAdmin = user?.role === 'admin';
 
-  const fetchSessions = async () => {
-    setLoading(true);
-    setSessionsError(null);
-    try {
-      const response = await api.get('/api/sessions');
+  const fetchSessions = () => {
+    return api.get('/api/sessions').then((response) => {
+      setSessionsError(null);
       if (Array.isArray(response)) {
         const mapped = response.map((s: any) => ({
           id: String(s.id),
@@ -82,17 +80,23 @@ export default function SessionsPage() {
       } else {
         setSessions([]);
       }
-    } catch (err) {
+    }).catch((err) => {
       console.error(err);
       setSessionsError(err instanceof Error ? err.message : 'Unable to load live broadcasts.');
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   };
 
   useEffect(() => {
     fetchSessions();
   }, []);
+
+  const refreshSessions = () => {
+    setLoading(true);
+    setSessionsError(null);
+    void fetchSessions();
+  };
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,7 +158,7 @@ export default function SessionsPage() {
     } catch (err: any) {
       console.error('Delete session error:', err);
       alert(err?.detail || 'Failed to delete session record.');
-      fetchSessions();
+      refreshSessions();
     } finally {
       setDeletingId(null);
     }
@@ -229,7 +233,7 @@ export default function SessionsPage() {
           </div>
 
           <button
-            onClick={fetchSessions}
+            onClick={refreshSessions}
             disabled={loading}
             className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800/50 transition-colors border border-zinc-850 shrink-0"
             title="Refresh Live Sessions"

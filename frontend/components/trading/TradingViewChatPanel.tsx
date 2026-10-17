@@ -106,13 +106,17 @@ export function TradingViewChatPanel({
 
   // Active asset price
   const currentSymbol = selectedAsset?.symbol || '';
+  const [signalSymbol, setSignalSymbol] = useState(currentSymbol);
+  // Reset only the instrument-specific draft before committing a different asset.
+  if (signalSymbol !== currentSymbol) {
+    setSignalSymbol(currentSymbol);
+    setSignalEntry('');
+    setSignalTP('');
+    setSignalSL('');
+  }
   const currentPriceObj = prices[currentSymbol];
   const livePrice = Number.isFinite(currentPriceObj?.price) && currentPriceObj.price > 0 ? currentPriceObj.price : null;
   const tradingViewUrl = getTradingViewChartUrl(currentSymbol);
-
-  useEffect(() => {
-    setSignalEntry(''); setSignalTP(''); setSignalSL('');
-  }, [currentSymbol]);
 
   // Handle Chart Creation & Data Loading
   useEffect(() => {

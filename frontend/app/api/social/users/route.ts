@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
         // short Discover page when they are newest records.
         .limit(Math.min(limit + LEGACY_DEMO_USERNAMES.size + 1, 100));
 
+      if (currentUser) query = query.neq('id', currentUser.id);
       if (mutualOnly) query = query.in('id', mutualIds);
       if (q.trim()) {
         const safeQuery = q.trim().replace(/[^\w .-]/g, '').slice(0, 80);

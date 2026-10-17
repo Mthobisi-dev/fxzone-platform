@@ -5,6 +5,7 @@ import { ScreenShare } from './ScreenShare';
 import { SessionChat, SessionChatMessage } from './SessionChat';
 import { SessionControls } from './SessionControls';
 import { useAuth } from '@/hooks/useAuth';
+import { useHydrated } from '@/hooks/useHydrated';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import {
   Shield,
@@ -61,7 +62,8 @@ export function SessionRoom({
   const [reviewingParticipantId, setReviewingParticipantId] = useState<string | null>(null);
   const [isEndingBroadcast, setIsEndingBroadcast] = useState(false);
   const [isStartingShare, setIsStartingShare] = useState(false);
-  const [screenShareSupported, setScreenShareSupported] = useState(false);
+  const hydrated = useHydrated();
+  const screenShareSupported = hydrated && supportsScreenShare(navigator.mediaDevices);
   const [hasSharedAudio, setHasSharedAudio] = useState(false);
   const capturePendingRef = useRef(false);
 
@@ -75,8 +77,6 @@ export function SessionRoom({
   const recordingTimerRef = useRef<any>(null);
   const shareTimerRef = useRef<any>(null);
   const participantFetchRef = useRef<any>(null);
-
-  useEffect(() => { setScreenShareSupported(supportsScreenShare(navigator.mediaDevices)); }, []);
 
   // Admin override detection
   const isAdmin = user?.role === 'admin';

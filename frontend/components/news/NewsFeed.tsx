@@ -28,12 +28,9 @@ export function NewsFeed() {
   const [activeTab, setActiveTab] = useState<'all' | 'forex' | 'stock' | 'crypto'>('all');
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
 
-  const fetchNews = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Endpoint is /api/news/feed
-      const response = await api.get('/api/news/feed?limit=20');
+  const fetchNews = () => {
+    return api.get('/api/news/feed?limit=20').then((response) => {
+      setError(null);
       let items: any[] = [];
       if (Array.isArray(response)) {
         items = response;
@@ -54,12 +51,18 @@ export function NewsFeed() {
         createdAt: item.published_at || item.createdAt || new Date(),
       }));
       setArticles(mapped);
-    } catch (err) {
+    }).catch((err) => {
       console.error('Error fetching news:', err);
       setError('Could not retrieve latest news. Please try again.');
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
+  };
+
+  const refreshNews = () => {
+    setLoading(true);
+    setError(null);
+    void fetchNews();
   };
 
   useEffect(() => {
@@ -98,7 +101,7 @@ export function NewsFeed() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-white tracking-wide">Market Intelligence</h2>
           <button
-            onClick={fetchNews}
+            onClick={refreshNews}
             disabled={loading}
             className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
           >
@@ -147,7 +150,7 @@ export function NewsFeed() {
             <AlertCircle className="text-rose-500" size={20} />
             <p className="text-xs text-rose-200">{error}</p>
             <button
-              onClick={fetchNews}
+              onClick={refreshNews}
               className="text-xs text-blue-400 font-semibold underline hover:text-blue-300"
             >
               Try Again

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { Plus, X, ArrowLeft, ArrowRight, Upload, Heart } from 'lucide-react';
@@ -37,12 +38,21 @@ export function StoryBar() {
   const [newContent, setNewContent] = useState('');
   const [newImageUrl, setNewImageUrl] = useState('');
   const [storyFile, setStoryFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  const fetchStories = async () => {
-    try {
-      const response = await api.get('/api/social/stories');
+  const selectStoryFile = (file: File | null) => {
+    setStoryFile(file);
+    setFilePreviewUrl(file ? URL.createObjectURL(file) : null);
+  };
+
+  useEffect(() => () => {
+    if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl);
+  }, [filePreviewUrl]);
+
+  const fetchStories = () => {
+    return api.get('/api/social/stories').then((response) => {
       if (Array.isArray(response)) {
         const mapped: Story[] = response.map((s: any) => ({
           id: String(s.id),
@@ -61,9 +71,9 @@ export function StoryBar() {
         }));
         setStories(mapped);
       }
-    } catch (err) {
+    }).catch((err) => {
       console.error('Failed to fetch stories:', err);
-    }
+    });
   };
 
   useEffect(() => {
@@ -110,7 +120,7 @@ export function StoryBar() {
       }, { timeoutMs: 60_000 });
       setNewContent('');
       setNewImageUrl('');
-      setStoryFile(null);
+      selectStoryFile(null);
       setCreating(false);
       await fetchStories();
       if (typeof window !== 'undefined') {
@@ -173,14 +183,6 @@ export function StoryBar() {
     }
   };
 
-  // Preview URL for the selected file
-  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!storyFile) { setFilePreviewUrl(null); return; }
-    const url = URL.createObjectURL(storyFile); setFilePreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [storyFile]);
-
   return (
     <div className="flex gap-4 items-center bg-zinc-950/20 border border-zinc-850 p-3 rounded-xl overflow-x-auto select-none no-scrollbar">
       {/* Create Story Button */}
@@ -221,7 +223,7 @@ export function StoryBar() {
 
       {/* Story Composition Modal */}
       {creating && (
-        <Modal isOpen={creating} onClose={() => { setCreating(false); setStoryFile(null); }} title="Create Day Story">
+        <Modal isOpen={creating} onClose={() => { setCreating(false); selectStoryFile(null); }} title="Create Day Story">
           <div className="space-y-4">
             {/* Image Preview */}
             {(filePreviewUrl || newImageUrl.trim()) && (
@@ -229,15 +231,18 @@ export function StoryBar() {
                 {storyFile?.type.startsWith('video/') || isVideoMediaUrl(newImageUrl) ? (
                   <video src={filePreviewUrl || newImageUrl.trim()} controls playsInline className="w-full h-48 object-contain" onPlay={e => playExclusive(e.currentTarget)} />
                 ) : (
-                <img
+                <Image
                   src={filePreviewUrl || newImageUrl.trim()}
+                  width={600}
+                  height={192}
+                  unoptimized
                   alt="Story preview"
                   className="w-full h-48 object-cover"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 )}
                 <button
-                  onClick={() => { setStoryFile(null); setNewImageUrl(''); }}
+                  onClick={() => { selectStoryFile(null); setNewImageUrl(''); }}
                   className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/60 flex items-center justify-center text-white hover:bg-black/80"
                 >
                   <X size={12} />
@@ -269,7 +274,7 @@ export function StoryBar() {
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files?.[0]) {
-                      setStoryFile(e.target.files[0]);
+                      selectStoryFile(e.target.files[0]);
                       setNewImageUrl('');
                     }
                   }}
@@ -279,7 +284,7 @@ export function StoryBar() {
               <input
                 type="text"
                 value={newImageUrl}
-                onChange={(e) => { setNewImageUrl(e.target.value); setStoryFile(null); }}
+                onChange={(e) => { setNewImageUrl(e.target.value); selectStoryFile(null); }}
                 placeholder="Paste image URL..."
                 className="flex-1 h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-750"
               />
@@ -289,7 +294,7 @@ export function StoryBar() {
               {publishError && (
                 <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300" role="alert">{publishError}</p>
               )}
-              <Button size="sm" variant="ghost" onClick={() => { setCreating(false); setStoryFile(null); }} disabled={publishing}>
+              <Button size="sm" variant="ghost" onClick={() => { setCreating(false); selectStoryFile(null); }} disabled={publishing}>
                 Cancel
               </Button>
               <Button
@@ -359,8 +364,11 @@ export function StoryBar() {
                   isVideoMediaUrl(activeStoryGroup[activeStoryIdx].imageUrl || '') ? (
                     <video key={activeStoryGroup[activeStoryIdx].id} src={activeStoryGroup[activeStoryIdx].imageUrl} controls autoPlay muted playsInline onEnded={nextStory} onPlay={e => playExclusive(e.currentTarget)} className="absolute inset-0 w-full h-full object-contain" />
                   ) : (
-                  <img
-                    src={activeStoryGroup[activeStoryIdx].imageUrl}
+                  <Image
+                    src={activeStoryGroup[activeStoryIdx].imageUrl!}
+                    fill
+                    unoptimized
+                    sizes="(max-width: 440px) 92vw, 405px"
                     alt="Story image"
                     className="absolute inset-0 w-full h-full object-cover"
                   />                  )

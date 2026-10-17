@@ -12,7 +12,8 @@ interface ScreenShareProps {
 
 export function ScreenShare({ stream, presenterName, isLocal = false, isHost = false }: ScreenShareProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [needsUserInteraction, setNeedsUserInteraction] = useState(false);
+  const [blockedStream, setBlockedStream] = useState<MediaStream | null>(null);
+  const needsUserInteraction = Boolean(stream && stream === blockedStream && stream.active);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
@@ -29,11 +30,11 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
         if (playPromise !== undefined) {
           playPromise
             .then(() => {
-              if (!disposed) setNeedsUserInteraction(false);
+              if (!disposed) setBlockedStream(null);
             })
             .catch((err) => {
               console.warn('ScreenShare autoplay prevented by browser policy:', err);
-              if (!disposed) setNeedsUserInteraction(true);
+              if (!disposed) setBlockedStream(stream);
             });
         }
       };
@@ -45,7 +46,7 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
         const hasLiveVideo = stream.getVideoTracks().some((t) => t.readyState === 'live');
         if (!hasLiveVideo && videoRef.current) {
           videoRef.current.srcObject = null;
-          setNeedsUserInteraction(false);
+          setBlockedStream(null);
         }
       };
 
@@ -65,7 +66,6 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
       };
     } else {
       video.srcObject = null;
-      setNeedsUserInteraction(false);
     }
   }, [stream, isLocal]);
 
@@ -84,7 +84,7 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
       videoRef.current
         .play()
         .then(() => {
-          setNeedsUserInteraction(false);
+          setBlockedStream(null);
         })
         .catch((e) => console.error('Manual play failed:', e));
     }
@@ -109,7 +109,7 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
       const nextMuted = !videoRef.current.muted;
       videoRef.current.muted = nextMuted;
       setIsMuted(nextMuted);
-      void videoRef.current.play().catch(() => setNeedsUserInteraction(true));
+      void videoRef.current.play().catch(() => setBlockedStream(stream));
     }
   };
 

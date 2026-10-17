@@ -7,7 +7,8 @@ test('Discover shows trending provider news and no longer exposes group creation
   const source = fs.readFileSync(path.join(__dirname, '(dashboard)', 'discover', 'page.tsx'), 'utf8');
 
   assert.match(source, /<h1[^>]*>Discover<\/h1>/);
-  assert.match(source, /\/api\/social\/users\?limit=12/);
+  assert.match(source, /\/api\/social\/users\?limit=3/);
+  assert.match(source, /\.slice\(0, 3\)/);
   assert.match(source, /\/api\/news\/feed\?limit=8/);
   assert.match(source, /Trending market news/);
   assert.match(source, /\/api\/news\/explanation/);
@@ -30,6 +31,11 @@ test('Messages uses a mobile viewport shell and compact responsive controls', ()
   assert.match(sidebar, /max-w-full/);
   assert.match(window, /fxzone-chat-mobile-header/);
   assert.match(input, /fxzone-chat-composer/);
+  const layout = fs.readFileSync(path.join(__dirname, '(dashboard)', 'layout.tsx'), 'utf8');
+  const navigation = fs.readFileSync(path.join(__dirname, '..', 'components', 'layout', 'Sidebar.tsx'), 'utf8');
+  assert.match(layout, /pb-\[var\(--mobile-nav-height\)\]/);
+  assert.match(navigation, /h-\[var\(--mobile-nav-height\)\]/);
+  assert.doesNotMatch(input, /safe-area-inset-bottom/);
 });
 
 test('system navigation keeps accessible icon links without visible page labels or mobile profile', () => {

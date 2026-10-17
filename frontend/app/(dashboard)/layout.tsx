@@ -7,6 +7,8 @@ import { Navbar } from '@/components/layout/Navbar';
 import { PriceTickerBar } from '@/components/trading/PriceTickerBar';
 import { AIChatPanel } from '@/components/ai/AIChatPanel';
 import { AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import { useHydrated } from '@/hooks/useHydrated';
 
 const LOADING_TIMEOUT_MS = 6000;
 
@@ -16,13 +18,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { isLoading, isAuthenticated } = useAuth(true);
+  const router = useRouter();
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHydrated();
 
   useEffect(() => {
     if (!isLoading) return;
@@ -34,9 +33,9 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (timedOut && !isAuthenticated && typeof window !== 'undefined') {
-      window.location.href = '/login';
+      router.replace('/login');
     }
-  }, [timedOut, isAuthenticated]);
+  }, [timedOut, isAuthenticated, router]);
 
   const showLoadingOverlay = mounted && isLoading && !timedOut;
 
@@ -64,7 +63,7 @@ export default function DashboardLayout({
         <Sidebar />
 
         {/* Center: Main Dashboard Viewport */}
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden w-full max-w-full min-h-0 bg-[var(--color-background)] relative pb-20 md:pb-0 overscroll-contain">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden w-full max-w-full min-h-0 bg-[var(--color-background)] relative pb-[var(--mobile-nav-height)] md:pb-0 overscroll-contain">
           {children}
         </main>
 

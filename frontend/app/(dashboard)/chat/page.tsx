@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatRequestGuard } from '@/lib/chatRequestGuard';
+import { getConversationPreview, mergeConversationMessages } from '@/lib/chatThreads';
 import { ChatSidebar, Conversation, SuggestedUser } from '@/components/chat/ChatSidebar';
 import { ChatWindow, ChatMessage } from '@/components/chat/ChatWindow';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,6 +20,7 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loadedConversationIds, setLoadedConversationIds] = useState<Set<string>>(() => new Set());
   const messageRequests = useRef(new ChatRequestGuard());
   const [loading, setLoading] = useState(true);
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -28,7 +30,7 @@ export default function ChatPage() {
 
   // States for user selection modal
   const [eligibleUsers, setEligibleUsers] = useState<any[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(true);
   const [userSearch, setUserSearch] = useState('');
 
   // Group creation modal states
@@ -38,19 +40,23 @@ export default function ChatPage() {
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
 
+  const selectConversation = useCallback((conversationId: string | null) => {
+    setActiveConvId(conversationId);
+    if (!conversationId) return;
+
+    setConversations((previous) =>
+      previous.map((conversation) =>
+        String(conversation.id) === String(conversationId)
+          ? { ...conversation, unreadCount: 0 }
+          : conversation
+      )
+    );
+  }, []);
+
   // WebSocket hook for real-time chat sync
   const socketRef = useWebSocket(
     activeConvId ? `/ws/chat/${activeConvId}` : '',
     {
-      open: () => {
-        setWsConnected(true);
-      },
-      close: () => {
-        setWsConnected(false);
-      },
-      error: () => {
-        setWsConnected(false);
-      },
       message: (payload) => {
         const msg = payload;
         const convId = msg.conversation_id || msg.conversationId;
@@ -93,7 +99,7 @@ export default function ChatPage() {
     }
   );
 
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     try {
       const response = await api.get('/api/chat/conversations');
       if (Array.isArray(response)) {
@@ -125,9 +131,9 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchMessages = async (convId: string) => {
+  const fetchMessages = useCallback(async (convId: string) => {
     const isCurrentRequest = messageRequests.current.begin(convId);
     try {
       const response = await api.get(`/api/chat/conversations/${convId}/messages`);
@@ -148,22 +154,17 @@ export default function ChatPage() {
               }
             : undefined,
         }));
-        setMessages((prev) => {
-          const pending = prev.filter((m) => String(m.id).startsWith('temp-'));
-          const confirmedIds = new Set(mapped.map((m: any) => String(m.id)));
-          const remainingPending = pending.filter((m) => !confirmedIds.has(String(m.id)));
-          return [...mapped, ...remainingPending];
-        });
+        setMessages((prev) => mergeConversationMessages(prev, mapped, convId));
       } else {
-        setMessages([]);
+        setMessages((previous) => previous.filter((message) => message.conversationId !== convId));
       }
+      setLoadedConversationIds((previous) => new Set(previous).add(convId));
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
-  const fetchEligibleUsers = async () => {
-    setLoadingUsers(true);
+  const fetchEligibleUsers = useCallback(async () => {
     try {
       const response = await api.get('/api/social/users?limit=100&mutual=true');
       if (Array.isArray(response)) {
@@ -179,21 +180,20 @@ export default function ChatPage() {
     } finally {
       setLoadingUsers(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
-    fetchConversations().then(() => {
+    void Promise.resolve().then(async () => {
+      await fetchConversations();
       if (typeof window !== 'undefined') {
         const searchParams = new URLSearchParams(window.location.search);
         const conv = searchParams.get('conv');
-        if (conv) {
-          setActiveConvId(conv);
-        }
+        if (conv) selectConversation(conv);
       }
     });
     // Fetch eligible users on page load so the People tab is ready
-    fetchEligibleUsers();
-  }, [user]);
+    void Promise.resolve().then(fetchEligibleUsers);
+  }, [fetchConversations, fetchEligibleUsers, selectConversation]);
 
   // Poll only while the tab is visible. Optimistic UI keeps local actions
   // immediate, while this avoids background database load for inactive tabs.
@@ -202,20 +202,24 @@ export default function ChatPage() {
       if (document.visibilityState === 'visible') fetchConversations();
     }, 15_000);
     return () => clearInterval(interval);
-  }, []);
-
-  // Track whether WS connected successfully
-  const [wsConnected, setWsConnected] = useState(false);
+  }, [fetchConversations]);
 
   useEffect(() => {
-    messageRequests.current.activate(activeConvId);
-    setMessages([]);
+    const guard = messageRequests.current;
+    guard.activate(activeConvId);
     if (activeConvId) {
-      fetchMessages(activeConvId);
-      // If conversation is not in list, fetch its metadata directly
-      if (!conversations.some((c) => String(c.id) === String(activeConvId))) {
+      void Promise.resolve().then(() => fetchMessages(activeConvId));
+    }
+    return () => guard.activate(null);
+  }, [activeConvId, user?.id, fetchMessages]);
+
+  // Resolve deep-linked conversations separately from message fetching so a
+  // metadata refresh cannot reset the request guard or refetch messages.
+  useEffect(() => {
+    let active = true;
+    if (activeConvId && !conversations.some((c) => String(c.id) === String(activeConvId))) {
         api.get(`/api/chat/conversations/${activeConvId}`).then((conv) => {
-          if (conv && conv.id) {
+          if (active && conv && conv.id) {
             const mapped = {
               id: conv.id,
               name: conv.name,
@@ -238,28 +242,26 @@ export default function ChatPage() {
             });
           }
         }).catch((e) => console.error('Could not fetch active conv:', e));
-      }
-      setWsConnected(false);
-      // Mark read
-      setConversations((prev) =>
-        prev.map((c) => (String(c.id) === String(activeConvId) ? { ...c, unreadCount: 0 } : c))
-      );
     }
-    return () => messageRequests.current.activate(null);
-  }, [activeConvId, user?.id]);
+    return () => { active = false; };
+  }, [activeConvId, conversations]);
 
-  // Derive the preview from the latest state, including messages received while
-  // a deletion is in flight. Never rebuild messages from a captured snapshot.
-  useEffect(() => {
-    if (!activeConvId) return;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage && String(lastMessage.conversationId) !== String(activeConvId)) return;
-    setConversations((previous) => previous.map((conversation) => (
-      conversation.id === activeConvId
-        ? { ...conversation, lastMessage: lastMessage ? { content: lastMessage.content, createdAt: lastMessage.createdAt } : undefined }
-        : conversation
-    )));
-  }, [activeConvId, messages]);
+  // Previews and the visible thread come from the same message data. This
+  // keeps deletion, polling and incoming events consistent without another
+  // effect copying messages into conversation state after every render.
+  const visibleMessages = messages.filter((message) => message.conversationId === activeConvId);
+  const visibleConversations = conversations.map((conversation) => {
+    return {
+      ...conversation,
+      unreadCount: conversation.id === activeConvId ? 0 : conversation.unreadCount,
+      lastMessage: getConversationPreview(
+        messages,
+        conversation.id,
+        loadedConversationIds.has(conversation.id),
+        conversation.lastMessage ?? undefined
+      ),
+    };
+  });
 
   // Active chat polling is a fallback for message delivery. Avoid requests while
   // hidden and keep the cadence moderate to prevent read/write contention.
@@ -269,13 +271,13 @@ export default function ChatPage() {
       if (document.visibilityState === 'visible') fetchMessages(activeConvId);
     }, 5_000);
     return () => clearInterval(interval);
-  }, [activeConvId]);
+  }, [activeConvId, fetchMessages]);
 
   useEffect(() => {
     if (newChatOpen) {
-      fetchEligibleUsers();
+      void Promise.resolve().then(fetchEligibleUsers);
     }
-  }, [newChatOpen]);
+  }, [newChatOpen, fetchEligibleUsers]);
 
   const handleSendMessage = async (text: string, messageType: 'text' | 'image' | 'video' | 'audio' = 'text') => {
     if (!activeConvId || !user) return;
@@ -352,7 +354,7 @@ export default function ChatPage() {
       });
       if (response && response.id) {
         setNewChatOpen(false);
-        setActiveConvId(response.id);
+        selectConversation(response.id);
         await fetchConversations();
       }
     } catch (err: any) {
@@ -377,7 +379,7 @@ export default function ChatPage() {
       if (response && response.id) {
         setTargetUsername('');
         setNewChatOpen(false);
-        setActiveConvId(response.id);
+        selectConversation(response.id);
         await fetchConversations();
       }
     } catch (err: any) {
@@ -411,7 +413,7 @@ export default function ChatPage() {
         setGroupDescription('');
         setSelectedGroupMembers([]);
         setNewChatOpen(false);
-        setActiveConvId(response.id);
+        selectConversation(response.id);
         await fetchConversations();
       }
     } catch (err: any) {
@@ -476,11 +478,11 @@ export default function ChatPage() {
           {/* Sidebar (Full width on mobile when no active chat, hidden on mobile when active chat is open) */}
           <ChatSidebar
             className={activeConvId ? 'hidden md:flex' : 'flex w-full md:w-80'}
-            conversations={conversations}
+            conversations={visibleConversations}
             suggestedUsers={eligibleUsers}
             loadingSuggested={loadingUsers}
             activeId={activeConvId}
-            onSelectConversation={setActiveConvId}
+            onSelectConversation={selectConversation}
             onStartChatWithUser={handleStartChatWithUser}
             startingChatUserId={startingUserId}
             onNewChat={() => {
@@ -494,7 +496,8 @@ export default function ChatPage() {
           {activeConvId && activeDetails ? (
             <div className="flex h-full min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden">
               <ChatWindow
-                messages={messages}
+                key={activeConvId}
+                messages={visibleMessages}
                 currentUserId={user?.id || ''}
                 conversationName={activeDetails.name}
                 conversationAvatar={activeDetails.avatarUrl}
@@ -504,7 +507,7 @@ export default function ChatPage() {
                 onSendMessage={handleSendMessage}
                 onDeleteMessage={handleDeleteMessage}
                 onStartLiveCall={handleStartLiveCall}
-                onBack={() => setActiveConvId(null)}
+                onBack={() => selectConversation(null)}
               />
             </div>
           ) : (

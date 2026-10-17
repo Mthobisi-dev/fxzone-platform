@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useMarketStore } from '@/stores/marketStore';
 import { formatPrice } from '@/lib/utils';
 import { Card } from '../ui/Card';
@@ -17,14 +17,13 @@ interface OrderBookRow {
 export function OrderBook() {
   const { selectedAsset, prices } = useMarketStore();
   const { user } = useAuth();
-  const [bids, setBids] = useState<OrderBookRow[]>([]);
-  const [asks, setAsks] = useState<OrderBookRow[]>([]);
+  const [simulationSeed] = useState(() => Math.random() * 1000);
   
   const currentPriceData = selectedAsset ? prices[selectedAsset.symbol.toUpperCase()] : null;
   const currentPrice = currentPriceData ? currentPriceData.price : null;
 
-  useEffect(() => {
-    if (!currentPrice) return;
+  const { asks, bids } = useMemo(() => {
+    if (!currentPrice) return { asks: [], bids: [] };
 
     // Generate simulated order book around current price
     const spread = currentPrice * 0.0005; // 0.05% spread
@@ -36,15 +35,19 @@ export function OrderBook() {
       return Array.from({ length: 6 }).map((_, idx) => {
         // Price shifts slightly outward
         const price = start + (direction * idx * currentPrice * 0.0002);
-        const size = Math.random() * (selectedAsset?.asset_type === 'crypto' ? 2.5 : 10000) + 0.1;
+        // A seeded sample varies with each quote while keeping render pure.
+        const sample = Math.sin(simulationSeed + currentPrice * 100 + direction * (idx + 1)) * 43758.5453;
+        const size = (sample - Math.floor(sample)) * (selectedAsset?.asset_type === 'crypto' ? 2.5 : 10000) + 0.1;
         accumTotal += size;
         return { price, size, total: accumTotal };
       });
     };
 
-    setAsks(generateSide(startAsk, 1).reverse()); // Highest ask at top
-    setBids(generateSide(startBid, -1)); // Highest bid at top
-  }, [currentPrice, selectedAsset]);
+    return {
+      asks: generateSide(startAsk, 1).reverse(), // Highest ask at top
+      bids: generateSide(startBid, -1), // Highest bid at top
+    };
+  }, [currentPrice, selectedAsset, simulationSeed]);
 
   if (!selectedAsset || !currentPrice) {
     return (

@@ -1,6 +1,25 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
+test('refreshing one thread preserves other threads and optimistic sends', async () => {
+  const { mergeConversationMessages } = await import('./chatThreads.ts');
+  const message = (id, conversationId) => ({ id, conversationId, content: id, createdAt: '2026-10-17T10:00:00Z' });
+  const previous = [message('a1', 'a'), message('b1', 'b'), message('temp-send', 'a')];
+  const confirmed = [message('a2', 'a')];
+  assert.deepEqual(mergeConversationMessages(previous, confirmed, 'a').map(item => item.id), ['b1', 'a2', 'temp-send']);
+  assert.deepEqual(mergeConversationMessages(previous, [], 'a').map(item => item.id), ['b1', 'temp-send']);
+  assert.deepEqual(previous.map(item => item.id), ['a1', 'b1', 'temp-send']);
+});
+
+test('preview reflects deleted messages while preserving unfetched conversation previews', async () => {
+  const { getConversationPreview } = await import('./chatThreads.ts');
+  const fallback = { content: 'old', createdAt: '2026-10-17T10:00:00Z' };
+  const messages = [{ id: 'b1', conversationId: 'b', content: 'Private B', createdAt: fallback.createdAt }];
+  assert.equal(getConversationPreview(messages, 'a', false, fallback), fallback);
+  assert.equal(getConversationPreview(messages, 'a', true, fallback), undefined);
+  assert.deepEqual(getConversationPreview(messages, 'b', true), { content: 'Private B', createdAt: fallback.createdAt });
+});
+
 test('an older poll cannot restore a deleted message or overwrite a newer response', async () => {
   const { ChatRequestGuard } = await import('./chatRequestGuard.ts');
   const guard = new ChatRequestGuard();

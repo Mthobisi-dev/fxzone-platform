@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Modal } from '@/components/ui/Modal';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import { useHydrated } from '@/hooks/useHydrated';
 import { Loader2, RefreshCw, TrendingUp } from 'lucide-react';
 
 interface TrendingSymbolView {
@@ -53,24 +54,19 @@ function TrendingSymbolsCard({ items }: { items: TrendingSymbolView[] }) {
 
 export default function SocialFeedPage() {
   const { user } = useAuth();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHydrated();
 
   const isAdmin = user?.role === 'admin';
   const showAdminControls = mounted && isAdmin;
   const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   // Sidebar dynamic real data
   const [trendingSymbols, setTrendingSymbols] = useState<TrendingSymbolView[]>([]);
 
-  const fetchSidebarData = async () => {
-    try {
-      const trendResponse = await api.get('/api/social/trending-symbols', { public: true });
+  const fetchSidebarData = () => {
+    return api.get('/api/social/trending-symbols', { public: true }).then((trendResponse) => {
       if (Array.isArray(trendResponse)) {
         setTrendingSymbols(
           trendResponse.map((trend: any) => {
@@ -89,15 +85,13 @@ export default function SocialFeedPage() {
       } else {
         setTrendingSymbols([]);
       }
-    } catch (e) {
+    }).catch((e) => {
       console.error('Failed to load sidebar data:', e);
-    }
+    });
   };
 
-  const fetchFeed = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get('/api/social/feed');
+  const fetchFeed = () => {
+    return api.get('/api/social/feed').then((response) => {
       if (Array.isArray(response)) {
         const mapped = response.map((p: any) => ({
           id: String(p.id),
@@ -145,17 +139,18 @@ export default function SocialFeedPage() {
       } else {
         setPosts([]);
       }
-    } catch (err) {
+    }).catch((err) => {
       console.error('Failed to load feed:', err);
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
+    });
   };
 
   useEffect(() => {
     fetchFeed();
     fetchSidebarData();
     const handleRefresh = () => {
+      setLoading(true);
       fetchFeed();
       fetchSidebarData();
     };
@@ -247,6 +242,7 @@ export default function SocialFeedPage() {
             )}
             <button
               onClick={() => {
+                setLoading(true);
                 fetchFeed();
                 fetchSidebarData();
               }}

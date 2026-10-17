@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Card } from '@/components/ui/Card';
@@ -30,6 +30,13 @@ import { BrokerSelector } from '@/components/profile/BrokerSelector';
 
 export default function ProfilePage() {
   const params = useParams();
+  const { user } = useAuth();
+  const targetId = params.id === 'me' && user?.id ? String(user.id) : String(params.id);
+  return <ProfileDetails key={targetId} />;
+}
+
+function ProfileDetails() {
+  const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user: currentUser, logout, deleteAccount, updateProfile } = useAuth();
@@ -48,7 +55,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
-  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(isSelf);
   const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'about'>('posts');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -69,20 +76,19 @@ export default function ProfilePage() {
   };
 
   // Delete account state
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const deleteAction = searchParams?.get('action') === 'delete';
+  const [deleteModalOpen, setDeleteModalOpen] = useState(deleteAction);
+  const [previousDeleteAction, setPreviousDeleteAction] = useState(deleteAction);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
 
-  useEffect(() => {
-    if (searchParams?.get('action') === 'delete') {
-      setDeleteModalOpen(true);
-    }
-  }, [searchParams]);
+  if (deleteAction !== previousDeleteAction) {
+    setPreviousDeleteAction(deleteAction);
+    if (deleteAction) setDeleteModalOpen(true);
+  }
 
-  const fetchSavedPosts = async () => {
-    setLoadingSaved(true);
-    try {
-      const res = await api.get('/api/social/posts/saved');
+  const fetchSavedPosts = () => {
+    return api.get('/api/social/posts/saved').then((res) => {
       if (Array.isArray(res)) {
         const mapped = res.map((p: any) => ({
           id: String(p.id),
@@ -120,11 +126,11 @@ export default function ProfilePage() {
         const unique = Array.from(new Map(mapped.map((p: any) => [String(p.id), p])).values());
         setSavedPosts(unique as Post[]);
       }
-    } catch (e) {
+    }).catch((e) => {
       console.error('Failed to load saved posts:', e);
-    } finally {
+    }).finally(() => {
       setLoadingSaved(false);
-    }
+    });
   };
 
   useEffect(() => {
@@ -134,13 +140,8 @@ export default function ProfilePage() {
   }, [isSelf]);
 
   useEffect(() => {
-    if (activeTab === 'saved') {
-      fetchSavedPosts();
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
     const handleSavedRefresh = () => {
+      setLoadingSaved(true);
       fetchSavedPosts();
     };
     window.addEventListener('fxzone_refresh_saved_posts', handleSavedRefresh);
@@ -162,15 +163,13 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [saveError, setSaveError] = useState('');
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(() => {
     if (!targetId) return;
-    setLoading(true);
-    setErrorMsg(null);
-    try {
-      const [response, userPosts] = await Promise.all([
-        api.get(`/api/social/users/${targetId}`),
-        api.get(`/api/social/users/${targetId}/posts?include_total=1`),
-      ]);
+    return Promise.all([
+      api.get(`/api/social/users/${targetId}`),
+      api.get(`/api/social/users/${targetId}/posts?include_total=1`),
+    ]).then(([response, userPosts]) => {
+      setErrorMsg(null);
       if (response && response.id) {
         setProfile(response);
       }
@@ -216,7 +215,7 @@ export default function ProfilePage() {
         setPosts([]);
         setSharedAnalysisCount(0);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('Failed to load profile details:', err);
       // If user is viewing their own profile via fallback
       if (
@@ -242,14 +241,15 @@ export default function ProfilePage() {
       }
       setPosts([]);
       setSharedAnalysisCount(0);
-    } finally {
+    }).finally(() => {
       setLoading(false);
-    }
-  };
+    });
+  }, [currentUser, targetId]);
 
   useEffect(() => {
     fetchProfile();
     const handleRefresh = () => {
+      setLoading(true);
       fetchProfile();
     };
     window.addEventListener('fxzone_refresh_feed', handleRefresh);
@@ -258,7 +258,7 @@ export default function ProfilePage() {
       window.removeEventListener('fxzone_refresh_feed', handleRefresh);
       window.removeEventListener('fxzone_refresh_saved_posts', handleRefresh);
     };
-  }, [targetId]);
+  }, [fetchProfile]);
 
   const handleFollowToggle = async () => {
     if (!profile || followLoading) return;
@@ -555,7 +555,11 @@ export default function ProfilePage() {
 
         {isSelf && (
           <button
-            onClick={() => setActiveTab('saved')}
+            onClick={() => {
+              setActiveTab('saved');
+              setLoadingSaved(true);
+              void fetchSavedPosts();
+            }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
               activeTab === 'saved'
                 ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20'

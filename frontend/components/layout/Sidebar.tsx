@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
+import { useHydrated } from '@/hooks/useHydrated';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,11 +23,7 @@ import { Avatar } from '../ui/Avatar';
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const [mounted, setMounted] = useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHydrated();
 
   const menuItems = [
     {
@@ -166,7 +163,7 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile Bottom Navigation Bar (< 768px) */}
-      <nav className="flex md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-850/90 px-1.5 py-1 justify-around items-center shadow-2xl safe-area-bottom">
+      <nav className="flex md:hidden fixed bottom-0 left-0 right-0 z-40 h-[var(--mobile-nav-height)] bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-850/90 px-1.5 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom,0px))] justify-around items-center shadow-2xl">
         {menuItems.map((item) => {
           const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
           return (
@@ -176,7 +173,7 @@ export function Sidebar() {
               aria-label={item.label}
               title={item.label}
               className={cn(
-                'flex flex-1 min-h-14 min-w-0 items-center justify-center rounded-lg font-semibold transition-all',
+                'flex h-full flex-1 min-h-0 min-w-0 items-center justify-center rounded-lg font-semibold transition-all',
                 isActive
                   ? 'text-blue-400 font-bold'
                   : 'text-zinc-500 hover:text-zinc-300'
