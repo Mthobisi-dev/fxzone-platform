@@ -118,6 +118,7 @@ test('double Share clicks open one picker and leaving before selection releases 
     './ScreenShare': { ScreenShare: () => null }, './SessionChat': { SessionChat: () => null },
     './SessionControls': { SessionControls: Controls },
     '@/hooks/useAuth': { useAuth: () => ({ user: { id: 'host' }, token: 'test', isAuthenticated: true }) },
+    '@/hooks/useHydrated': { useHydrated: () => true },
     '@/hooks/useWebSocket': { useWebSocket: () => ({ current: { getState: () => 'CONNECTED', send: () => true } }) },
     'lucide-react': require('lucide-react'), '@/lib/webrtc': { WebRTCClient: RTC },
     '@/lib/api': { api: { get: async () => [] } },
@@ -268,7 +269,7 @@ test('screen capture discourages sharing the broadcast tab and stops audio when 
   const client = new WebRTCClient({ currentUserId: 'host', isHost: true });
   await client.startLocalStream();
   assert.equal(captureOptions.selfBrowserSurface, 'exclude');
-  assert.equal(captureOptions.video.displaySurface, 'window');
+  assert.equal(captureOptions.video.displaySurface, 'monitor');
   await video.onended();
   assert.equal(stopped, 2, 'ending a video capture must also release its audio track');
   client.close();

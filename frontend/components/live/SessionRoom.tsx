@@ -62,6 +62,7 @@ export function SessionRoom({
   const [reviewingParticipantId, setReviewingParticipantId] = useState<string | null>(null);
   const [isEndingBroadcast, setIsEndingBroadcast] = useState(false);
   const [isStartingShare, setIsStartingShare] = useState(false);
+  const [captureSurface, setCaptureSurface] = useState<string | null>(null);
   const hydrated = useHydrated();
   const screenShareSupported = hydrated && supportsScreenShare(navigator.mediaDevices);
   const [hasSharedAudio, setHasSharedAudio] = useState(false);
@@ -331,6 +332,7 @@ export function SessionRoom({
       setActiveStream(stream);
       setIsSharingScreen(true);
       setHasSharedAudio(stream.getAudioTracks().length > 0);
+      setCaptureSurface(stream.getVideoTracks()[0]?.getSettings().displaySurface || null);
 
       // Push stream into the existing (ref-stable) WebRTC client.
       if (rtcClientRef.current) {
@@ -368,6 +370,7 @@ export function SessionRoom({
       setActiveStream(null);
       setIsSharingScreen(false);
       setHasSharedAudio(false);
+      setCaptureSurface(null);
       console.warn('Display media capture cancelled or rejected:', err);
       setBroadcastError(err instanceof Error && err.name === 'NotAllowedError'
         ? 'Screen sharing was cancelled or denied. Click Share Screen and choose a screen, window, or tab.'
@@ -387,6 +390,7 @@ export function SessionRoom({
     setActiveStream(null);
     setIsSharingScreen(false);
     setHasSharedAudio(false);
+    setCaptureSurface(null);
     setShareTimeLeft(null);
     if (mediaRecorderRef.current?.state === 'recording') stopRecording();
 
@@ -610,6 +614,13 @@ export function SessionRoom({
         <div className="flex-1 p-3 sm:p-5 flex flex-col gap-4 min-w-0">
           {canControlBroadcast && !screenShareSupported && <p role="status" className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-200">This browser cannot share a device screen. You can keep the session open and chat here; open the same session in a browser that supports screen capture to present.</p>}
           {broadcastError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">{broadcastError}</p>}
+          {isSharingScreen && captureSurface && (
+            <p role="status" className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-100">
+              {captureSurface === 'monitor'
+                ? 'Broadcasting your entire screen. Viewers can follow as you navigate FxZone and other apps.'
+                : `Broadcasting one ${captureSurface}. Viewers only see that ${captureSurface}; select Entire Screen when sharing to show your full navigation.`}
+            </p>
+          )}
           {/* AI Alerts */}
           {copilotAlerts.length > 0 && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 p-2.5 rounded-lg flex items-start gap-2 text-[10px] text-yellow-500 animate-pulse">

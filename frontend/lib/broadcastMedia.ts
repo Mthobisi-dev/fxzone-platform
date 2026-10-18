@@ -1,5 +1,6 @@
-// These are picker hints, not restrictions: browsers may ignore them. The
-// host view also omits local video so entire-screen capture cannot feed back.
+// These are picker hints, not restrictions: browsers may ignore them. Prefer
+// an entire display so viewers keep seeing the host as they navigate FxZone.
+// The host view omits local video so capture cannot feed back into itself.
 type BroadcastCaptureOptions = DisplayMediaStreamOptions & {
   selfBrowserSurface: 'exclude';
   surfaceSwitching: 'include';
@@ -8,7 +9,7 @@ type BroadcastCaptureOptions = DisplayMediaStreamOptions & {
 
 export function broadcastCaptureOptions(): BroadcastCaptureOptions {
   return {
-    video: { displaySurface: 'window', frameRate: { ideal: 30, max: 30 } },
+    video: { displaySurface: 'monitor', frameRate: { ideal: 30, max: 30 } },
     audio: true,
     selfBrowserSurface: 'exclude',
     surfaceSwitching: 'include',

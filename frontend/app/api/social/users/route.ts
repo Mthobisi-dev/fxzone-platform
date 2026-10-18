@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     // Messages only suggests mutual connections; filter before pagination.
     const mutualOnly = searchParams.get('mutual') === 'true';
     let mutualIds: string[] = [];
+    const followingIds = new Set<string>();
     if (mutualOnly) {
       if (!currentUser) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
       const [outgoing, incoming] = await Promise.all([
@@ -36,6 +37,17 @@ export async function GET(request: NextRequest) {
       if (incoming.error) throw incoming.error;
       mutualIds = mutualConnectionIds(currentUser.id, outgoing.data || [], incoming.data || []);
       if (!mutualIds.length) return NextResponse.json([], { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
+    // Discover is for finding new traders. Fetch the viewer's follow list
+    // before querying profiles so followed accounts do not consume the page.
+    if (currentUser && !mutualOnly) {
+      const { data: followingRows, error: followingError } = await db
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUser.id);
+      if (followingError) throw followingError;
+      for (const row of followingRows || []) followingIds.add(row.following_id);
     }
 
     // 1. Query registered accounts from public.users table
@@ -50,6 +62,9 @@ export async function GET(request: NextRequest) {
 
       if (currentUser) query = query.neq('id', currentUser.id);
       if (mutualOnly) query = query.in('id', mutualIds);
+      if (!mutualOnly && followingIds.size > 0) {
+        query = query.not('id', 'in', `(${Array.from(followingIds).join(',')})`);
+      }
       if (q.trim()) {
         const safeQuery = q.trim().replace(/[^\w .-]/g, '').slice(0, 80);
         if (safeQuery) {
@@ -88,24 +103,15 @@ export async function GET(request: NextRequest) {
     if (currentUser && users.length > 0) {
       const userIds = users.map((u: any) => u.id);
       
-      const [followingsResult, followersResult] = await Promise.all([
-        db
-          .from('follows')
-          .select('following_id')
-          .eq('follower_id', currentUser.id)
-          .in('following_id', userIds),
-        db
-          .from('follows')
-          .select('follower_id')
-          .eq('following_id', currentUser.id)
-          .in('follower_id', userIds),
-      ]);
-      const followings = followingsResult.data;
+      const followersResult = await db
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', currentUser.id)
+        .in('follower_id', userIds);
       const followers = followersResult.data;
-      if (followingsResult.error) throw followingsResult.error;
       if (followersResult.error) throw followersResult.error;
 
-      const followingSet = new Set((followings || []).map((f: any) => f.following_id));
+      const followingSet = mutualOnly ? new Set(mutualIds) : followingIds;
       const followerSet = new Set((followers || []).map((f: any) => f.follower_id));
 
       users = users.map((u: any) => {
