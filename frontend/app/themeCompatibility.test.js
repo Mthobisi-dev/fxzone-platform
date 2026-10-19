@@ -44,16 +44,14 @@ test('all theme modes provide semantic visual tokens for shared surfaces and tex
   }
 });
 
-test('root layout self-hosts the display, UI, and data fonts with next/font', () => {
+test('root layout does not require a remote font download during production builds', () => {
   const layout = fs.readFileSync(layoutPath, 'utf8');
+  const styles = fs.readFileSync(stylesPath, 'utf8');
 
-  assert.match(layout, /from 'next\/font\/google'/);
-  assert.match(layout, /Manrope\(/);
-  assert.match(layout, /Inter\(/);
-  assert.match(layout, /JetBrains_Mono\(/);
-  assert.match(layout, /variable:\s*'--font-display'/);
-  assert.match(layout, /variable:\s*'--font-ui'/);
-  assert.match(layout, /variable:\s*'--font-data'/);
+  assert.doesNotMatch(layout, /next\/font\/google/);
+  assert.match(styles, /--font-display:\s*Manrope, Inter, ui-sans-serif, system-ui, sans-serif/);
+  assert.match(styles, /--font-ui:\s*Inter, ui-sans-serif, system-ui, sans-serif/);
+  assert.match(styles, /--font-data:\s*"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace/);
 });
 
 test('shared controls consume semantic theme tokens instead of structural zinc surfaces', () => {

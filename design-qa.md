@@ -36,4 +36,14 @@ The local Next.js server started successfully on port 3001. Browser rendering of
 
 - Iteration 1: blocked before a rendered implementation capture due to missing local Supabase public environment variables. No visual findings can be resolved until the route renders.
 
+## Automated verification
+
+- `npm run lint`: PASS.
+- `npm run typecheck`: PASS.
+- `npm run test`: PASS — 145 tests.
+- `npx next build --webpack`: PASS — compiled, type-checked, generated 37 static pages, and collected route traces.
+- `npm run build`: blocked in this host's unsupported Node 24/Turbopack path after the source had compiled. The repository declares Node 22/npm 10. The initial failure caused by Google-font downloads was removed by using the equivalent system font stacks in `globals.css`; the remaining panic is a local Turbopack process failure while transforming CSS.
+
+The automated checks do not replace the blocked browser comparison above. A deployed or locally configured Supabase environment is still required for visual review of authenticated screens.
+
 final result: blocked
