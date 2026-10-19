@@ -5,10 +5,9 @@ const { test } = require('node:test');
 
 const appDirectory = __dirname;
 
-test('the requested live logo motion is not disabled by Windows reduced-motion media settings', () => {
-  const page = fs.readFileSync(path.join(appDirectory, 'page.tsx'), 'utf8');
+test('the live logo respects a user preference for reduced motion', () => {
   const styles = fs.readFileSync(path.join(appDirectory, 'globals.css'), 'utf8');
 
-  assert.match(page, /fxzone-live-mark--force-motion/);
-  assert.match(styles, /fxzone-live-mark:not\(\.fxzone-live-mark--force-motion\)/);
+  assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.fxzone-live-mark\s+\.fxzone-live-body[\s\S]*?animation:\s*none\s*!important/);
+  assert.doesNotMatch(styles, /fxzone-live-mark--force-motion/);
 });

@@ -4,6 +4,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const stylesPath = path.join(__dirname, 'globals.css');
+const layoutPath = path.join(__dirname, 'layout.tsx');
 
 test('theme compatibility preserves custom blue component backgrounds', () => {
   const styles = fs.readFileSync(stylesPath, 'utf8');
@@ -21,6 +22,40 @@ test('all themes define the shared background alias and mobile-safe control sizi
   assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?font-size:\s*16px/);
 });
 
+test('all theme modes provide semantic visual tokens for shared surfaces and text', () => {
+  const styles = fs.readFileSync(stylesPath, 'utf8');
+
+  for (const selector of [':root, .theme-dark-terminal', '.theme-neon-cyber', '.theme-minimal-light']) {
+    const start = styles.indexOf(selector);
+    assert.notEqual(start, -1, `${selector} should be defined`);
+    const section = styles.slice(start, styles.indexOf('}', start));
+
+    for (const token of [
+      '--fx-bg-canvas:',
+      '--fx-bg-surface:',
+      '--fx-bg-elevated:',
+      '--fx-text-strong:',
+      '--fx-text-muted:',
+      '--fx-border-subtle:',
+      '--fx-accent:',
+    ]) {
+      assert.match(section, new RegExp(token));
+    }
+  }
+});
+
+test('root layout self-hosts the display, UI, and data fonts with next/font', () => {
+  const layout = fs.readFileSync(layoutPath, 'utf8');
+
+  assert.match(layout, /from 'next\/font\/google'/);
+  assert.match(layout, /Manrope\(/);
+  assert.match(layout, /Inter\(/);
+  assert.match(layout, /JetBrains_Mono\(/);
+  assert.match(layout, /variable:\s*'--font-display'/);
+  assert.match(layout, /variable:\s*'--font-ui'/);
+  assert.match(layout, /variable:\s*'--font-data'/);
+});
+
 test('mobile typography prevents browser inflation and caps legacy oversized headings', () => {
   const styles = fs.readFileSync(stylesPath, 'utf8');
 
@@ -32,7 +67,7 @@ test('mobile typography prevents browser inflation and caps legacy oversized hea
   assert.match(styles, /overflow-wrap:\s*anywhere/);
   assert.match(styles, /html\s*\{[\s\S]*?font-size:\s*15px/);
   assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?html\s*\{[\s\S]*?font-size:\s*14px/);
-  assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?body\s*\{[\s\S]*?-apple-system[\s\S]*?BlinkMacSystemFont[\s\S]*?Segoe UI/);
+  assert.match(styles, /@media\s*\(max-width:\s*639px\)[\s\S]*?body\s*\{[\s\S]*?font-family:\s*var\(--font-ui\)/);
 });
 
 test('market screener uses the broader Markets title', () => {
