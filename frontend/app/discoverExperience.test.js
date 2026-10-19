@@ -46,3 +46,11 @@ test('system navigation keeps accessible icon links without visible page labels 
   assert.doesNotMatch(source, /pathname\.startsWith\('\/profile'\)/);
 });
 
+test('social gallery keeps attachment navigation reachable on touch screens', () => {
+  const gallery = fs.readFileSync(path.join(__dirname, '..', 'components', 'social', 'PostGallery.tsx'), 'utf8');
+
+  assert.match(gallery, /aria-label=\{`Show attachment/);
+  assert.match(gallery, /h-11 w-11/);
+  assert.match(gallery, /snap-x snap-mandatory overflow-x-auto/);
+});
+
