@@ -17,12 +17,11 @@ import {
   Disc,
 } from 'lucide-react';
 import { WebRTCClient } from '@/lib/webrtc';
-import { broadcastCaptureOptions, stopBroadcastTracks } from '@/lib/broadcastMedia';
+import { broadcastCaptureOptions, stopBroadcastTracks, getScreenShareCapability, screenShareUnavailableMessage, type ShareCapability } from '@/lib/broadcastMedia';
 import { api } from '@/lib/api';
 import { canControlLiveBroadcastMedia, canEndLiveBroadcast } from '@/lib/liveSessionPermissions';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
-import { getScreenShareCapability, screenShareUnavailableMessage, type ShareCapability } from '@/lib/screenShareCapability';
 
 interface SessionRoomProps {
   sessionId: string;
