@@ -365,7 +365,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       className={`fxzone-post-composer p-3 sm:p-4 border transition-colors ${
         isDragOver
           ? 'border-blue-500 bg-blue-950/20'
-          : 'border-zinc-850 bg-zinc-900/10'
+          : 'border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)]'
       }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -393,7 +393,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                 : "Share an update, photo or video…"
             }
             rows={isExpanded ? (mediaFiles.length > 0 ? 3 : 3) : 1}
-            className="w-full bg-transparent border-0 text-xs text-white placeholder-zinc-500 focus:ring-0 focus:outline-none resize-none min-h-[36px] leading-relaxed"
+            className="min-h-11 w-full resize-none border-0 bg-transparent text-xs leading-relaxed text-[var(--fx-text-strong)] placeholder:text-[var(--fx-text-muted)] focus:outline-none focus:ring-0"
           />
 
           {submitNotice && (
@@ -420,7 +420,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             onChange={(e) => setCaption(e.target.value)}
             maxLength={200}
             placeholder="Add a caption... (optional)"
-            className="w-full px-3 py-2 text-sm bg-gray-800/50 border border-gray-700/50 rounded-lg text-gray-300 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors mt-2"
+            className="mt-2 min-h-11 w-full rounded-lg border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-elevated)] px-3 py-2 text-sm text-[var(--fx-text-strong)] placeholder:text-[var(--fx-text-muted)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
           />
 
           {/* Dedicated Media Caption Indicator if files attached */}
@@ -436,7 +436,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
           {/* Expanded Tools & Previews */}
           {isExpanded && (
-            <div className="mt-3 space-y-3 pt-3 border-t border-zinc-850/60">
+            <div className="mt-3 space-y-3 border-t border-[var(--fx-border-subtle)] pt-3">
               {/* Hidden file input */}
               <input
                 ref={fileInputRef}
@@ -507,7 +507,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                       {/* Remove button */}
                       <button
                         onClick={() => removeMedia(idx)}
-                        className="absolute top-1 right-1 p-1 bg-black/80 hover:bg-rose-600 rounded-full text-white transition-colors"
+                        className="absolute right-1 top-1 grid h-11 w-11 place-items-center rounded-full bg-black/80 text-white transition-colors hover:bg-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
                         title="Remove attachment"
                       >
                         <X size={10} />
@@ -567,12 +567,12 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
               </div>
 
               {/* Toolbar Actions — Responsive Mobile Flex Container */}
-              <div className="flex flex-wrap items-center justify-between gap-2.5 select-none pt-2 border-t border-zinc-850/60 mt-2">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2.5 border-t border-[var(--fx-border-subtle)] pt-2">
                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1 sm:pb-0 pr-1">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-2 sm:p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0"
+                    className="min-h-11 rounded-lg px-2 text-[var(--fx-text-muted)] transition-colors hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] flex shrink-0 items-center gap-1.5 text-[11px] sm:text-[10px]"
                     title="Upload Photo / Chart"
                   >
                     <ImageIcon size={15} className="text-blue-400" aria-hidden="true" />
@@ -582,7 +582,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-2 sm:p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0"
+                    className="min-h-11 rounded-lg px-2 text-[var(--fx-text-muted)] transition-colors hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] flex shrink-0 items-center gap-1.5 text-[11px] sm:text-[10px]"
                     title="Upload Video"
                   >
                     <Film size={15} className="text-emerald-400" />
@@ -592,10 +592,10 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                   <button
                     type="button"
                     onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                    className={`p-2 sm:p-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0 ${
+                    className={`min-h-11 rounded-lg px-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0 ${
                       isRecording
                         ? 'bg-red-500/20 text-red-400 font-bold'
-                        : 'hover:bg-zinc-850 text-zinc-400 hover:text-white'
+                        : 'hover:bg-[var(--fx-bg-elevated)] text-[var(--fx-text-muted)] hover:text-[var(--fx-text-strong)]'
                     }`}
                     title={isRecording ? 'Stop Voice Recording' : 'Record Voice Memo'}
                   >
@@ -612,7 +612,7 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-2 sm:p-1.5 rounded-lg hover:bg-zinc-850 transition-colors text-zinc-400 hover:text-white flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0"
+                    className="min-h-11 rounded-lg px-2 text-[var(--fx-text-muted)] transition-colors hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] flex shrink-0 items-center gap-1.5 text-[11px] sm:text-[10px]"
                     title="Attach File / Document"
                   >
                     <Paperclip size={15} className="text-orange-400" />
@@ -622,10 +622,10 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                   <button
                     type="button"
                     onClick={() => setShowOptionsModal((prev) => !prev)}
-                    className={`p-2 sm:p-1.5 rounded-lg transition-colors flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0 ${
+                    className={`min-h-11 rounded-lg px-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] flex items-center gap-1.5 text-[11px] sm:text-[10px] shrink-0 ${
                       showOptionsModal || (!showCommentsCount || !showLikesCount || !allowReshare || !allowSave || !allowShare)
                         ? 'bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/30'
-                        : 'hover:bg-zinc-850 text-zinc-400 hover:text-white'
+                        : 'hover:bg-[var(--fx-bg-elevated)] text-[var(--fx-text-muted)] hover:text-[var(--fx-text-strong)]'
                     }`}
                     aria-expanded={showOptionsModal}
                     title="Post settings"

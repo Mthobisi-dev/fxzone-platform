@@ -75,7 +75,7 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
     <>
       <nav className="h-14 border-b border-zinc-850 bg-zinc-950/80 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between shrink-0 select-none z-40 relative">
         {/* Left Side: Brand Logo */}
-        <div className="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onClick={() => router.push('/dashboard')}>
+        <button type="button" aria-label="Open dashboard" className="flex min-h-11 items-center gap-2 rounded-lg sm:gap-3 shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]" onClick={() => router.push('/dashboard')}>
           <Image
             src="/fxzone-logo.jpg"
             alt="FxZone Logo"
@@ -92,7 +92,7 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
               Trading Intelligence
             </span>
           </div>
-        </div>
+        </button>
 
         {/* Right Side: Navigation Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
@@ -100,8 +100,9 @@ export function Navbar({ onToggleAI, isAIOpen = false }: NavbarProps) {
           {onToggleAI && (
             <button
               onClick={onToggleAI}
+              aria-label="Toggle AI analyst"
               className={cn(
-                'relative p-1.5 sm:p-2 rounded-lg hover:bg-white/5 transition-all focus:outline-none flex items-center gap-1.5 border text-xs font-semibold shrink-0',
+                'relative flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border p-1.5 text-xs font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] sm:p-2 shrink-0',
                 isAIOpen
                   ? 'bg-blue-600/15 border-blue-500/30 text-blue-400'
                   : 'border-zinc-850 text-zinc-400 hover:text-white'

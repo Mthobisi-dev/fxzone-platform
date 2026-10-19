@@ -43,7 +43,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950/60 backdrop-blur-md flex select-none">
+    <div className="flex min-h-screen bg-[var(--fx-bg-canvas)] text-[var(--fx-text-strong)] backdrop-blur-md">
       {/* Left visual column */}
       <div className="hidden lg:flex lg:w-1/2 bg-zinc-950/50 border-r border-zinc-800/80 flex-col justify-between p-12 relative overflow-hidden">
         {/* Animated chart visualization grid */}
@@ -75,14 +75,14 @@ export default function LoginPage() {
       </div>
 
       {/* Right form column */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 bg-zinc-950/40 relative">
+      <div className="relative flex w-full items-center justify-center bg-[var(--fx-bg-canvas)]/80 p-4 sm:p-6 lg:w-1/2">
         <div className="w-full max-w-sm">
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
           >
-            <Card className="p-6 border border-zinc-800/80 bg-zinc-950/70 backdrop-blur-xl shadow-2xl">
+            <Card className="border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
               <div className="text-center mb-6">
                 <h3 className="text-lg font-bold text-white mb-1">Welcome Back</h3>
                 <p className="text-[10px] text-zinc-400">Sign in to access your FxZone trading workspace.</p>

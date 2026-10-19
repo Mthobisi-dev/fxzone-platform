@@ -15,7 +15,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full flex flex-col gap-1.5">
         {label && (
-          <label htmlFor={id} className="text-xs font-semibold text-zinc-400 select-none">
+          <label htmlFor={id} className="select-none text-xs font-semibold text-[var(--fx-text-muted)]">
             {label}
           </label>
         )}
@@ -30,7 +30,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             type={type}
             className={cn(
-              'w-full bg-zinc-900/60 border border-zinc-800 focus:border-zinc-700 rounded-lg px-4 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all duration-200',
+              'min-h-11 w-full rounded-lg border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] px-4 py-2 text-sm text-[var(--fx-text-strong)] placeholder:text-[var(--fx-text-muted)] transition-all duration-200 focus:outline-none focus-visible:border-[var(--fx-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]/20',
               {
                 'pl-10': leftIcon,
                 'pr-10': rightIcon,

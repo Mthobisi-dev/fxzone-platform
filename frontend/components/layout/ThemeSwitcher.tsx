@@ -10,7 +10,7 @@ export function ThemeSwitcher() {
   const { theme, density, setTheme, setDensity } = useTheme();
 
   return (
-    <div className="flex flex-col gap-4 p-4 glass rounded-xl border border-zinc-800/60 max-w-xs">
+    <div className="glass flex max-w-xs flex-col gap-4 rounded-xl border border-[var(--fx-border-subtle)] p-4 text-[var(--fx-text-strong)]">
       <div>
         <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Display Theme</h4>
         <div className="flex flex-col gap-2">
@@ -18,7 +18,7 @@ export function ThemeSwitcher() {
           <button
             onClick={() => setTheme('dark-terminal')}
             className={cn(
-              'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left border transition-all duration-200',
+              'flex min-h-11 items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
               theme === 'dark-terminal'
                 ? 'bg-zinc-800/80 border-blue-500/50 text-white shadow-[0_0_10px_rgba(59,130,246,0.15)]'
                 : 'bg-zinc-900/40 border-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/50'
@@ -35,7 +35,7 @@ export function ThemeSwitcher() {
           <button
             onClick={() => setTheme('neon-cyber')}
             className={cn(
-              'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left border transition-all duration-200',
+              'flex min-h-11 items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
               theme === 'neon-cyber'
                 ? 'bg-purple-950/40 border-purple-500/50 text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.15)]'
                 : 'bg-zinc-900/40 border-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/50'
@@ -52,7 +52,7 @@ export function ThemeSwitcher() {
           <button
             onClick={() => setTheme('minimal-light')}
             className={cn(
-              'flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left border transition-all duration-200',
+              'flex min-h-11 items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
               theme === 'minimal-light'
                 ? 'bg-zinc-100 border-zinc-300 text-zinc-800'
                 : 'bg-zinc-900/40 border-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700/50'

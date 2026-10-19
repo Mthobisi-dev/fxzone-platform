@@ -229,10 +229,10 @@ export function VerifiedAssetDetail({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-xs text-[var(--color-text-muted)]">Last provider quote</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--color-text)]">{formatPrice(detail.price)}</p>
+              <p className="fx-data mt-1 text-xl font-semibold text-[var(--color-text)]">{formatPrice(detail.price)}</p>
             </div>
             {detail.changePct !== null && (
-              <p className={cn('text-sm font-semibold tabular-nums', isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+              <p className={cn('fx-data text-sm font-semibold', isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
                 {detail.changePct > 0 ? '+' : ''}{detail.changePct.toFixed(2)}%
               </p>
             )}
@@ -247,7 +247,7 @@ export function VerifiedAssetDetail({
             ].map(([label, value]) => (
               <div key={label} className="rounded-md border border-[var(--color-border)] px-2 py-1.5">
                 <p className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">{label}</p>
-                <p className="mt-0.5 truncate font-medium tabular-nums text-[var(--color-text)]">{value}</p>
+                <p className="fx-data mt-0.5 truncate font-medium text-[var(--color-text)]">{value}</p>
               </div>
             ))}
           </div>
@@ -261,7 +261,7 @@ export function VerifiedAssetDetail({
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text)]"><BarChart3 size={14} className="text-cyan-600 dark:text-cyan-300" />Provider history</div>
-            <div className="flex rounded-md border border-[var(--color-border)] p-0.5">
+            <div className="flex max-w-full overflow-x-auto rounded-md border border-[var(--color-border)] p-0.5">
               {(['1h', '1d'] as Timeframe[]).map((value) => (
                 <button
                   key={value}

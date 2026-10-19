@@ -471,6 +471,19 @@ test('an explicit follow intent never toggles an existing follow off during a br
   assert.equal(deleted, false);
 });
 
+test('communication controls keep their mobile-safe sizing and role/screen status visible', () => {
+  const composer = fs.readFileSync(path.join(__dirname, '../components/chat/MessageInput.tsx'), 'utf8');
+  const controls = fs.readFileSync(path.join(__dirname, '../components/live/SessionControls.tsx'), 'utf8');
+  const screen = fs.readFileSync(path.join(__dirname, '../components/live/ScreenShare.tsx'), 'utf8');
+
+  assert.match(composer, /fxzone-chat-composer/);
+  assert.match(composer, /min-h-11/);
+  assert.match(controls, /min-h-11/);
+  assert.match(controls, /Watching host broadcast/);
+  assert.match(screen, /You are sharing your screen/);
+  assert.match(screen, /Tap to watch the broadcast/);
+});
+
 test('the session list reports an unapplied live-session schema migration safely', async () => {
   let selectedFields = '';
   const db = {

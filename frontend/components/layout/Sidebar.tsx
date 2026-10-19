@@ -173,7 +173,7 @@ export function Sidebar() {
               aria-label={item.label}
               title={item.label}
               className={cn(
-                'flex h-full flex-1 min-h-0 min-w-0 items-center justify-center rounded-lg font-semibold transition-all',
+                'flex h-full min-h-11 min-w-0 flex-1 items-center justify-center rounded-lg font-semibold transition-all',
                 isActive
                   ? 'text-blue-400 font-bold'
                   : 'text-zinc-500 hover:text-zinc-300'

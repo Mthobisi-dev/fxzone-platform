@@ -25,7 +25,7 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
             // info (blue)
             'bg-blue-500/10 border-blue-500/20 text-blue-400': variant === 'info',
             // neutral (grey)
-            'bg-zinc-800 border-zinc-700 text-zinc-400': variant === 'neutral',
+            'border-[var(--fx-border-subtle)] bg-[var(--fx-bg-elevated)] text-[var(--fx-text-muted)]': variant === 'neutral',
             // purple (neon)
             'bg-purple-500/10 border-purple-500/20 text-purple-400': variant === 'purple',
           },

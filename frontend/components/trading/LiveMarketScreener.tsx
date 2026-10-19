@@ -134,12 +134,12 @@ export function LiveMarketScreener() {
   const hasActiveFilters = filter !== 'stock' || priceFilter !== 'all' || changeFilter !== 'all' || marketCapFilter !== 'all' || sectorFilter !== 'all' || sizeMetric !== 'volume' || colorMetric !== 'change_1d' || Boolean(search.trim());
 
   return (
-    <section className="fxzone-screener fxzone-heatmap overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-[0_22px_60px_rgba(2,6,23,0.2)]">
-      <header className="fxzone-heatmap-toolbar border-b border-[var(--color-border)] px-3 py-2.5 sm:px-4">
+    <section className="fxzone-screener fxzone-heatmap overflow-hidden rounded-2xl border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] shadow-[0_22px_60px_rgba(2,6,23,0.2)]">
+      <header className="fxzone-heatmap-toolbar border-b border-[var(--fx-border-subtle)] px-3 py-2.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex min-w-0 items-center gap-2 pr-1">
             <Grid2X2 size={15} className="shrink-0 text-cyan-400" />
-            <h1 className="truncate text-xs font-semibold tracking-tight text-[var(--color-text)] sm:text-sm">Markets</h1>
+            <h1 className="truncate text-xs font-semibold tracking-tight text-[var(--fx-text-strong)] sm:text-sm">Markets</h1>
           </div>
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
             {FILTERS.map((item) => (
@@ -148,24 +148,24 @@ export function LiveMarketScreener() {
                 type="button"
                 onClick={() => setFilter(item.value)}
                 className={cn(
-                  'shrink-0 rounded border px-2 py-1 text-[10px] font-medium transition',
+                  'min-h-11 shrink-0 rounded border px-2 text-[10px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
                   filter === item.value
                     ? 'border-cyan-400/65 bg-cyan-400/15 text-cyan-700 dark:text-cyan-200'
-                    : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-cyan-400/45 hover:text-[var(--color-text)]'
+                    : 'border-[var(--fx-border-subtle)] text-[var(--fx-text-muted)] hover:border-cyan-400/45 hover:text-[var(--fx-text-strong)]'
                 )}
               >
                 {item.label}
               </button>
             ))}
           </div>
-          <div className="flex shrink-0 rounded border border-[var(--color-border)] p-0.5" role="group" aria-label="Screener layout">
+          <div className="flex shrink-0 rounded border border-[var(--fx-border-subtle)] p-0.5" role="group" aria-label="Screener layout">
             <button
               type="button"
               onClick={() => setView('heatmap')}
               aria-label="Show heat map"
               aria-pressed={view === 'heatmap'}
               title="Heat map"
-              className={cn('grid h-6 w-6 place-items-center rounded transition', view === 'heatmap' ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-200' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]')}
+              className={cn('grid min-h-11 min-w-11 place-items-center rounded transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]', view === 'heatmap' ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-200' : 'text-[var(--fx-text-muted)] hover:text-[var(--fx-text-strong)]')}
             >
               <Grid2X2 size={12} />
             </button>
@@ -175,7 +175,7 @@ export function LiveMarketScreener() {
               aria-label="Show list"
               aria-pressed={view === 'list'}
               title="List"
-              className={cn('grid h-6 w-6 place-items-center rounded transition', view === 'list' ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-200' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]')}
+              className={cn('grid min-h-11 min-w-11 place-items-center rounded transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]', view === 'list' ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-200' : 'text-[var(--fx-text-muted)] hover:text-[var(--fx-text-strong)]')}
             >
               <ListIcon size={13} />
             </button>
@@ -184,7 +184,7 @@ export function LiveMarketScreener() {
             type="button"
             onClick={() => void refreshNow()}
             aria-label="Refresh market data"
-            className="grid h-7 w-7 shrink-0 place-items-center rounded border border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:border-cyan-400 hover:text-cyan-500"
+            className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded border border-[var(--fx-border-subtle)] text-[var(--fx-text-muted)] transition hover:border-cyan-400 hover:text-cyan-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
           >
             <RefreshCw size={13} className={cn(isRefreshing && 'animate-spin')} />
           </button>
@@ -245,13 +245,13 @@ export function LiveMarketScreener() {
 
         <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-[var(--color-text-muted)]">
           <span className="truncate">{liveCount} live · {delayedCount} delayed · {unavailableCount} unavailable{selectedSymbol ? ` · selected ${selectedSymbol}` : ''}</span>
-          <label className="flex min-w-0 w-36 shrink-0 items-center gap-1.5 rounded border border-[var(--color-border)] px-2 py-1 sm:w-48">
+          <label className="flex min-h-11 w-36 min-w-0 shrink-0 items-center gap-1.5 rounded border border-[var(--fx-border-subtle)] px-2 sm:w-48">
             <Search size={11} className="shrink-0" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search"
-              className="min-w-0 w-full bg-transparent text-[10px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
+              className="min-w-0 w-full bg-transparent text-[10px] text-[var(--fx-text-strong)] outline-none placeholder:text-[var(--fx-text-muted)]"
             />
           </label>
           <Settings2 size={13} className="hidden shrink-0 text-[var(--color-text-muted)] sm:block" aria-hidden="true" />

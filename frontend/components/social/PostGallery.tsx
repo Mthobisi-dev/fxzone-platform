@@ -63,7 +63,7 @@ export function PostGallery({ urls }: { urls: string[] }) {
             aria-label={`Show attachment ${dotIndex + 1} of ${urls.length}`}
             aria-current={active ? 'true' : undefined}
             onClick={() => go(dotIndex)}
-            className="group grid h-8 w-8 place-items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="group grid h-11 w-11 place-items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
           >
             <span className={`h-2 rounded-full transition-all ${active ? 'w-4 bg-blue-500' : 'w-2 bg-[var(--color-text-muted)] opacity-45 group-hover:opacity-80'}`} />
           </button>

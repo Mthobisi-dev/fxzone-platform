@@ -142,14 +142,14 @@ export function ChatWindow({
   };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col justify-between overflow-hidden bg-[var(--color-background)] fxzone-chat-surface">
+    <div className="fxzone-chat-surface relative flex h-full min-h-0 flex-1 flex-col justify-between overflow-hidden bg-[var(--fx-bg-canvas)]">
       {/* ─── CHAT & TRADINGVIEW HEADER ─── */}
       <div className="fxzone-chat-mobile-header fxzone-chat-header z-20 flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-x-1.5 gap-y-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 select-none sm:h-14 sm:flex-nowrap sm:gap-x-3 sm:px-4 sm:py-0">
         <div className="flex flex-1 items-center gap-2 sm:gap-3 min-w-0">
           {onBack && (
             <button
               onClick={onBack}
-              className="md:hidden p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors shrink-0"
+              className="-ml-1 grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-[var(--fx-text-muted)] transition-colors hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] md:hidden"
               title="Back to Conversations"
             >
               <ArrowLeft size={18} />
@@ -179,7 +179,7 @@ export function ChatWindow({
           <button
             onClick={() => setViewMode('chat')}
             className={cn(
-              "px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all",
+              "flex min-h-11 items-center gap-1 rounded-lg px-2.5 text-[10px] font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]",
               viewMode === 'chat'
                 ? "bg-blue-600 text-white shadow-sm"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
@@ -207,7 +207,7 @@ export function ChatWindow({
           <button
             onClick={() => setViewMode('chart')}
             className={cn(
-              "px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all",
+              "flex min-h-11 items-center gap-1 rounded-lg px-2.5 text-[10px] font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]",
               viewMode === 'chart'
                 ? "bg-blue-600 text-white shadow-sm"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
@@ -224,7 +224,7 @@ export function ChatWindow({
           {isGroup && (
             <button
               onClick={() => setShowGroupProfile(true)}
-              className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-850 transition-colors"
+              className="grid min-h-11 min-w-11 place-items-center rounded-lg text-[var(--fx-text-muted)] transition-colors hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
               title="Group Members"
             >
               <Users size={16} />
@@ -234,7 +234,7 @@ export function ChatWindow({
           {onStartLiveCall && (
             <button
               onClick={onStartLiveCall}
-              className="flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-600/15 px-2 py-1.5 text-xs font-semibold text-purple-400 transition-all hover:bg-purple-600 hover:text-white sm:px-3"
+              className="flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-600/15 px-2 py-1.5 text-xs font-semibold text-purple-400 transition-all hover:bg-purple-600 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] sm:px-3"
               title="Start 1-on-1 Trading Room"
             >
               <Video size={14} className="text-purple-400" />
@@ -317,8 +317,8 @@ export function ChatWindow({
                         className={cn(
                           'p-2.5 rounded-2xl border text-xs leading-relaxed break-words shadow-lg',
                           isSelf
-                            ? 'bg-blue-600/10 border-blue-500/20 text-zinc-200 rounded-tr-none'
-                            : 'bg-[#0f1523] fxzone-chat-message border-zinc-850 text-zinc-300 rounded-tl-none'
+                            ? 'bg-blue-600/10 border-blue-500/20 text-[var(--fx-text-strong)] rounded-tr-none'
+                            : 'bg-[var(--fx-bg-elevated)] fxzone-chat-message border-[var(--fx-border-subtle)] text-[var(--fx-text-strong)] rounded-tl-none'
                         )}
                       >
                         {/* 1. Custom Renderer: TradingView Chart Snapshot Card */}
@@ -472,7 +472,7 @@ export function ChatWindow({
                               disabled={Boolean(deletingMessageId)}
                               aria-label="Delete sent message"
                               title="Delete this message"
-                              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[var(--fxzone-text-muted)] transition hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
+                              className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-[var(--fx-text-muted)] transition hover:bg-red-500/10 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
                             >
                               <Trash2 size={14} className={cn(deletingMessageId === msg.id && 'animate-pulse')} />
                             </button>
