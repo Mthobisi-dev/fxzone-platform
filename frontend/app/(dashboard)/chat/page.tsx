@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatRequestGuard } from '@/lib/chatRequestGuard';
 import { getConversationPreview, mergeConversationMessages } from '@/lib/chatThreads';
+import { dedupeDirectConversations, removeConversationById } from '@/lib/directConversation';
 import { ChatSidebar, Conversation, SuggestedUser } from '@/components/chat/ChatSidebar';
 import { ChatWindow, ChatMessage } from '@/components/chat/ChatWindow';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,6 +53,22 @@ export default function ChatPage() {
       )
     );
   }, []);
+
+  const handleDeleteConversation = useCallback(async (conversationId: string) => {
+    try {
+      await api.delete(`/api/chat/conversations/${conversationId}`);
+      setConversations((previous) => removeConversationById(previous, conversationId));
+      setMessages((previous) => previous.filter((message) => String(message.conversationId) !== String(conversationId)));
+      setLoadedConversationIds((previous) => {
+        const next = new Set(previous);
+        next.delete(conversationId);
+        return next;
+      });
+      if (String(activeConvId) === String(conversationId)) setActiveConvId(null);
+    } catch (error) {
+      console.error('Failed to remove conversation:', error);
+    }
+  }, [activeConvId]);
 
   // WebSocket hook for real-time chat sync
   const socketRef = useWebSocket(
@@ -119,10 +136,10 @@ export default function ChatPage() {
               }))
             : [],
         }));
-        setConversations((previous) => mapped.map((conversation) => ({
+        setConversations((previous) => dedupeDirectConversations(mapped.map((conversation) => ({
           ...conversation,
           lastMessage: previous.find((item) => item.id === conversation.id)?.lastMessage,
-        })));
+        }))));
       } else {
         setConversations([]);
       }
@@ -468,7 +485,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="fxzone-mobile-chat flex h-full min-h-0 min-w-0 max-w-full overflow-hidden">
+    <div className="fxzone-mobile-chat flex h-[calc(100%+var(--mobile-nav-height))] min-h-0 min-w-0 max-w-full -mb-[var(--mobile-nav-height)] overflow-hidden">
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="animate-spin text-blue-500" size={24} />
@@ -489,6 +506,7 @@ export default function ChatPage() {
               setModalTab('direct');
               setNewChatOpen(true);
             }}
+            onDeleteConversation={handleDeleteConversation}
             currentUserId={user?.id || ''}
           />
 

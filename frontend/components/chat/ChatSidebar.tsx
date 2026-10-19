@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Avatar } from '../ui/Avatar';
-import { Search, Plus, MessageSquare, Users, UserPlus, Loader2 } from 'lucide-react';
+import { Search, Plus, MessageSquare, Users, UserPlus, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface Conversation {
@@ -42,6 +42,7 @@ interface ChatSidebarProps {
   onStartChatWithUser?: (user: SuggestedUser) => void;
   startingChatUserId?: string | null;
   onNewChat: () => void;
+  onDeleteConversation?: (id: string) => void;
   currentUserId: string;
   className?: string;
 }
@@ -55,6 +56,7 @@ export function ChatSidebar({
   onStartChatWithUser,
   startingChatUserId,
   onNewChat,
+  onDeleteConversation,
   currentUserId,
   className,
 }: ChatSidebarProps) {
@@ -290,6 +292,20 @@ export function ChatSidebar({
                       <span className="h-4 min-w-4 px-1 rounded-full bg-blue-600 text-white font-bold text-[9px] flex items-center justify-center shrink-0">
                         {conv.unreadCount}
                       </span>
+                    )}
+                    {onDeleteConversation && (
+                      <button
+                        type="button"
+                        aria-label={`Remove conversation with ${details.name}`}
+                        title="Remove conversation"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteConversation(conv.id);
+                        }}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     )}
                   </div>
                 );

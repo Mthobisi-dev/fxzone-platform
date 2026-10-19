@@ -30,6 +30,6 @@ test('light theme keeps the wordmark on a semantic strong-text token', () => {
 
 test('navigation renders a chat unread badge without changing the icon layout', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'components/layout/Sidebar.tsx'), 'utf8');
-  assert.match(source, /getUnreadBadgeLabel\(chatUnreadCount\)/);
+  assert.match(source, /getUnreadBadgeLabel\(totalChatUnreadCount\)/);
   assert.match(source, /unread messages/);
 });

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api } from '@/lib/api';
 import { UserShort } from './socialStore';
+import { dedupeDirectConversations } from '@/lib/directConversation';
 
 export interface Conversation {
   id: string;
@@ -108,7 +109,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
 
       set((state) => ({
-        conversations: [conv, ...state.conversations],
+        conversations: dedupeDirectConversations([conv, ...state.conversations]),
         isLoading: false,
       }));
 

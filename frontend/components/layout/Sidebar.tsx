@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Avatar } from '../ui/Avatar';
 import { useChatStore } from '@/stores/chatStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { getUnreadBadgeLabel } from '@/lib/postAssetTags';
 
 export function Sidebar() {
@@ -27,6 +28,8 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const mounted = useHydrated();
   const chatUnreadCount = useChatStore((state) => state.conversations.reduce((total, conversation) => total + Math.max(0, conversation.unread_count || 0), 0));
+  const messageNotificationCount = useNotificationStore((state) => state.notifications.filter((notification) => !notification.is_read && notification.type === 'message').length);
+  const totalChatUnreadCount = chatUnreadCount + messageNotificationCount;
 
   const menuItems = [
     {
@@ -84,9 +87,9 @@ export function Sidebar() {
                 >
                   <span className={cn('relative text-current transition-colors', isActive ? 'text-blue-400' : 'text-zinc-400 group-hover:text-white')}>
                     {item.icon}
-                    {item.path === '/chat' && getUnreadBadgeLabel(chatUnreadCount) && (
-                      <span aria-label={`${getUnreadBadgeLabel(chatUnreadCount)} unread messages`} className="absolute -right-2 -top-2 min-w-4 rounded-full border border-[var(--fx-bg-canvas)] bg-[var(--fx-accent)] px-1 text-center text-[9px] font-bold leading-4 text-[var(--fx-bg-canvas)]">
-                        {getUnreadBadgeLabel(chatUnreadCount)}
+                    {item.path === '/chat' && getUnreadBadgeLabel(totalChatUnreadCount) && (
+                      <span aria-label={`${getUnreadBadgeLabel(totalChatUnreadCount)} unread messages`} className="absolute -right-2 -top-2 min-w-4 rounded-full border border-[var(--fx-bg-canvas)] bg-[var(--fx-accent)] px-1 text-center text-[9px] font-bold leading-4 text-[var(--fx-bg-canvas)]">
+                        {getUnreadBadgeLabel(totalChatUnreadCount)}
                       </span>
                     )}
                   </span>
@@ -189,9 +192,9 @@ export function Sidebar() {
             >
               <span className={cn('relative p-2 rounded-lg transition-colors [&>svg]:h-6 [&>svg]:w-6', isActive && 'bg-blue-600/15 text-blue-400')}>
                 {item.icon}
-                {item.path === '/chat' && getUnreadBadgeLabel(chatUnreadCount) && (
-                  <span aria-label={`${getUnreadBadgeLabel(chatUnreadCount)} unread messages`} className="absolute right-0 top-0 min-w-4 rounded-full border border-[var(--fx-bg-canvas)] bg-[var(--fx-accent)] px-1 text-center text-[9px] font-bold leading-4 text-[var(--fx-bg-canvas)]">
-                    {getUnreadBadgeLabel(chatUnreadCount)}
+                {item.path === '/chat' && getUnreadBadgeLabel(totalChatUnreadCount) && (
+                  <span aria-label={`${getUnreadBadgeLabel(totalChatUnreadCount)} unread messages`} className="absolute right-0 top-0 min-w-4 rounded-full border border-[var(--fx-bg-canvas)] bg-[var(--fx-accent)] px-1 text-center text-[9px] font-bold leading-4 text-[var(--fx-bg-canvas)]">
+                    {getUnreadBadgeLabel(totalChatUnreadCount)}
                   </span>
                 )}
               </span>
