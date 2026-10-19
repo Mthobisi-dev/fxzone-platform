@@ -114,13 +114,13 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
   };
 
   return (
-    <div className="relative w-full h-full bg-zinc-950 border border-zinc-850 rounded-xl overflow-hidden flex items-center justify-center group shadow-2xl">
+    <div className="group relative flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] shadow-2xl">
       {isLocal && stream ? (
         <div className="max-w-md p-6 text-center" role="status">
           <Check size={32} className="mx-auto mb-4 text-emerald-500" />
-          <h3 className="text-base font-semibold text-zinc-100">You are sharing your screen</h3>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-400">Your viewers see the tab or window you selected. Your preview is hidden to prevent the screen repeating inside itself.</p>
-          <p className="mt-3 text-xs text-zinc-400">Keep your presentation open. You can approve requests and chat here.</p>
+          <h3 className="text-base font-semibold text-[var(--fx-text-strong)]">You are sharing your screen</h3>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--fx-text-muted)]">Your viewers see the tab or window you selected. Your preview is hidden to prevent the screen repeating inside itself.</p>
+          <p className="mt-3 text-xs text-[var(--fx-text-muted)]">Keep your presentation open. You can approve requests and chat here.</p>
         </div>
       ) : stream && stream.active ? (
         <>
@@ -161,7 +161,7 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
             {!isLocal && (
               <button
                 onClick={toggleAudio}
-                className="p-3 flex items-center gap-2 bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-850 rounded-lg text-zinc-300 hover:text-white transition-colors"
+                className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-elevated)] p-3 text-[var(--fx-text-strong)] transition-colors hover:bg-[var(--fx-bg-surface)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
                 aria-label={isMuted ? 'Enable broadcast audio' : 'Mute broadcast audio'}
                 title={isMuted ? 'Unmute stream audio' : 'Mute stream audio'}
               >
@@ -172,7 +172,7 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
 
             <button
               onClick={toggleFullscreen}
-              className="p-2 bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-850 rounded-lg text-zinc-300 hover:text-white transition-colors"
+              className="grid min-h-11 min-w-11 place-items-center rounded-lg border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-elevated)] p-2 text-[var(--fx-text-strong)] transition-colors hover:bg-[var(--fx-bg-surface)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
               title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             >
@@ -185,8 +185,8 @@ export function ScreenShare({ stream, presenterName, isLocal = false, isHost = f
           <div className="h-14 w-14 bg-zinc-900 border border-zinc-800 text-zinc-500 rounded-2xl flex items-center justify-center mb-3 shadow-inner">
             <Monitor size={24} />
           </div>
-          <h4 className="text-sm font-semibold text-zinc-200">{isHost ? 'Your broadcast room is ready' : 'You’re in. Waiting for the host’s screen.'}</h4>
-          <p className="text-sm text-zinc-400 max-w-sm mt-2 leading-relaxed">
+          <h4 className="text-sm font-semibold text-[var(--fx-text-strong)]">{isHost ? 'Your broadcast room is ready' : 'You’re in. Waiting for the host’s screen.'}</h4>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-[var(--fx-text-muted)]">
             {isHost ? 'Choose Share screen, then select your presentation tab or window. Approve followers in Access requests.' : 'The screen will appear here when the host starts sharing. You can say hello in the chat while you wait.'}
           </p>
         </div>

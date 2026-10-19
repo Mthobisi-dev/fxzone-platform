@@ -112,7 +112,7 @@ export function ChatSidebar({
         <h3 className="text-sm font-bold tracking-wide text-[var(--color-text)]">Messages</h3>
         <button
           onClick={onNewChat}
-          className="p-1.5 bg-blue-600/10 border border-blue-500/30 text-blue-400 hover:bg-blue-600/20 rounded-lg transition-colors focus:outline-none flex items-center gap-1 text-[11px] font-semibold px-2"
+          className="flex min-h-11 items-center gap-1 rounded-lg border border-blue-500/30 bg-blue-600/10 px-2 text-[11px] font-semibold text-blue-400 transition-colors hover:bg-blue-600/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
           title="New Chat / Group"
         >
           <Plus size={14} />
@@ -125,7 +125,7 @@ export function ChatSidebar({
         <button
           onClick={() => setActiveTab('chats')}
           className={cn(
-            'flex-1 py-2 text-[11px] font-bold tracking-wide transition-colors flex items-center justify-center gap-1.5',
+            'flex min-h-11 flex-1 items-center justify-center gap-1.5 text-[11px] font-bold tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
             activeTab === 'chats'
               ? 'text-blue-400 border-b-2 border-blue-500'
               : 'text-zinc-500 hover:text-zinc-300'
@@ -140,7 +140,7 @@ export function ChatSidebar({
         <button
           onClick={() => setActiveTab('people')}
           className={cn(
-            'flex-1 py-2 text-[11px] font-bold tracking-wide transition-colors flex items-center justify-center gap-1.5',
+            'flex min-h-11 flex-1 items-center justify-center gap-1.5 text-[11px] font-bold tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
             activeTab === 'people'
               ? 'text-blue-400 border-b-2 border-blue-500'
               : 'text-zinc-500 hover:text-zinc-300'

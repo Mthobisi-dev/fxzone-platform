@@ -89,7 +89,7 @@ export function SessionControls({
   };
 
   return (
-    <div className="bg-zinc-950 border border-zinc-850 rounded-xl px-3 py-3 flex flex-wrap items-center justify-between gap-3 select-none relative">
+    <div className="relative flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] px-3 py-3">
       {/* Session Timer & Recording Badge */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 bg-zinc-900/80 border border-zinc-800 px-3 py-1.5 rounded-lg">
@@ -116,7 +116,7 @@ export function SessionControls({
             <button
               onClick={handleMic}
               disabled={!isSharing || !hasSharedAudio}
-              className={`p-2.5 rounded-lg border transition-all ${
+              className={`min-h-11 min-w-11 rounded-lg border p-2.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] ${
                 micOn
                   ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-850'
                   : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
@@ -130,7 +130,7 @@ export function SessionControls({
             <button
               onClick={handleCam}
               disabled={!isSharing}
-              className={`p-2.5 rounded-lg border transition-all ${
+              className={`min-h-11 min-w-11 rounded-lg border p-2.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] ${
                 camOn
                   ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 hover:bg-blue-600/30'
                   : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-850 hover:text-white'
@@ -144,7 +144,7 @@ export function SessionControls({
             <button
               onClick={handleShare}
               disabled={isStartingShare || (!isSharing && (!canStartShare || !screenShareSupported))}
-              className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
+              className={`flex min-h-11 items-center gap-1.5 rounded-lg border p-2.5 text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] ${
                 isSharing
                   ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30 animate-pulse'
                   : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
@@ -159,7 +159,7 @@ export function SessionControls({
               <button
                 onClick={onToggleRecord}
                 disabled={!isSharing && !isRecording}
-                className={`p-2.5 rounded-lg border transition-all flex items-center gap-1.5 font-bold text-xs ${
+                className={`flex min-h-11 items-center gap-1.5 rounded-lg border p-2.5 text-xs font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] ${
                   isRecording
                     ? 'bg-red-600 border-red-500 text-white shadow-lg shadow-red-600/30'
                     : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 hover:text-white'
@@ -175,7 +175,7 @@ export function SessionControls({
               <button
                 onClick={onEndBroadcast}
                 disabled={isEndingBroadcast}
-                className="p-2.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 transition-colors hover:bg-rose-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 flex items-center gap-1.5 text-xs font-bold"
+                className="flex min-h-11 items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs font-bold text-rose-300 transition-colors hover:bg-rose-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] disabled:cursor-not-allowed disabled:opacity-60"
                 title="End broadcast for every participant"
               >
                 <Radio size={15} />
@@ -193,7 +193,7 @@ export function SessionControls({
         onClick={onLeave}
         variant="danger"
         size="sm"
-        className="h-9 px-4 text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-rose-600/10"
+        className="min-h-11 px-4 text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-rose-600/10"
       >
         <PhoneOff size={13} />
         <span>Leave</span>

@@ -152,7 +152,7 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="fxzone-chat-composer flex w-full max-w-full shrink-0 items-center gap-1 border-t border-[var(--color-border)] bg-[var(--color-surface)] p-2 select-none sm:gap-1.5 sm:p-3">
+      <form onSubmit={handleSubmit} className="fxzone-chat-composer flex w-full max-w-full shrink-0 items-center gap-1 border-t border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] p-2 sm:gap-1.5 sm:p-3">
         {/* Hidden File Input */}
         <input
           type="file"
@@ -166,7 +166,7 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg p-0 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-background)] hover:text-[var(--color-text)]"
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-0 text-[var(--fx-text-muted)] transition-colors hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
           disabled={disabled || uploadingImage || uploadingVoice}
           title="Share a picture or video"
         >
@@ -177,10 +177,10 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
         <button
           type="button"
           onClick={isRecording ? stopRecording : startRecording}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg p-0 transition-colors ${
+          className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] ${
             isRecording
               ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20'
-              : 'text-zinc-500 hover:text-white hover:bg-zinc-900'
+              : 'text-[var(--fx-text-muted)] hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)]'
           }`}
           disabled={disabled || uploadingImage || uploadingVoice}
           title={isRecording ? 'Stop Recording and Send' : 'Record voice note'}
@@ -198,7 +198,7 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
         <button
           type="button"
           onClick={openSessionShare}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg p-0 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-background)] hover:text-[var(--color-text)]"
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-0 text-[var(--fx-text-muted)] transition-colors hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
           disabled={disabled || uploadingImage || uploadingVoice}
           title="Share live session invitation"
         >
@@ -211,14 +211,14 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
           value={isRecording ? 'Recording voice note...' : text}
           onChange={handleChange}
           placeholder={isRecording ? 'Press mic icon to stop and send...' : 'Type a message...'}
-          className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 text-[11px] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-blue-500 focus:outline-none sm:px-3 sm:text-xs"
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-elevated)] px-2 text-[11px] text-[var(--fx-text-strong)] placeholder:text-[var(--fx-text-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] sm:px-3 sm:text-xs"
           disabled={disabled || sending || isRecording || uploadingImage || uploadingVoice}
         />
 
         <Button
           type="submit"
           size="sm"
-          className="h-9 min-w-9 shrink-0 bg-blue-600 px-2.5 hover:bg-blue-500 sm:px-4"
+          className="min-h-11 min-w-11 shrink-0 bg-blue-600 px-2.5 hover:bg-blue-500 sm:px-4"
           disabled={!text.trim() || sending || disabled || isRecording}
         >
           {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
