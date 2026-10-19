@@ -6,8 +6,9 @@ import { api } from '@/lib/api';
 import { buildPreferredAssetOptions, buildVerifiedAssetDetail } from '@/lib/marketContext';
 import type { Asset, PriceData } from '@/stores/marketStore';
 import { cn } from '@/lib/utils';
+import { ChartIntervalId, SUPPORTED_CHART_INTERVALS } from '@/lib/chartIntervals';
 
-type Timeframe = '1h' | '1d';
+type Timeframe = ChartIntervalId;
 
 interface HistoricalCandle {
   time: number;
@@ -262,14 +263,14 @@ export function VerifiedAssetDetail({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text)]"><BarChart3 size={14} className="text-cyan-600 dark:text-cyan-300" />Provider history</div>
             <div className="flex max-w-full overflow-x-auto rounded-md border border-[var(--color-border)] p-0.5">
-              {(['1h', '1d'] as Timeframe[]).map((value) => (
+              {SUPPORTED_CHART_INTERVALS.map(({ id: value, label }) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setTimeframe(value)}
                   className={cn('rounded px-2 py-1 text-[10px] font-medium transition', timeframe === value ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-200' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]')}
                 >
-                  {value.toUpperCase()}
+                  {label}
                 </button>
               ))}
             </div>

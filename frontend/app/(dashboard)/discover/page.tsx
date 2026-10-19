@@ -23,6 +23,7 @@ import {
   FileText,
   PlayCircle,
 } from 'lucide-react';
+import { buildNewsEvidence } from '@/lib/newsEvidence';
 
 interface DiscoverUser {
   id: string;
@@ -453,6 +454,7 @@ export default function DiscoverPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {visibleNews.map((article) => {
               const explanation = newsExplanations[article.id];
+              const evidence = buildNewsEvidence(article);
               return (
                 <article key={article.id} className="min-w-0 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
                   {article.media_url && (
@@ -518,6 +520,17 @@ export default function DiscoverPage() {
                       </p>
                       <p className="mt-1.5 text-[11px] leading-5 text-[var(--color-text)]">{explanation.result.explanation}</p>
                       <p className="mt-2 text-[9px] leading-4 text-[var(--color-text-muted)]">{explanation.result.limitation}</p>
+                      <div className="mt-3 border-t border-[var(--color-border)] pt-3" aria-label="News evidence graph">
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Evidence map</p>
+                        <div className="mt-2 grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-1.5 text-[10px]">
+                          <span className="rounded bg-blue-500/10 px-1.5 py-1 font-semibold text-blue-500">Source</span>
+                          <span className="text-[var(--color-text)]">{evidence.source}{evidence.publishedAt ? ` · ${new Date(evidence.publishedAt).toLocaleString()}` : ''}</span>
+                          <span className="rounded bg-cyan-500/10 px-1.5 py-1 font-semibold text-cyan-600 dark:text-cyan-300">Assets</span>
+                          <span className="text-[var(--color-text)]">{evidence.assets.length ? evidence.assets.join(' · ') : 'No tagged assets'}</span>
+                          <span className="rounded bg-amber-500/10 px-1.5 py-1 font-semibold text-amber-700 dark:text-amber-300">Facts</span>
+                          <span className="text-[var(--color-text)]">{evidence.facts.length ? evidence.facts.join(' ') : 'No provider facts supplied'}</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                   </div>
