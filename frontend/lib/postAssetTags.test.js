@@ -21,6 +21,9 @@ test('unread badge labels are bounded and hidden at zero', async () => {
 test('composer no longer presents the optional caption prompt', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'components/social/PostComposer.tsx'), 'utf8');
   assert.doesNotMatch(source, /add a caption \(optional\)/i);
+  const card = fs.readFileSync(path.join(__dirname, '..', 'components/social/PostCard.tsx'), 'utf8');
+  assert.doesNotMatch(card, /add a caption \(optional\)/i);
+  assert.match(card, /extractPostAssetTags/);
 });
 
 test('light theme keeps the wordmark on a semantic strong-text token', () => {

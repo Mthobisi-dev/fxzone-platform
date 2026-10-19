@@ -36,6 +36,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { PostGallery } from './PostGallery';
 import { readPostAttachments } from '@/lib/postAttachments';
 import { isPostTap, nextPostLikeState, registerPostTap, type TapPoint } from '@/lib/postGesture';
+import { extractPostAssetTags, POST_ASSET_SYMBOLS } from '@/lib/postAssetTags';
 
 export interface Post {
   id: string;
@@ -108,7 +109,9 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
 
   const imageUrl = post.imageUrl || raw.image_url;
   const attachments = readPostAttachments(post.content || '', imageUrl);
-  const assetTags = post.assetTags || raw.asset_tags || [];
+  const explicitAssetTags = post.assetTags || raw.asset_tags || [];
+  const inferredAssetTags = extractPostAssetTags(post.content || '', POST_ASSET_SYMBOLS);
+  const assetTags = Array.from(new Set([...explicitAssetTags, ...inferredAssetTags]));
   const initialLikes = post.likesCount ?? raw.likes_count ?? 0;
   const initialComments = post.commentsCount ?? raw.comments_count ?? 0;
   const initialReposts = post.repostsCount ?? raw.reposts_count ?? 0;
@@ -276,7 +279,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
   };
 
   const [repostModalOpen, setRepostModalOpen] = useState(false);
-  const [repostCaption, setRepostCaption] = useState('');
 
   // Repost / Reshare Post
   const handleRepost = async (e: React.MouseEvent) => {
@@ -290,24 +292,13 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     const previousReposts = reposts;
     setRepostLoading(true);
     try {
-      if (repostCaption.trim()) {
-        await api.post('/api/social/posts', {
-          content: post.content,
-          caption: "Quote from @" + postUser.username + ": " + repostCaption.trim(),
-          image_url: imageUrl,
-          asset_tags: assetTags
-        });
-        // A quote post is independent. Only the repost endpoint changes the
-        // source post's repost count and active state.
-      } else {
-        const nextReposted = !isReposted;
-        setIsReposted(nextReposted);
-        setReposts((prev) => (nextReposted ? prev + 1 : Math.max(0, prev - 1)));
-        const res = await api.post(`/api/social/posts/${post.id}/repost`, {});
-        if (res && typeof res.reposts_count === 'number') {
-          setReposts(res.reposts_count);
-          setIsReposted(res.is_reposted ?? nextReposted);
-        }
+      const nextReposted = !isReposted;
+      setIsReposted(nextReposted);
+      setReposts((prev) => (nextReposted ? prev + 1 : Math.max(0, prev - 1)));
+      const res = await api.post(`/api/social/posts/${post.id}/repost`, {});
+      if (res && typeof res.reposts_count === 'number') {
+        setReposts(res.reposts_count);
+        setIsReposted(res.is_reposted ?? nextReposted);
       }
       window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
       setRepostModalOpen(false);
@@ -866,12 +857,6 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
               <span className="text-zinc-500 font-bold block mb-1">@{postUser.username}:</span>
               <p className="line-clamp-3 italic">&quot;{post.content}&quot;</p>
             </div>
-            <textarea
-              value={repostCaption}
-              onChange={(e) => setRepostCaption(e.target.value)}
-              placeholder="Add a caption... (optional)"
-              className="w-full h-20 bg-zinc-950 border border-zinc-800 rounded p-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-            />
             <Button onClick={submitRepost} disabled={repostLoading} className="w-full">
               {repostLoading ? 'Reposting...' : 'Repost'}
             </Button>

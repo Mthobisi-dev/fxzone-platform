@@ -15,3 +15,5 @@ Task 4: complete (focused density and evidence tests → 2/2 pass; typecheck →
 Task 5: complete (screen-share capability test → 1/1 pass; typecheck → PASS). Ruling: native `getDisplayMedia` remains the only support signal; iOS/restricted browsers receive truthful actionable messaging and no capture attempt is made when unsupported.
 
 Task 6: complete. `npm run lint` PASS, `npm run typecheck` PASS, `npm run test` PASS (160/160), `git diff --check` PASS. Both default Turbopack and webpack production builds were attempted; this Windows host failed during `.next` child-process/output directory creation (Turbopack panic and webpack EPERM), so deployment CI/Vercel must perform the authoritative Node 22 build.
+
+Post-task correction: PostCard now renders recognized symbols found in post text alongside explicit tags, and the repost flow no longer exposes or sends the removed optional-caption field. Focused social tests and typecheck remain passing.

@@ -1,5 +1,11 @@
 const SYMBOL_PATTERN = /\$?[A-Z][A-Z0-9]{1,9}(?:\/[A-Z]{3,5})?/g;
 
+export const POST_ASSET_SYMBOLS = new Set([
+  'BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'ADAUSD', 'DOTUSD', 'LINKUSD', 'UNIUSD', 'DOGEUSD', 'AVAXUSD',
+  'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'AVGO', 'INTC', 'QCOM', 'AMD', 'LLY', 'JNJ', 'WMT', 'CAT', 'GE',
+  'EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'NZDUSD', 'USDCHF', 'EURGBP', 'XAUUSD', 'XAGUSD',
+]);
+
 function normalizeSymbol(value: string): string {
   return value.replace(/^\$/, '').replace('/', '').toUpperCase();
 }
