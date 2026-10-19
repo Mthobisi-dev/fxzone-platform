@@ -25,3 +25,12 @@ test('selected-instrument detail keeps provider provenance and dense values read
   assert.match(component, /overflow-x-auto/);
   assert.match(component, /sm:grid-cols/);
 });
+
+test('live market workspace keeps real-data controls compact and theme-aware', () => {
+  const screener = fs.readFileSync(path.join(__dirname, 'LiveMarketScreener.tsx'), 'utf8');
+
+  assert.match(screener, /buildMarketScreenerRows/);
+  assert.match(screener, /min-h-11/);
+  assert.match(screener, /var\(--fx-bg-surface\)/);
+  assert.match(screener, /overflow-x-auto/);
+});
