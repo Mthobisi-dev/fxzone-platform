@@ -54,3 +54,18 @@ test('social gallery keeps attachment navigation reachable on touch screens', ()
   assert.match(gallery, /snap-x snap-mandatory overflow-x-auto/);
 });
 
+test('social composition and suggestions retain compact, reachable mobile controls', () => {
+  const composer = fs.readFileSync(path.join(__dirname, '..', 'components', 'social', 'PostComposer.tsx'), 'utf8');
+  const userCard = fs.readFileSync(path.join(__dirname, '..', 'components', 'social', 'UserCard.tsx'), 'utf8');
+  const post = fs.readFileSync(path.join(__dirname, '..', 'components', 'social', 'PostCard.tsx'), 'utf8');
+
+  assert.match(composer, /fxzone-post-composer/);
+  assert.match(composer, /min-h-11/);
+  assert.match(composer, /overflow-x-auto/);
+  assert.match(composer, /var\(--fx-text-strong\)/);
+  assert.match(userCard, /min-h-11/);
+  assert.match(userCard, /var\(--fx-text-strong\)/);
+  assert.match(post, /min-h-11/);
+  assert.match(post, /focus-visible:ring-2/);
+});
+

@@ -478,7 +478,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
     <Card
       id={`post-${post.id}`}
       onClick={() => onSelect?.(post)}
-      className="relative p-0 border border-zinc-850 bg-zinc-900/20 hover:border-zinc-800 transition-all duration-200 cursor-pointer rounded-xl overflow-hidden"
+      className="relative cursor-pointer overflow-hidden rounded-xl border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] p-0 transition-all duration-200 hover:bg-[var(--fx-bg-elevated)]"
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 280px' }}
     >
       <AnimatePresence>
@@ -551,7 +551,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
               }}
               title={`View @${postUser.username}'s profile`}
             >
-              <span className="text-xs font-semibold text-white truncate max-w-[140px] group-hover/author:text-blue-400 group-hover/author:underline transition-colors">
+              <span className="max-w-[140px] truncate text-xs font-semibold text-[var(--fx-text-strong)] transition-colors group-hover/author:text-blue-400 group-hover/author:underline">
                 {postUser.displayName || postUser.username}
               </span>
               <span className="text-[10px] text-zinc-500 truncate max-w-[90px]">
@@ -648,7 +648,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             onPointerCancel={() => { pointerDownRef.current = null; }}
           >
           {/* Text Content with Viewable Link Highlights */}
-          <div className="text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap mb-3 break-words">
+          <div className="mb-3 break-words whitespace-pre-wrap text-xs leading-relaxed text-[var(--fx-text-strong)]">
             {attachments.text.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
               if (/^https?:\/\//.test(part)) {
                 return (
@@ -717,14 +717,14 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
             const allowShareOpt = post.allowShare ?? raw.allow_share ?? true;
 
             return (
-              <div className="flex items-center justify-between border-t border-zinc-850/50 pt-2.5 mt-2 max-w-sm select-none">
+              <div className="mt-2 flex max-w-sm items-center justify-between border-t border-[var(--fx-border-subtle)] pt-2.5">
                 {!isBot && (
                   <>
                     {/* Comment Toggle Button */}
                     <button
                       onClick={handleToggleComments}
                       className={cn(
-                        'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                        'group flex min-h-11 items-center gap-1.5 rounded-md px-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
                         showComments
                           ? 'text-blue-400 bg-blue-500/10'
                           : 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-850/40'
@@ -743,7 +743,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                         onClick={handleRepost}
                         disabled={repostLoading}
                         className={cn(
-                          'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                          'group flex min-h-11 items-center gap-1.5 rounded-md px-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
                           isReposted
                             ? 'text-emerald-400 bg-emerald-500/10'
                             : 'text-zinc-500 hover:text-emerald-400 hover:bg-zinc-850/40'
@@ -768,7 +768,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                   onClick={handleLike}
                   disabled={likeLoading}
                   className={cn(
-                    'group flex items-center gap-1.5 transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                    'group flex min-h-11 items-center gap-1.5 rounded-md px-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
                     isLiked
                       ? 'text-rose-500 bg-rose-500/10'
                       : 'text-zinc-500 hover:text-rose-500 hover:bg-zinc-850/40'
@@ -797,7 +797,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                         onClick={handleBookmark}
                         disabled={bookmarkLoading}
                         className={cn(
-                          'group flex items-center transition-colors focus:outline-none px-1.5 py-1 rounded-md',
+                          'group flex min-h-11 items-center rounded-md px-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]',
                           isBookmarked
                             ? 'text-yellow-500 bg-yellow-500/10'
                             : 'text-zinc-500 hover:text-yellow-500 hover:bg-zinc-850/40'
@@ -820,7 +820,7 @@ export function PostCard({ post, onSelect, onTagClick, onDelete }: PostCardProps
                     {allowShareOpt && (
                       <button
                         onClick={openShareModal}
-                        className="group flex items-center gap-1.5 text-zinc-500 hover:text-blue-400 hover:bg-zinc-850/40 px-1.5 py-1 rounded-md transition-colors focus:outline-none"
+                        className="group flex min-h-11 items-center gap-1.5 rounded-md px-2 text-zinc-500 transition-colors hover:bg-zinc-850/40 hover:text-blue-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
                         title="Share post"
                       >
                         <Share2 size={13} className="group-hover:scale-110 transition-transform" />

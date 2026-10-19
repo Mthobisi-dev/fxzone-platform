@@ -72,7 +72,7 @@ export function UserCard({ userSummary, onProfileClick }: UserCardProps) {
   return (
     <Card 
       onClick={() => onProfileClick?.(userSummary.id)}
-      className="p-4 border border-zinc-850 bg-zinc-900/25 hover:border-zinc-800 transition-all duration-200 cursor-pointer flex flex-col justify-between"
+      className="flex cursor-pointer flex-col justify-between border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] p-4 transition-all duration-200 hover:bg-[var(--fx-bg-elevated)]"
     >
       <div className="flex gap-3">
         {/* Avatar */}
@@ -81,14 +81,14 @@ export function UserCard({ userSummary, onProfileClick }: UserCardProps) {
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-            <h4 className="text-xs font-bold text-white truncate max-w-[120px]">
+            <h4 className="max-w-[120px] truncate text-xs font-bold text-[var(--fx-text-strong)]">
               {userSummary.displayName || userSummary.username}
             </h4>
             {userSummary.role === 'verified_educator' && (
               <CheckCircle2 size={10} className="text-blue-500 fill-blue-500/10" />
             )}
           </div>
-          <span className="text-[10px] text-zinc-500 block mb-1">@{userSummary.username}</span>
+          <span className="mb-1 block text-[10px] text-[var(--fx-text-muted)]">@{userSummary.username}</span>
 
           {userSummary.role && userSummary.role !== 'trader' && (
             <span className={cn('inline-block text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider mb-2', getRoleBadgeColor(userSummary.role))}>
@@ -97,7 +97,7 @@ export function UserCard({ userSummary, onProfileClick }: UserCardProps) {
           )}
 
           {userSummary.bio && (
-            <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed mb-3">
+            <p className="mb-3 line-clamp-2 text-[11px] leading-relaxed text-[var(--fx-text-muted)]">
               {userSummary.bio}
             </p>
           )}
@@ -105,15 +105,15 @@ export function UserCard({ userSummary, onProfileClick }: UserCardProps) {
       </div>
 
       {/* Stats and Follow Button */}
-      <div className="flex items-center justify-between border-t border-zinc-850/50 pt-3 mt-2 select-none">
+      <div className="mt-2 flex items-center justify-between border-t border-[var(--fx-border-subtle)] pt-3">
         <div className="flex gap-4">
           <div>
-            <span className="text-[10px] font-semibold text-zinc-200 block leading-tight">{followers}</span>
-            <span className="text-[8px] text-zinc-500">Followers</span>
+            <span className="block text-[10px] font-semibold leading-tight text-[var(--fx-text-strong)]">{followers}</span>
+            <span className="text-[8px] text-[var(--fx-text-muted)]">Followers</span>
           </div>
           <div>
-            <span className="text-[10px] font-semibold text-zinc-200 block leading-tight">{userSummary.followingCount}</span>
-            <span className="text-[8px] text-zinc-500">Following</span>
+            <span className="block text-[10px] font-semibold leading-tight text-[var(--fx-text-strong)]">{userSummary.followingCount}</span>
+            <span className="text-[8px] text-[var(--fx-text-muted)]">Following</span>
           </div>
         </div>
 
@@ -122,7 +122,7 @@ export function UserCard({ userSummary, onProfileClick }: UserCardProps) {
           variant={isFollowing ? 'outline' : 'primary'}
           size="sm"
           className={cn(
-            'h-7 px-3 text-[10px] flex items-center gap-1 shrink-0 font-semibold',
+            'min-h-11 px-3 text-[10px] flex items-center gap-1 shrink-0 font-semibold',
             isFollowing ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'bg-blue-600 hover:bg-blue-500 text-white'
           )}
           disabled={loading}
