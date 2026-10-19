@@ -19,11 +19,17 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar } from '../ui/Avatar';
+import { useChatStore } from '@/stores/chatStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { getUnreadBadgeLabel } from '@/lib/postAssetTags';
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const mounted = useHydrated();
+  const chatUnreadCount = useChatStore((state) => state.conversations.reduce((total, conversation) => total + Math.max(0, conversation.unread_count || 0), 0));
+  const messageNotificationCount = useNotificationStore((state) => state.notifications.filter((notification) => !notification.is_read && notification.type === 'message').length);
+  const totalChatUnreadCount = chatUnreadCount + messageNotificationCount;
 
   const menuItems = [
     {
@@ -79,8 +85,13 @@ export function Sidebar() {
                       : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
                   )}
                 >
-                  <span className={cn('text-current transition-colors', isActive ? 'text-blue-400' : 'text-zinc-400 group-hover:text-white')}>
+                  <span className={cn('relative text-current transition-colors', isActive ? 'text-blue-400' : 'text-zinc-400 group-hover:text-white')}>
                     {item.icon}
+                    {item.path === '/chat' && getUnreadBadgeLabel(totalChatUnreadCount) && (
+                      <span aria-label={`${getUnreadBadgeLabel(totalChatUnreadCount)} unread messages`} className="absolute -right-2 -top-2 min-w-4 rounded-full border border-[var(--fx-bg-canvas)] bg-[var(--fx-accent)] px-1 text-center text-[9px] font-bold leading-4 text-[var(--fx-bg-canvas)]">
+                        {getUnreadBadgeLabel(totalChatUnreadCount)}
+                      </span>
+                    )}
                   </span>
                   <span className="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                     {item.label}
@@ -179,8 +190,13 @@ export function Sidebar() {
                   : 'text-zinc-500 hover:text-zinc-300'
               )}
             >
-              <span className={cn('p-2 rounded-lg transition-colors [&>svg]:h-6 [&>svg]:w-6', isActive && 'bg-blue-600/15 text-blue-400')}>
+              <span className={cn('relative p-2 rounded-lg transition-colors [&>svg]:h-6 [&>svg]:w-6', isActive && 'bg-blue-600/15 text-blue-400')}>
                 {item.icon}
+                {item.path === '/chat' && getUnreadBadgeLabel(totalChatUnreadCount) && (
+                  <span aria-label={`${getUnreadBadgeLabel(totalChatUnreadCount)} unread messages`} className="absolute right-0 top-0 min-w-4 rounded-full border border-[var(--fx-bg-canvas)] bg-[var(--fx-accent)] px-1 text-center text-[9px] font-bold leading-4 text-[var(--fx-bg-canvas)]">
+                    {getUnreadBadgeLabel(totalChatUnreadCount)}
+                  </span>
+                )}
               </span>
             </Link>
           );

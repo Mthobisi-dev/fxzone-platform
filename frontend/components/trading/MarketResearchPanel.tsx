@@ -30,7 +30,7 @@ function readArticles(payload: unknown): NewsArticle[] {
  * Asset discovery remains available through the instrument picker, while the
  * large cross-market catalogue is kept out of the primary workspace.
  */
-export function MarketResearchPanel() {
+export function MarketResearchPanel({ className }: { className?: string } = {}) {
   const {
     assets,
     prices,
@@ -75,7 +75,7 @@ export function MarketResearchPanel() {
   const activeQuote = activeAsset ? prices[activeAsset.symbol.toUpperCase()] ?? null : null;
 
   return (
-    <section className="space-y-3 sm:space-y-4">
+    <section className={`space-y-3 sm:space-y-4 ${className || ''}`}>
       {activeAsset ? (
         <VerifiedAssetDetail
           asset={activeAsset}

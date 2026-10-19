@@ -61,7 +61,6 @@ function isSignedPostUpload(value: unknown): value is SignedPostUpload {
 export function PostComposer({ onPostCreated }: PostComposerProps) {
   const { user } = useAuth();
   const [content, setContent] = useState('');
-  const [caption, setCaption] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [assetTags, setAssetTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -291,7 +290,6 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
       const createdPost = await api.post('/api/social/posts', {
         content: finalContent,
         image_url: primaryUrl,
-        caption: caption || undefined,
         asset_tags: assetTags,
         show_comments_count: showCommentsCount,
         show_likes_count: showLikesCount,
@@ -302,7 +300,6 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
       // Reset state
       setContent('');
-      setCaption('');
       setAssetTags([]);
       mediaFiles.forEach((m) => {
         if (m.previewUrl) URL.revokeObjectURL(m.previewUrl);
@@ -414,22 +411,9 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             </p>
           )}
 
-          <input
-            type="text"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            maxLength={200}
-            placeholder="Add a caption... (optional)"
-            className="mt-2 min-h-11 w-full rounded-lg border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-elevated)] px-3 py-2 text-sm text-[var(--fx-text-strong)] placeholder:text-[var(--fx-text-muted)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]"
-          />
-
-          {/* Dedicated Media Caption Indicator if files attached */}
           {mediaFiles.length > 0 && (
             <div className="flex items-center justify-between text-[10px] text-zinc-500 border-t border-zinc-800/40 pt-1.5 mt-1">
-              <span className="flex items-center gap-1 text-purple-400 font-medium">
-                <FileText size={10} />
-                <span>Caption attached to {mediaFiles.length} media file{mediaFiles.length > 1 ? 's' : ''}</span>
-              </span>
+              <span className="text-purple-400 font-medium">{mediaFiles.length} media attachment{mediaFiles.length > 1 ? 's' : ''}</span>
               <span>{content.length} characters</span>
             </div>
           )}
@@ -745,7 +729,6 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                     onClick={() => {
                       setIsExpanded(false);
                       setContent('');
-                      setCaption('');
                       setAssetTags([]);
                       mediaFiles.forEach((m) => {
                         if (m.previewUrl) URL.revokeObjectURL(m.previewUrl);

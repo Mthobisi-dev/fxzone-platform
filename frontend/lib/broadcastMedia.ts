@@ -28,3 +28,19 @@ export function stopBroadcastTracks(stream: MediaStream): void {
 export function supportsScreenShare(mediaDevices?: Pick<MediaDevices, 'getDisplayMedia'>): boolean {
   return typeof mediaDevices?.getDisplayMedia === 'function';
 }
+
+export type ShareCapability = 'supported' | 'unsupported' | 'restricted';
+
+export function getScreenShareCapability(navigatorLike: {
+  userAgent?: string;
+  mediaDevices?: { getDisplayMedia?: unknown };
+} | null | undefined): ShareCapability {
+  if (typeof navigatorLike?.mediaDevices?.getDisplayMedia !== 'function') return 'unsupported';
+  return /iphone|ipad|ipod/i.test(String(navigatorLike.userAgent || '')) ? 'restricted' : 'supported';
+}
+
+export function screenShareUnavailableMessage(capability: ShareCapability): string {
+  return capability === 'restricted'
+    ? 'Screen sharing is restricted by this mobile browser. Open the session in a supported desktop or Android browser to present.'
+    : 'This browser cannot share a device screen. Keep watching here or open the session in a browser with native screen capture support.';
+}

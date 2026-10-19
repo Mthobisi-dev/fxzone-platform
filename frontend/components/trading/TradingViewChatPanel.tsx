@@ -34,6 +34,8 @@ import { cn } from '@/lib/utils';
 import { getTradingViewChartUrl } from '@/lib/tradingView';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { ChartIntervalId, SUPPORTED_CHART_INTERVALS } from '@/lib/chartIntervals';
+import { serializeShareSignal, validateShareSignal } from '@/lib/shareSignal';
 
 interface TradingViewChatPanelProps {
   onShareSnapshot?: (snapshotData: string) => void;
@@ -72,7 +74,7 @@ export function TradingViewChatPanel({
   const emaSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
 
   // Timeframe state
-  const [timeframe, setTimeframe] = useState<'1h' | '1d'>('1h');
+  const [timeframe, setTimeframe] = useState<ChartIntervalId>('1h');
   const [chartType, setChartType] = useState<'candlestick' | 'line' | 'area'>('candlestick');
   const [isLoading, setIsLoading] = useState(false);
   const [activeIndicators, setActiveIndicators] = useState<{ sma: boolean; ema: boolean; volume: boolean }>({
@@ -388,11 +390,22 @@ export function TradingViewChatPanel({
 
   // Generate Signal and Share to Chat
   const handleCreateSignal = () => {
-    if (![signalEntry, signalTP, signalSL].every(value => Number.isFinite(Number(value)) && Number(value) > 0)) return;
     if (!currentSymbol) return;
-    const text = `[Signal Card] Side: ${signalSide} | Asset: ${currentSymbol} | Entry: ${signalEntry} | TP: ${signalTP} | SL: ${signalSL} | Note: ${signalNote || 'FxZone Trading Strategy'}`;
-    if (onShareSignal) {
-      onShareSignal(text);
+    try {
+      const signal = validateShareSignal({
+        symbol: currentSymbol,
+        interval: timeframe,
+        side: signalSide,
+        entry: signalEntry,
+        takeProfit: signalTP,
+        stopLoss: signalSL,
+        rationale: signalNote,
+        provider: currentPriceObj?.data_source || 'provider',
+        timestamp: currentPriceObj?.timestamp || new Date().toISOString(),
+      });
+      if (onShareSignal) onShareSignal(serializeShareSignal(signal));
+    } catch {
+      return;
     }
     setSignalModalOpen(false);
     setSignalNote('');
@@ -434,18 +447,18 @@ export function TradingViewChatPanel({
 
           {/* Timeframe Buttons */}
           <div className="flex bg-zinc-900/90 border border-zinc-850 rounded-lg p-0.5 gap-0.5">
-            {(['1h', '1d'] as const).map((tf) => (
+            {SUPPORTED_CHART_INTERVALS.map((interval) => (
               <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
+                key={interval.id}
+                onClick={() => setTimeframe(interval.id)}
                 className={cn(
                   "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
-                  timeframe === tf
+                  timeframe === interval.id
                     ? "bg-blue-600 text-white shadow-sm"
                     : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
                 )}
               >
-                {tf.toUpperCase()}
+                {interval.label}
               </button>
             ))}
           </div>

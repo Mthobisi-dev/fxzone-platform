@@ -17,7 +17,7 @@ import {
   Disc,
 } from 'lucide-react';
 import { WebRTCClient } from '@/lib/webrtc';
-import { broadcastCaptureOptions, stopBroadcastTracks, supportsScreenShare } from '@/lib/broadcastMedia';
+import { broadcastCaptureOptions, stopBroadcastTracks, getScreenShareCapability, screenShareUnavailableMessage, type ShareCapability } from '@/lib/broadcastMedia';
 import { api } from '@/lib/api';
 import { canControlLiveBroadcastMedia, canEndLiveBroadcast } from '@/lib/liveSessionPermissions';
 import { Button } from '../ui/Button';
@@ -64,7 +64,10 @@ export function SessionRoom({
   const [isStartingShare, setIsStartingShare] = useState(false);
   const [captureSurface, setCaptureSurface] = useState<string | null>(null);
   const hydrated = useHydrated();
-  const screenShareSupported = hydrated && supportsScreenShare(navigator.mediaDevices);
+  const screenShareCapability: ShareCapability = hydrated && typeof navigator !== 'undefined'
+    ? getScreenShareCapability(navigator)
+    : 'unsupported';
+  const screenShareSupported = screenShareCapability === 'supported';
   const [hasSharedAudio, setHasSharedAudio] = useState(false);
   const capturePendingRef = useRef(false);
 
@@ -612,7 +615,7 @@ export function SessionRoom({
       <div className="flex-1 flex flex-col xl:flex-row min-h-0 relative">
         {/* Stream Area */}
         <div className="flex-1 p-3 sm:p-5 flex flex-col gap-4 min-w-0">
-          {canControlBroadcast && !screenShareSupported && <p role="status" className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-200">This browser cannot share a device screen. You can keep the session open and chat here; open the same session in a browser that supports screen capture to present.</p>}
+          {canControlBroadcast && !screenShareSupported && <p role="status" className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-200">{screenShareUnavailableMessage(screenShareCapability)}</p>}
           {broadcastError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">{broadcastError}</p>}
           {isSharingScreen && captureSurface && (
             <p role="status" className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-100">

@@ -61,7 +61,7 @@ function providerLabel(source?: string): string {
   return 'Provider';
 }
 
-export function LiveMarketScreener() {
+export function LiveMarketScreener({ className }: { className?: string } = {}) {
   const { assets, prices, error, isLoading, selectedAssetId, fetchAssets, fetchPrices, setSelectedAsset } = useMarketStore();
   const [filter, setFilter] = useState<MarketFilter>('stock');
   const [priceFilter, setPriceFilter] = useState<DashboardPriceFilter>('all');
@@ -134,7 +134,7 @@ export function LiveMarketScreener() {
   const hasActiveFilters = filter !== 'stock' || priceFilter !== 'all' || changeFilter !== 'all' || marketCapFilter !== 'all' || sectorFilter !== 'all' || sizeMetric !== 'volume' || colorMetric !== 'change_1d' || Boolean(search.trim());
 
   return (
-    <section className="fxzone-screener fxzone-heatmap overflow-hidden rounded-2xl border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] shadow-[0_22px_60px_rgba(2,6,23,0.2)]">
+    <section className={cn('fxzone-screener fxzone-heatmap overflow-hidden rounded-2xl border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] shadow-[0_22px_60px_rgba(2,6,23,0.2)]', className)}>
       <header className="fxzone-heatmap-toolbar border-b border-[var(--fx-border-subtle)] px-3 py-2.5 sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex min-w-0 items-center gap-2 pr-1">
