@@ -77,6 +77,20 @@ test('application navigation exposes labelled touch-safe controls', () => {
   assert.match(themeSwitcher, /min-h-11/);
 });
 
+test('public and legal pages use shared theme surfaces rather than a fixed dark canvas', () => {
+  const appRoot = path.join(__dirname);
+  const legalPages = ['terms', 'privacy', 'risk-disclosure'].map((route) =>
+    fs.readFileSync(path.join(appRoot, route, 'page.tsx'), 'utf8')
+  );
+  const landing = fs.readFileSync(path.join(appRoot, 'page.tsx'), 'utf8');
+
+  assert.match(landing, /text-\[var\(--fx-text-strong\)\]/);
+  for (const page of legalPages) {
+    assert.match(page, /bg-\[var\(--fx-bg-canvas\)\]/);
+    assert.match(page, /text-\[var\(--fx-text-strong\)\]/);
+  }
+});
+
 test('mobile typography prevents browser inflation and caps legacy oversized headings', () => {
   const styles = fs.readFileSync(stylesPath, 'utf8');
 

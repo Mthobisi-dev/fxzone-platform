@@ -2,7 +2,6 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Github, Instagram, Linkedin, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react';
 
@@ -12,15 +11,11 @@ const socialLinks = [
   { href: 'https://www.linkedin.com/in/mthobisi-mzimela-136835354', label: 'LinkedIn', icon: Linkedin },
 ];
 
-function FxZoneLiveMark() {
-  const [isHovered, setIsHovered] = useState(false);
-
+function FxZoneLiveMark({ reduceMotion }: { reduceMotion: boolean | null }) {
   return (
     <motion.div
-      className={`fxzone-live-mark fxzone-live-mark--force-motion${isHovered ? ' is-hovered' : ''}`}
-      onHoverStart={() => setIsHovered(true)}
-      onHoverEnd={() => setIsHovered(false)}
-      animate={{ y: [-12, 12, -12], rotate: [-1.25, 1.25, -1.25] }}
+      className="fxzone-live-mark"
+      animate={reduceMotion ? undefined : { y: [-12, 12, -12], rotate: [-1.25, 1.25, -1.25] }}
       transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
     >
       <div className="fxzone-live-candles" aria-hidden="true">
@@ -38,13 +33,13 @@ export default function LandingPage() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <main className="fxzone-landing relative min-h-[100svh] overflow-x-hidden bg-[var(--color-background)] text-slate-100">
+    <main className="fxzone-landing relative min-h-[100svh] overflow-x-hidden bg-[var(--fx-bg-canvas)] text-[var(--fx-text-strong)]">
       <div className="fxzone-landing-backdrop pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"
-        className="fxzone-landing-watermark absolute left-1/2 top-24 -z-0 -translate-x-1/2 sm:top-28"
+        className="fxzone-landing-watermark pointer-events-none absolute left-1/2 top-24 -z-0 -translate-x-1/2 sm:top-28"
       >
-        <FxZoneLiveMark />
+        <FxZoneLiveMark reduceMotion={reduceMotion} />
       </div>
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 pb-8 pt-3 sm:px-6 sm:pb-12 sm:pt-5 lg:px-10">
@@ -53,9 +48,9 @@ export default function LandingPage() {
             <Image src="/fxzone-logo.jpg" alt="" width={36} height={36} className="h-8 w-8 rounded-lg border border-border object-cover sm:h-9 sm:w-9" />
             <span className="text-lg font-black tracking-tight text-white min-[360px]:text-xl sm:text-3xl">Fx<span className="text-sky-400">Zone</span></span>
           </Link>
-          <div className="hidden shrink-0 items-center gap-3 sm:flex">
-            <Link href="/login" className="rounded-xl border border-white/15 px-5 py-2 text-sm font-semibold text-slate-100 transition hover:border-sky-300/60 hover:bg-white/5">Log in</Link>
-            <Link href="/register" className="fxzone-landing-primary-action rounded-xl px-5 py-2 text-sm font-bold">Get started</Link>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <Link href="/login" className="inline-flex min-h-11 items-center rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold text-[var(--fx-text-strong)] transition hover:border-sky-300/60 hover:bg-white/5 sm:px-5 sm:text-sm">Log in</Link>
+            <Link href="/register" className="fxzone-landing-primary-action hidden min-h-11 items-center rounded-xl px-5 py-2 text-sm font-bold min-[390px]:inline-flex">Get started</Link>
           </div>
         </header>
 

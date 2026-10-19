@@ -6,7 +6,7 @@ import { ArrowLeft, Lock } from 'lucide-react';
 
 export default function PrivacyPage() {
   return (
-    <div className="mx-auto min-h-screen max-w-4xl bg-zinc-950 p-4 font-sans text-zinc-100 sm:p-6 md:p-12">
+    <div className="mx-auto min-h-screen max-w-4xl bg-[var(--fx-bg-canvas)] p-4 font-sans text-[var(--fx-text-strong)] sm:p-6 md:p-12">
       <Link href="/" className="inline-flex items-center gap-2 text-xs font-semibold text-purple-400 hover:text-purple-300 mb-8 transition-colors">
         <ArrowLeft size={14} /> Back to FxZone
       </Link>
