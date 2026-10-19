@@ -31,14 +31,14 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={cn(
-          'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]',
+          'inline-flex min-h-11 items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--fx-bg-canvas)] disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
           // Variants
           {
-            'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]': variant === 'primary',
-            'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700': variant === 'secondary',
-            'bg-transparent hover:bg-white/5 text-zinc-400 hover:text-white': variant === 'ghost',
+            'bg-[var(--fx-accent)] text-white shadow-[0_0_15px_color-mix(in_srgb,var(--fx-accent)_30%,transparent)] hover:brightness-110': variant === 'primary',
+            'border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-elevated)] text-[var(--fx-text-strong)] hover:brightness-110': variant === 'secondary',
+            'bg-transparent text-[var(--fx-text-muted)] hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)]': variant === 'ghost',
             'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.3)]': variant === 'danger',
-            'bg-transparent border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white': variant === 'outline',
+            'border border-[var(--fx-border-subtle)] bg-transparent text-[var(--fx-text-strong)] hover:bg-[var(--fx-bg-elevated)]': variant === 'outline',
             'bg-purple-600 hover:bg-purple-500 text-white neon-glow-purple shadow-[0_0_15px_rgba(147,51,234,0.4)]': variant === 'neon',
           },
           // Sizes

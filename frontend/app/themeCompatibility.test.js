@@ -56,6 +56,27 @@ test('root layout self-hosts the display, UI, and data fonts with next/font', ()
   assert.match(layout, /variable:\s*'--font-data'/);
 });
 
+test('shared controls consume semantic theme tokens instead of structural zinc surfaces', () => {
+  const componentDirectory = path.join(__dirname, '..', 'components');
+
+  for (const component of ['ui/Button.tsx', 'ui/Card.tsx', 'ui/Input.tsx', 'ui/Badge.tsx']) {
+    const source = fs.readFileSync(path.join(componentDirectory, component), 'utf8');
+    assert.match(source, /var\(--fx-(?:bg|text|border|accent)/, `${component} should use semantic tokens`);
+  }
+});
+
+test('application navigation exposes labelled touch-safe controls', () => {
+  const componentDirectory = path.join(__dirname, '..', 'components', 'layout');
+  const sidebar = fs.readFileSync(path.join(componentDirectory, 'Sidebar.tsx'), 'utf8');
+  const navbar = fs.readFileSync(path.join(componentDirectory, 'Navbar.tsx'), 'utf8');
+  const themeSwitcher = fs.readFileSync(path.join(componentDirectory, 'ThemeSwitcher.tsx'), 'utf8');
+
+  assert.match(sidebar, /min-h-11/);
+  assert.match(sidebar, /aria-label=\{item\.label\}/);
+  assert.match(navbar, /aria-label="Toggle AI analyst"/);
+  assert.match(themeSwitcher, /min-h-11/);
+});
+
 test('mobile typography prevents browser inflation and caps legacy oversized headings', () => {
   const styles = fs.readFileSync(stylesPath, 'utf8');
 
