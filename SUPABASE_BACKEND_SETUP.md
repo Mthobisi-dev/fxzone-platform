@@ -52,6 +52,7 @@ In the Supabase SQL editor, run the tracked files in numerical order:
 19. `supabase/migrations/20261007213918_session_membership_realtime_access.sql`
 20. `supabase/migrations/20261011191252_repair_live_session_realtime_authorization.sql`
 21. `supabase/migrations/20261011205854_restore_live_session_approval_schema.sql`
+22. `supabase/migrations/20261020090000_add_private_chat_media_bucket.sql`
 
 Migration 020 is mandatory privacy hardening. It applies explicit public
 profile-column grants and prevents browser clients from selecting email or
@@ -90,6 +91,15 @@ the authenticated Next.js API. Larger attachments use a short-lived,
 server-issued Supabase Storage upload token so a 90-second video does not
 pass through Vercel's request-size limit. The bucket limits video uploads to
 100 MB and has no general browser INSERT policy; do not add one.
+
+The `20261020090000_add_private_chat_media_bucket.sql` migration creates the
+private `chat-media` bucket for conversation attachments. The chat upload and
+signed-URL routes verify conversation membership before issuing a token or
+resolving a URL. This migration is present in the repository but has not been
+applied to production by this repair branch. Existing messages that store
+legacy public `post-media` URLs require an explicitly approved, audited storage
+transition before their URLs can be replaced; the application does not delete
+or rewrite those records automatically.
 
 For private Realtime authorization, disable **Allow public access** in
 **Database → Replication → Realtime** after migration 019 is applied. Clients

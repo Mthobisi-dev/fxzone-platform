@@ -37,6 +37,7 @@ export interface ChatMessage {
   content: string;
   messageType?: 'text' | 'image' | 'video' | 'audio' | string;
   createdAt: string;
+  status?: 'pending' | 'sent' | 'failed';
   sender?: {
     username: string;
     displayName: string;
@@ -45,6 +46,7 @@ export interface ChatMessage {
 }
 
 interface ChatWindowProps {
+  conversationId: string;
   messages: ChatMessage[];
   currentUserId: string;
   conversationName: string;
@@ -54,6 +56,7 @@ interface ChatWindowProps {
   conversationData?: any;
   onSendMessage: (text: string, messageType?: 'text' | 'image' | 'video' | 'audio') => Promise<void>;
   onDeleteMessage?: (messageId: string) => Promise<void>;
+  onRetryMessage?: (message: ChatMessage) => Promise<void>;
   onStartLiveCall?: () => void;
   onTyping?: () => void;
   typingUsers?: string[];
@@ -61,6 +64,7 @@ interface ChatWindowProps {
 }
 
 export function ChatWindow({
+  conversationId,
   messages,
   currentUserId,
   conversationName,
@@ -70,6 +74,7 @@ export function ChatWindow({
   conversationData = {},
   onSendMessage,
   onDeleteMessage,
+  onRetryMessage,
   onStartLiveCall,
   onTyping,
   typingUsers = [],
@@ -465,6 +470,12 @@ export function ChatWindow({
                               minute: '2-digit',
                             })}
                           </span>
+                          {isSelf && msg.status === 'failed' && onRetryMessage && (
+                            <button type="button" onClick={() => void onRetryMessage(msg)} className="text-red-400 hover:text-red-300 font-semibold">
+                              Retry
+                            </button>
+                          )}
+                          {isSelf && msg.status === 'pending' && <span className="text-blue-400">Sending…</span>}
                           {isSelf && onDeleteMessage && !String(msg.id).startsWith('temp-') && (
                             <button
                               type="button"
@@ -488,7 +499,7 @@ export function ChatWindow({
           </div>
 
           {/* Message Input */}
-          <MessageInput onSendMessage={onSendMessage} onTyping={onTyping} />
+          <MessageInput conversationId={conversationId} onSendMessage={onSendMessage} onTyping={onTyping} />
         </div>
       </div>
 

@@ -13,3 +13,11 @@ test('message deletion is limited to the sender and the requested conversation',
   assert.equal(canDeleteMessage(message, 'u-2', 'c-1'), false);
   assert.equal(canDeleteMessage(message, 'u-1', 'c-2'), false);
 });
+
+test('chat content follows the database-safe 4,000 character boundary', async () => {
+  const { CHAT_MAX_MESSAGE_LENGTH, isValidChatMessageContent } = await loadPolicy();
+  assert.equal(CHAT_MAX_MESSAGE_LENGTH, 4000);
+  assert.equal(isValidChatMessageContent('a'.repeat(4000)), true);
+  assert.equal(isValidChatMessageContent('   '), false);
+  assert.equal(isValidChatMessageContent(''), false);
+});

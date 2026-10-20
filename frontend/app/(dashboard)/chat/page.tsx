@@ -307,6 +307,7 @@ export default function ChatPage() {
       senderId: String(user.id),
       content: text,
       messageType,
+      status: 'pending' as const,
       createdAt: new Date().toISOString(),
       sender: {
         username: user.username,
@@ -337,13 +338,21 @@ export default function ChatPage() {
             id: res.id,
             createdAt: res.created_at || res.createdAt || m.createdAt,
             messageType: res.message_type || res.messageType || messageType,
+            status: 'sent' as const,
           } : m))
         );
       }
     } catch (err) {
       console.error('Failed to send message:', err);
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      // Keep failed text/media visible so the user can retry instead of losing
+      // a draft when a mobile network or server request fails.
+      setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, status: 'failed' as const } : m));
     }
+  };
+
+  const handleRetryMessage = async (message: { id: string; content: string; messageType?: 'text' | 'image' | 'video' | 'audio' | string }) => {
+    setMessages((prev) => prev.filter((item) => item.id !== message.id));
+    await handleSendMessage(message.content, (message.messageType as 'text' | 'image' | 'video' | 'audio') || 'text');
   };
 
   const handleDeleteMessage = async (messageId: string) => {
@@ -515,6 +524,7 @@ export default function ChatPage() {
             <div className="flex h-full min-h-0 min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden">
               <ChatWindow
                 key={activeConvId}
+                conversationId={activeConvId}
                 messages={visibleMessages}
                 currentUserId={user?.id || ''}
                 conversationName={activeDetails.name}
@@ -524,6 +534,7 @@ export default function ChatPage() {
                 conversationData={activeConv}
                 onSendMessage={handleSendMessage}
                 onDeleteMessage={handleDeleteMessage}
+                onRetryMessage={handleRetryMessage}
                 onStartLiveCall={handleStartLiveCall}
                 onBack={() => selectConversation(null)}
               />

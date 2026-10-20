@@ -4,15 +4,18 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Image as ImageIcon, Smile, Loader2, Mic, MicOff, Radio, Users } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+import { normalizePostMediaFile } from '@/lib/postUpload';
 import { Modal } from '../ui/Modal';
 
 interface MessageInputProps {
+  conversationId: string;
   onSendMessage: (text: string, messageType?: 'text' | 'image' | 'video' | 'audio') => Promise<void>;
   onTyping?: () => void;
   disabled?: boolean;
 }
 
-export function MessageInput({ onSendMessage, onTyping, disabled = false }: MessageInputProps) {
+export function MessageInput({ conversationId, onSendMessage, onTyping, disabled = false }: MessageInputProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -25,6 +28,22 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [uploadingVoice, setUploadingVoice] = useState(false);
+
+  const uploadChatMedia = async (input: File): Promise<{ url: string; type: string }> => {
+    const file = await normalizePostMediaFile(input);
+    const signed = await api.post(`/api/chat/conversations/${encodeURIComponent(conversationId)}/media-upload-url`, {
+      type: file.type,
+      size: file.size,
+    });
+    const { error: uploadError } = await supabase.storage
+      .from('chat-media')
+      .uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type, upsert: false });
+    if (uploadError) throw uploadError;
+    // Store a stable server-resolved marker. The messages API converts it to a
+    // short-lived signed URL for each authorized conversation read, so refreshes
+    // do not expose a public object or depend on an expired client URL.
+    return { url: `chat-media://${signed.path}`, type: file.type };
+  };
 
   // Live session sharing states
   const [sessionShareOpen, setSessionShareOpen] = useState(false);
@@ -60,12 +79,8 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
 
     setUploadingImage(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await api.post('/api/social/posts/upload', formData, { timeoutMs: 60_000 });
-      if (res?.url) {
-        await onSendMessage(res.url, file.type.startsWith('video/') ? 'video' : 'image');
-      }
+      const uploaded = await uploadChatMedia(file);
+      await onSendMessage(uploaded.url, uploaded.type.startsWith('video/') ? 'video' : 'image');
     } catch (err) {
       console.error('Failed to upload image in chat:', err);
     } finally {
@@ -91,12 +106,8 @@ export function MessageInput({ onSendMessage, onTyping, disabled = false }: Mess
         
         setUploadingVoice(true);
         try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await api.post('/api/social/posts/upload', formData, { timeoutMs: 60_000 });
-          if (res?.url) {
-            await onSendMessage(res.url, 'audio');
-          }
+          const uploaded = await uploadChatMedia(file);
+          await onSendMessage(uploaded.url, 'audio');
         } catch (err) {
           console.error('Failed to upload voice note:', err);
         } finally {

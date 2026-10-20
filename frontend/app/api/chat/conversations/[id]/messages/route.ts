@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
 import { apiError } from '@/lib/api-error';
+import { CHAT_MAX_MESSAGE_LENGTH, isValidChatMessageContent } from '@/lib/chatMessagePolicy';
 
 const MESSAGE_TYPES = new Set(['text', 'image', 'video', 'audio']);
-const MAX_MESSAGE_LENGTH = 10_000;
+// Keep the API aligned with the messages.content database constraint.
 const MAX_PAGE_SIZE = 100;
+
+async function resolveChatMediaContent(db: ReturnType<typeof getSupabaseAdmin>, conversationId: string, content: string) {
+  if (!content.startsWith('chat-media://')) return content;
+  const path = content.slice('chat-media://'.length);
+  if (!path.startsWith(`${conversationId}/`)) return '';
+  const { data } = await db.storage.from('chat-media').createSignedUrl(path, 60 * 60);
+  return data?.signedUrl || '';
+}
 
 // GET /api/chat/conversations/[id]/messages
 export async function GET(
@@ -48,7 +57,7 @@ export async function GET(
 
     if (error) throw error;
 
-    const messages = (data || []).reverse().map((m: any) => ({
+    const messages = await Promise.all((data || []).reverse().map(async (m: any) => ({
       id: m.id,
       conversation_id: m.conversation_id,
       sender_id: m.sender_id,
@@ -58,18 +67,21 @@ export async function GET(
         display_name: m.users?.display_name,
         avatar_url: m.users?.avatar_url || `https://api.dicebear.com/8.x/initials/svg?seed=${m.users?.username || 'user'}`,
       },
-      content: m.content,
+      content: await resolveChatMediaContent(db, id, m.content),
       message_type: m.message_type || 'text',
       created_at: m.created_at,
-    }));
+    })));
 
     const newestMessageAt = data?.[0]?.created_at;
     if (newestMessageAt && (!membership.last_read_at || newestMessageAt > membership.last_read_at)) {
-      void db
+      const { error: readReceiptError } = await db
         .from('conversation_members')
         .update({ last_read_at: newestMessageAt })
         .eq('conversation_id', id)
         .eq('user_id', user.id);
+      if (readReceiptError) {
+        console.error('Unable to persist chat read receipt:', readReceiptError.message);
+      }
     }
 
     return NextResponse.json(messages);
@@ -109,11 +121,11 @@ export async function POST(
     const { content, message_type } = body as Record<string, unknown>;
     const normalizedMessageType = message_type || 'text';
 
-    if (typeof content !== 'string' || !content.trim()) {
+    if (!isValidChatMessageContent(content)) {
       return apiError('UNPROCESSABLE_ENTITY', 'Content is required', 422);
     }
-    if (content.trim().length > MAX_MESSAGE_LENGTH) {
-      return apiError('UNPROCESSABLE_ENTITY', `Messages must be at most ${MAX_MESSAGE_LENGTH} characters.`, 422);
+    if (content.trim().length > CHAT_MAX_MESSAGE_LENGTH) {
+      return apiError('UNPROCESSABLE_ENTITY', `Messages must be at most ${CHAT_MAX_MESSAGE_LENGTH} characters.`, 422);
     }
     if (typeof normalizedMessageType !== 'string' || !MESSAGE_TYPES.has(normalizedMessageType)) {
       return apiError('UNPROCESSABLE_ENTITY', 'Unsupported message type', 422);
@@ -165,8 +177,10 @@ export async function POST(
       })
     ));
 
+    const responseContent = await resolveChatMediaContent(db, id, data.content);
     return NextResponse.json({
       ...data,
+      content: responseContent,
       sender: {
         id: sender?.id || user.id,
         username: sender?.username || user.email?.split('@')[0],
