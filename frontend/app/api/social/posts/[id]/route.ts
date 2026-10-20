@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
+import { canViewPost } from '@/lib/server/postAuthorization';
 
 // GET /api/social/posts/[id] — Fetch single post details
 export async function GET(
@@ -11,11 +12,18 @@ export async function GET(
     const postId = params.id;
     const db = getSupabaseAdmin(request);
 
+    const { user: viewer } = await getUserFromRequest(request);
+    const visibility = await canViewPost(db, postId, viewer?.id || null);
+    if (!visibility.allowed) {
+      // Do not disclose whether a restricted story exists.
+      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
+
     const { data: post, error } = await db
       .from('posts')
       .select(`
         id, content, image_url, likes_count, comments_count, reposts_count,
-        is_story, is_pinned, created_at, user_id,
+        is_story, is_pinned, expires_at, created_at, user_id,
         users:user_id (id, username, display_name, avatar_url, role)
       `)
       .eq('id', postId)
@@ -26,8 +34,9 @@ export async function GET(
     }
 
     return NextResponse.json(post);
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch post', detail: error?.message }, { status: 500 });
+  } catch (error) {
+    console.error('Fetch post error:', error);
+    return NextResponse.json({ error: 'Failed to fetch post' }, { status: 500 });
   }
 }
 
@@ -54,7 +63,7 @@ export async function DELETE(
     // Check if postId is a valid UUID format
     const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(postId);
     if (!isUuid) {
-      return NextResponse.json({ message: 'Post removed from UI', id: postId });
+      return NextResponse.json({ error: 'Invalid post id' }, { status: 400 });
     }
 
     // 1. Fetch target post from Supabase
@@ -107,20 +116,17 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('Database post delete error:', deleteError.message);
-      // Fallback: If hard delete is blocked by RLS/constraints, soft delete post content
-      try {
-        await db.from('posts').update({ content: '[deleted]', image_url: null }).eq('id', postId);
-      } catch (_) {}
+      return NextResponse.json({ error: 'Unable to delete post' }, { status: 500 });
     }
 
     return NextResponse.json({
       message: 'Post deleted successfully',
       id: postId,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Delete post exception:', error);
     return NextResponse.json(
-      { error: 'Failed to delete post', detail: error?.message },
+      { error: 'Failed to delete post' },
       { status: 500 }
     );
   }

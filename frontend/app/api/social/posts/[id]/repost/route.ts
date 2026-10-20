@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
 import { getPostInteractionCounts } from '@/lib/server/socialCounters';
+import { canViewPost } from '@/lib/server/postAuthorization';
 
 export async function POST(
   request: NextRequest,
@@ -15,6 +16,8 @@ export async function POST(
 
     const { id: postId } = await params;
     const client = getSupabaseAdmin(request);
+    const visibility = await canViewPost(client, postId, user.id);
+    if (!visibility.allowed) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
 
     if (!await ensureUserProfile(client, user)) {
       return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
@@ -70,10 +73,10 @@ export async function POST(
     }
 
     return NextResponse.json({ is_reposted: !existing, reposts_count: reposts_count });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Post repost error:', error);
     return NextResponse.json(
-      { error: error.message || 'Repost action failed' },
+      { error: 'Repost action failed' },
       { status: 500 }
     );
   }

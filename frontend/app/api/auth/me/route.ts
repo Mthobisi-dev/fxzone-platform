@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 
+// Keep the authenticated profile response explicit. In particular, never
+// return legacy password material or internal moderation/security columns.
+const PROFILE_COLUMNS = 'id, email, username, display_name, avatar_url, bio, role, preferred_broker, followers_count, following_count, created_at, updated_at, is_active';
+
 // GET /api/auth/me — returns user profile from public.users via the session token
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +19,7 @@ export async function GET(request: NextRequest) {
     // Fetch profile from public.users
     const { data: profile, error: profileError } = await db
       .from('users')
-      .select('*')
+      .select(PROFILE_COLUMNS)
       .eq('id', user.id)
       .maybeSingle();
 
@@ -31,7 +35,7 @@ export async function GET(request: NextRequest) {
 
       const { data: provisionedProfile, error: provisionError } = await db
         .from('users')
-        .select('*')
+        .select(PROFILE_COLUMNS)
         .eq('id', user.id)
         .single();
 
@@ -111,7 +115,7 @@ export async function PUT(request: NextRequest) {
         .from('users')
         .update(updatePayload)
         .eq('id', user.id)
-        .select()
+      .select(PROFILE_COLUMNS)
         .maybeSingle();
       updated = res.data;
       updateError = res.error;

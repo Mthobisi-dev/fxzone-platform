@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
 import { getPostInteractionCounts } from '@/lib/server/socialCounters';
-import { storyAudienceIds } from '@/lib/storyAudience';
+import { canViewPost } from '@/lib/server/postAuthorization';
 
 // POST /api/social/posts/[id]/react — toggle like/reaction
 export async function POST(
@@ -29,25 +29,11 @@ export async function POST(
       return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
     }
 
-    const { data: post, error: postError } = await db
-      .from('posts')
-      .select('user_id, is_story')
-      .eq('id', id)
-      .maybeSingle();
-    if (postError) throw postError;
-    if (!post) return NextResponse.json({ detail: 'Post not found' }, { status: 404 });
-
-    if (post.is_story && post.user_id !== user.id) {
-      const [outgoing, incoming] = await Promise.all([
-        db.from('follows').select('following_id').eq('follower_id', user.id),
-        db.from('follows').select('follower_id').eq('following_id', user.id),
-      ]);
-      if (outgoing.error) throw outgoing.error;
-      if (incoming.error) throw incoming.error;
-      if (!storyAudienceIds(user.id, outgoing.data || [], incoming.data || []).includes(post.user_id)) {
-        return NextResponse.json({ detail: 'This story is only available to mutual followers.' }, { status: 403 });
-      }
+    const visibility = await canViewPost(db, id, user.id);
+    if (!visibility.allowed) {
+      return NextResponse.json({ detail: 'Post not found' }, { status: 404 });
     }
+    const post = visibility.post;
 
     // Check if reaction exists
     const { data: existing, error: existingError } = await db
@@ -91,8 +77,8 @@ export async function POST(
     }
 
     return NextResponse.json({ active, likes_count, reaction_type: reactionType });
-  } catch (error: any) {
+  } catch (error) {
     console.error('React error:', error);
-    return NextResponse.json({ error: 'Failed to react', detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to react' }, { status: 500 });
   }
 }

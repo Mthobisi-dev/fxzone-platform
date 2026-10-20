@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
 import { createNotification } from '@/lib/server/notifications';
 import { getPostInteractionCounts } from '@/lib/server/socialCounters';
+import { canViewPost } from '@/lib/server/postAuthorization';
 
 
 // GET /api/social/posts/[id]/comments
@@ -12,6 +13,11 @@ export async function GET(
   try {
     const { id } = await context.params;
     const db = getSupabaseAdmin(request);
+    const { user: viewer } = await getUserFromRequest(request);
+    const visibility = await canViewPost(db, id, viewer?.id || null);
+    if (!visibility.allowed) {
+      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
 
     const { data, error } = await db
       .from('comments')
@@ -42,8 +48,9 @@ export async function GET(
     }));
 
     return NextResponse.json(comments);
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to fetch comments', detail: error?.message }, { status: 500 });
+  } catch (error) {
+    console.error('Fetch comments error:', error);
+    return NextResponse.json({ error: 'Failed to fetch comments' }, { status: 500 });
   }
 }
 
@@ -57,6 +64,11 @@ export async function POST(
     if (authErr || !user) return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
 
     const { id } = await context.params;
+    const db = getSupabaseAdmin(request);
+    const visibility = await canViewPost(db, id, user.id);
+    if (!visibility.allowed) {
+      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
     const body = await request.json();
     const { content, parent_id } = body;
 
@@ -64,7 +76,6 @@ export async function POST(
       return NextResponse.json({ detail: 'Content is required' }, { status: 400 });
     }
 
-    const db = getSupabaseAdmin(request);
     if (!await ensureUserProfile(db, user)) {
       return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
     }
@@ -110,7 +121,8 @@ export async function POST(
       },
       comments_count,
     }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Failed to post comment', detail: error?.message }, { status: 500 });
+  } catch (error) {
+    console.error('Post comment error:', error);
+    return NextResponse.json({ error: 'Failed to post comment' }, { status: 500 });
   }
 }
