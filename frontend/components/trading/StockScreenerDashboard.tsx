@@ -346,10 +346,10 @@ export function StockScreenerDashboard() {
       if (res && (res.summary || res.analysis)) {
         setAiTextSummary(res.summary || res.analysis);
       } else {
-        setAiTextSummary(`Gemini Market Analysis for ${symbol}: Technical indicators show strong volume consolidation near key moving averages with high bullish probability.`);
+        setAiTextSummary(`Verified market analysis for ${symbol} is unavailable because the provider did not return enough evidence.`);
       }
     } catch (err) {
-      setAiTextSummary(`Gemini Market Analysis for ${symbol}: Bullish momentum above key support level.`);
+      setAiTextSummary(`Verified market analysis for ${symbol} is temporarily unavailable. No synthetic values are shown.`);
     } finally {
       setLoadingAiText(false);
     }

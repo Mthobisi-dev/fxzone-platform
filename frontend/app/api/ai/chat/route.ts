@@ -1,137 +1,81 @@
 import { NextResponse } from 'next/server';
-import { fetchLivePrices } from '@/lib/server/marketService';
+import { fetchHistoricalCandles, fetchLivePrices, SUPPORTED_ASSETS } from '@/lib/server/marketService';
+import { calculateTechnicalAnalysis } from '@/lib/server/technicalAnalysis';
+import type { TechnicalAnalysis } from '@/lib/server/technicalAnalysis';
+import { buildMarketInsight } from '@/lib/server/marketInsights';
 
 function detectSymbol(text: string): string | null {
   const lower = text.toLowerCase();
-  const map: Record<string, string[]> = {
-    BTCUSD: ['btc', 'bitcoin', 'crypto'],
-    ETHUSD: ['eth', 'ethereum', 'ether'],
-    SOLUSD: ['sol', 'solana'],
-    XRPUSD: ['xrp', 'ripple'],
-    NVDA: ['nvda', 'nvidia', 'gpu'],
-    AAPL: ['aapl', 'apple'],
-    MSFT: ['msft', 'microsoft'],
-    GOOGL: ['googl', 'google', 'alphabet'],
-    AMZN: ['amzn', 'amazon'],
-    TSLA: ['tsla', 'tesla'],
-    EURUSD: ['eurusd', 'eur/usd', 'euro'],
-    GBPUSD: ['gbpusd', 'gbp/usd', 'pound', 'cable'],
-    USDJPY: ['usdjpy', 'usd/jpy', 'yen'],
-    XAUUSD: ['xauusd', 'gold', 'bullion'],
-    XAGUSD: ['xagusd', 'silver'],
+  const aliases: Record<string, string[]> = {
+    BTCUSD: ['btc', 'bitcoin'], ETHUSD: ['eth', 'ethereum'], SOLUSD: ['sol', 'solana'],
+    XRPUSD: ['xrp', 'ripple'], NVDA: ['nvda', 'nvidia'], AAPL: ['aapl', 'apple'],
+    MSFT: ['msft', 'microsoft'], GOOGL: ['googl', 'google', 'alphabet'], AMZN: ['amzn', 'amazon'],
+    TSLA: ['tsla', 'tesla'], EURUSD: ['eurusd', 'eur/usd', 'euro'], GBPUSD: ['gbpusd', 'gbp/usd', 'pound'],
+    USDJPY: ['usdjpy', 'usd/jpy', 'yen'], XAUUSD: ['xauusd', 'gold', 'bullion'], XAGUSD: ['xagusd', 'silver'],
   };
-
-  for (const [sym, keywords] of Object.entries(map)) {
-    if (keywords.some((k) => lower.includes(k))) {
-      return sym;
-    }
-  }
-  return null;
+  return Object.entries(aliases).find(([, values]) => values.some((value) => lower.includes(value)))?.[0] || null;
 }
 
-function generateInstitutionalAnalysis(symbol: string, priceData: any) {
-  const price = priceData.price;
-  const changePct = priceData.change_pct;
-  const isUp = changePct >= 0;
+function formatQuote(symbol: string, quote: { price: number; change_pct: number; data_source: string; freshness: string }) {
+  const sign = quote.change_pct > 0 ? '+' : '';
+  return `**${symbol}** ${quote.price.toLocaleString(undefined, { maximumFractionDigits: 6 })} (${sign}${quote.change_pct.toFixed(2)}%) · ${quote.data_source} · ${quote.freshness}`;
+}
 
-  const rsi = Math.min(Math.max(50 + (changePct * 2.8), 26.0), 84.0).toFixed(1);
-  const ema20 = (price * (isUp ? 0.983 : 1.017)).toFixed(2);
-  const ema50 = (price * (isUp ? 0.958 : 1.042)).toFixed(2);
-  const ema200 = (price * (isUp ? 0.892 : 1.108)).toFixed(2);
+async function explainSymbol(symbol: string, prices: Awaited<ReturnType<typeof fetchLivePrices>>) {
+  const asset = SUPPORTED_ASSETS.find((item) => item.symbol === symbol);
+  const quote = prices[symbol] || null;
+  let technical: TechnicalAnalysis = { status: 'insufficient_data' };
+  if (quote) {
+    try {
+      const candles = await fetchHistoricalCandles(symbol, '1d');
+      technical = calculateTechnicalAnalysis(candles);
+    } catch (error) {
+      console.warn(`Historical analysis unavailable for ${symbol}:`, error);
+    }
+  }
 
-  const atr = price * 0.021;
-  const sl = (isUp ? price - (atr * 1.5) : price + (atr * 1.5)).toFixed(2);
-  const tp1 = (isUp ? price + (atr * 2.4) : price - (atr * 2.4)).toFixed(2);
-  const tp2 = (isUp ? price + (atr * 4.6) : price - (atr * 4.6)).toFixed(2);
+  const insight = buildMarketInsight({
+    symbol,
+    name: asset?.name || symbol,
+    quote: quote ? {
+      price: quote.price,
+      change_pct: quote.change_pct,
+      timestamp: quote.timestamp,
+      data_source: quote.data_source,
+      freshness: quote.freshness,
+    } : null,
+    technical,
+  });
 
-  const fmt = (v: number) => symbol.length === 6 && !symbol.startsWith('X') ? v.toFixed(5) : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-
-  return `### 📊 FxZone Institutional Market Intelligence: **${symbol}**
-
-#### 🎯 Executive Stance & Model Consensus
-- **Live Quote**: **$${fmt(price)}** (${changePct > 0 ? '+' : ''}${changePct}%)
-- **Model Consensus**: **${isUp ? 'STRONG BULLISH EXPANSION' : 'BEARISH CONSOLIDATION REVERSAL'}** (89.4% Confidence)
-- **24h Volume**: **${priceData.volume.toLocaleString()} units**
-- **Session Range**: **$${fmt(priceData.low)}** — **$${fmt(priceData.high)}**
-
----
-
-#### 📐 Quantitative Technical Matrix
-- **14-Period RSI**: **${rsi}** — ${Number(rsi) > 70 ? 'Overbought Momentum Squeeze' : Number(rsi) < 30 ? 'Oversold Accumulation Divergence' : 'Structural Bullish Momentum'}
-- **EMA Trend Ribbons**:
-  - **20-EMA (Short Term)**: $${ema20}
-  - **50-EMA (Medium Term)**: $${ema50}
-  - **200-EMA (Structural Baseline)**: $${ema200}
-- **MACD (12,26,9)**: ${isUp ? 'Positive Histogram Expansion (+1.62), MACD > Signal' : 'Negative Histogram Pressure (-1.24), MACD < Signal'}
-
----
-
-#### 🏛️ Smart Money Concepts (SMC) & Institutional Order Flow
-1. **Order Block Demand Zone**: **$${fmt(price * 0.978)} — $${fmt(price * 0.986)}** (High institutional limit buyer density).
-2. **Fair Value Gap (FVG)**: Price imbalance resting between **$${fmt(price * 0.991)}** and **$${fmt(price * 0.996)}**.
-3. **Liquidity Sweep Target**: Stop-loss liquidity resting above **$${fmt(priceData.high * 1.008)}**.
-
----
-
-#### ⚡ Tactical Execution Setup & Risk Parameters
-- **Suggested Entry Zone**: **$${fmt(price)}**
-- **Invalidation / Stop Loss (SL)**: **$${sl}**
-- **Take Profit 1 (TP1)**: **$${tp1}** (Initial Liquidity Run)
-- **Take Profit 2 (TP2)**: **$${tp2}** (Macro Expansion Target)
-- **Risk-to-Reward Ratio**: **1:3.2 R:R**
-
-> ⚠️ *Risk Disclaimer: FxZone AI provides quantitative data models for educational research only. Maintain strict risk management (max 1-2% account equity per trade).*`;
+  const lines = [`### Verified market explanation: ${insight.name}`, '', insight.summary];
+  if (quote) lines.push('', `Quote: ${formatQuote(symbol, quote)}`);
+  if (insight.highlights.length) lines.push('', 'Calculated indicators:', ...insight.highlights.map((item) => `- ${item}`));
+  if (insight.status !== 'available') lines.push('', 'Historical candles are insufficient, so indicator values are withheld.');
+  lines.push('', 'This is research context from provider data and deterministic calculations; it is not investment advice.');
+  return lines.join('\n');
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const userPrompt = body.message || body.prompt || 'market overview';
-    const pricesMap = await fetchLivePrices();
+    const body: unknown = await request.json();
+    const prompt = body && typeof body === 'object' && !Array.isArray(body)
+      ? String((body as Record<string, unknown>).message || (body as Record<string, unknown>).prompt || 'market overview')
+      : 'market overview';
+    const prices = await fetchLivePrices();
+    const detected = detectSymbol(prompt);
 
-    const detected = detectSymbol(userPrompt);
-
-    if (detected && pricesMap[detected]) {
-      const responseText = generateInstitutionalAnalysis(detected, pricesMap[detected]);
-      return NextResponse.json({
-        reply: responseText,
-        message: responseText,
-        timestamp: new Date().toISOString(),
-      });
+    if (detected) {
+      const response = await explainSymbol(detected, prices);
+      return NextResponse.json({ reply: response, message: response, timestamp: new Date().toISOString() });
     }
 
-    // Default institutional overview response
-    const nvda = pricesMap['NVDA'] || { price: 138.80, change_pct: 3.04 };
-    const btc = pricesMap['BTCUSD'] || { price: 96450.00, change_pct: 1.92 };
-    const eurusd = pricesMap['EURUSD'] || { price: 1.0485, change_pct: -0.17 };
-    const xau = pricesMap['XAUUSD'] || { price: 2892.40, change_pct: 0.65 };
-
-    const responseText = `### 🌐 FxZone Global Quantitative Market Intelligence
-
-#### 📊 Live Institutional Asset Snapshot
-1. **NVIDIA (NVDA)**: **$${nvda.price}** (${nvda.change_pct > 0 ? '+' : ''}${nvda.change_pct}%) — *Order flow shows strong institutional accumulation above 20 EMA.*
-2. **Bitcoin (BTCUSD)**: **$${btc.price.toLocaleString()}** (${btc.change_pct > 0 ? '+' : ''}${btc.change_pct}%) — *Spot ETF net inflows sustain bullish cycle regime.*
-3. **Gold (XAUUSD)**: **$${xau.price}** (${xau.change_pct > 0 ? '+' : ''}${xau.change_pct}%) — *Central bank reserve diversification drives ATH breakout.*
-4. **EUR/USD**: **${eurusd.price}** (${eurusd.change_pct > 0 ? '+' : ''}${eurusd.change_pct}%) — *Central bank monetary policy divergence keeps pair range-bound.*
-
----
-
-#### 💡 How to Query Quantitative AI Intelligence:
-- Ask: *"Analyze NVDA"* or *"Bitcoin analysis"* for full **SMC Order Block & 1:3.2 R:R trade setups**.
-- Ask: *"What is the price of Gold?"* for live real-time tick analysis.
-- Ask: *"Forex overview"* or *"Crypto analysis"* for multi-asset sector metrics.
-
-> ⚠️ *Risk Disclaimer: FxZone AI quant models update in real-time. Practice disciplined position sizing.*`;
-
-    return NextResponse.json({
-      reply: responseText,
-      message: responseText,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err: any) {
-    return NextResponse.json({
-      reply: 'FxZone AI Quantitative Engine is processing live market feeds. Please resubmit your query.',
-      timestamp: new Date().toISOString(),
-    });
+    const available = Object.values(prices).slice(0, 8);
+    const response = available.length
+      ? ['### Verified market overview', '', 'Current provider quotes:', ...available.map((quote) => `- ${formatQuote(quote.symbol, quote)}`), '', 'Ask for a specific symbol to receive calculated historical indicators.'].join('\n')
+      : 'Verified provider quotes are currently unavailable. No synthetic prices are shown.';
+    return NextResponse.json({ reply: response, message: response, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('AI market explanation error:', error);
+    return NextResponse.json({ error: { code: 'SERVICE_UNAVAILABLE', message: 'Verified market data is temporarily unavailable.' } }, { status: 503 });
   }
 }

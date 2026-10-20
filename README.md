@@ -93,6 +93,10 @@ npm run test
 npm run build
 ```
 
+The same gates run in `.github/workflows/ci.yml` for pushes and pull requests
+against `main`. The workflow uses Node 22 and does not require production
+Supabase, AI, or TURN secrets.
+
 The repository is being migrated to automated test coverage. Any future `npm run test` script must be backed by committed tests; do not treat an empty test command as a quality gate.
 
 ## Vercel configuration
