@@ -56,3 +56,28 @@ test('news AI trading instructions are rejected in favor of provider context', a
   assert.doesNotMatch(result.explanation, /should buy/i);
 });
 
+test('news AI returns structured, evidence-scoped market impact guidance', async () => {
+  const { buildNewsExplanation } = await import('./newsExplanation.ts');
+  const result = await buildNewsExplanation({
+    title: 'Provider reports stronger quarterly revenue growth',
+    content: 'The provider reports higher revenue in the latest quarter and says the company expanded its operating priorities.',
+    source: 'Example News',
+    publishedAt: '2026-10-15T10:00:00.000Z',
+    assetTags: ['NVDA'],
+  }, async () => JSON.stringify({
+    explanation: 'The provider reports stronger quarterly revenue and an expansion of operating priorities. Review the full source for definitions and context.',
+    marketImpact: {
+      stance: 'positive',
+      horizon: 'medium_term',
+      affectedAssets: ['NVDA', 'FAKE'],
+      rationale: 'The supplied summary describes stronger revenue, which may affect how readers assess the company.',
+      traderFocus: 'Compare the report with the latest provider quote and volatility before making any decision.',
+      investorFocus: 'Review the full source and fundamentals against your own time horizon.',
+    },
+  }));
+
+  assert.equal(result.source, 'ai_gateway');
+  assert.equal(result.marketImpact.stance, 'positive');
+  assert.deepEqual(result.marketImpact.affectedAssets, ['NVDA']);
+});
+

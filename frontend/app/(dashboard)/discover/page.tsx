@@ -55,6 +55,14 @@ interface NewsExplanationResult {
   isAiGenerated: boolean;
   explanation: string;
   limitation: string;
+  marketImpact?: {
+    stance: 'positive' | 'negative' | 'mixed' | 'unclear';
+    horizon: 'near_term' | 'medium_term' | 'long_term' | 'unclear';
+    affectedAssets: string[];
+    rationale: string;
+    traderFocus: string;
+    investorFocus: string;
+  };
 }
 
 interface NewsExplanationState {
@@ -520,6 +528,30 @@ export default function DiscoverPage() {
                       </p>
                       <p className="mt-1.5 text-[11px] leading-5 text-[var(--color-text)]">{explanation.result.explanation}</p>
                       <p className="mt-2 text-[9px] leading-4 text-[var(--color-text-muted)]">{explanation.result.limitation}</p>
+                      {explanation.result.marketImpact && (
+                        <div className="mt-3 border-t border-[var(--color-border)] pt-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Market impact context</p>
+                            <span className="rounded-full bg-[var(--color-bg)] px-2 py-1 text-[9px] font-semibold capitalize text-[var(--color-text)]">
+                              {explanation.result.marketImpact.stance} · {explanation.result.marketImpact.horizon.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-[10px] leading-4 text-[var(--color-text)]">{explanation.result.marketImpact.rationale}</p>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
+                              <p className="text-[9px] font-semibold uppercase tracking-wide text-cyan-600 dark:text-cyan-300">Trader focus</p>
+                              <p className="mt-1 text-[10px] leading-4 text-[var(--color-text-muted)]">{explanation.result.marketImpact.traderFocus}</p>
+                            </div>
+                            <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
+                              <p className="text-[9px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">Investor focus</p>
+                              <p className="mt-1 text-[10px] leading-4 text-[var(--color-text-muted)]">{explanation.result.marketImpact.investorFocus}</p>
+                            </div>
+                          </div>
+                          <p className="mt-2 text-[9px] leading-4 text-[var(--color-text-muted)]">
+                            Affected instruments: {explanation.result.marketImpact.affectedAssets.length ? explanation.result.marketImpact.affectedAssets.join(' · ') : 'none supplied by the provider'}
+                          </p>
+                        </div>
+                      )}
                       <div className="mt-3 border-t border-[var(--color-border)] pt-3" aria-label="News evidence graph">
                         <p className="text-[9px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Evidence map</p>
                         <div className="mt-2 grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-1.5 text-[10px]">

@@ -21,6 +21,8 @@ test('selected-instrument detail keeps provider provenance and dense values read
   const component = fs.readFileSync(componentPath, 'utf8');
 
   assert.match(component, /Provider history/);
+  assert.match(component, /historyAreaPath/);
+  assert.match(component, /linearGradient/);
   assert.match(component, /fx-data/);
   assert.match(component, /overflow-x-auto/);
   assert.match(component, /sm:grid-cols/);

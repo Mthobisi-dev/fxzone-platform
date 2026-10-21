@@ -41,3 +41,19 @@ export function serializeShareSignal(signal: ShareSignal): string {
   const safe = validateShareSignal(signal);
   return `[FxZone Signal] ${JSON.stringify(safe)}`;
 }
+
+/**
+ * Parses the structured signal payload used by chat messages.
+ * Invalid or legacy text is ignored so a malformed message is rendered as
+ * ordinary text instead of inventing prices or trade levels in the UI.
+ */
+export function parseSerializedShareSignal(content: string): ShareSignal | null {
+  const prefix = '[FxZone Signal] ';
+  if (!content.startsWith(prefix)) return null;
+
+  try {
+    return validateShareSignal(JSON.parse(content.slice(prefix.length)));
+  } catch {
+    return null;
+  }
+}

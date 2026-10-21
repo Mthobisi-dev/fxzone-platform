@@ -29,6 +29,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { TradingViewChatPanel } from '../trading/TradingViewChatPanel';
 import { playExclusive, releaseMedia } from '@/lib/mediaPlayback';
+import { parseSerializedShareSignal } from '@/lib/shareSignal';
 
 export interface ChatMessage {
   id: string;
@@ -293,6 +294,7 @@ export function ChatWindow({
                 const senderIdVal = msg.senderId || (msg as any).sender_id;
                 const isSelf = String(senderIdVal) === String(currentUserId);
                 const legacyVoiceUrl = msg.content.match(/^\[Voice Note\]\s*\(url:\s*(https?:\/\/[^\s)]+)\)$/i)?.[1];
+                const sharedSignal = parseSerializedShareSignal(msg.content);
 
                 return (
                   <div
@@ -327,7 +329,62 @@ export function ChatWindow({
                         )}
                       >
                         {/* 1. Custom Renderer: TradingView Chart Snapshot Card */}
-                        {msg.content.startsWith('[TradingView Chart]') ? (
+                        {sharedSignal ? (
+                          <div
+                            className={cn(
+                              'w-full max-w-sm space-y-2.5 rounded-xl border p-3',
+                              sharedSignal.side === 'BUY'
+                                ? 'border-emerald-500/40 bg-emerald-500/10'
+                                : 'border-rose-500/40 bg-rose-500/10',
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className={cn(
+                                  'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-white',
+                                  sharedSignal.side === 'BUY' ? 'bg-emerald-600' : 'bg-rose-600',
+                                )}>
+                                  {sharedSignal.side === 'BUY' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                                  {sharedSignal.side} signal
+                                </p>
+                                <p className="mt-1 text-sm font-bold text-[var(--fx-text-strong)]">{sharedSignal.symbol}</p>
+                              </div>
+                              <span className="shrink-0 rounded-full border border-[var(--fx-border-subtle)] px-2 py-1 text-[9px] font-semibold text-[var(--fx-text-muted)]">
+                                {sharedSignal.interval.toUpperCase()}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-elevated)]/80 p-2 text-center">
+                              <div>
+                                <span className="block text-[8px] uppercase tracking-wide text-[var(--fx-text-muted)]">Entry</span>
+                                <span className="fx-data mt-0.5 block text-[11px] font-bold text-[var(--fx-text-strong)]">{sharedSignal.entry}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[8px] uppercase tracking-wide text-emerald-500">Take profit</span>
+                                <span className="fx-data mt-0.5 block text-[11px] font-bold text-emerald-500">{sharedSignal.takeProfit}</span>
+                              </div>
+                              <div>
+                                <span className="block text-[8px] uppercase tracking-wide text-rose-500">Stop loss</span>
+                                <span className="fx-data mt-0.5 block text-[11px] font-bold text-rose-500">{sharedSignal.stopLoss}</span>
+                              </div>
+                            </div>
+
+                            {sharedSignal.rationale && (
+                              <p className="text-[10px] leading-4 text-[var(--fx-text-muted)]">{sharedSignal.rationale}</p>
+                            )}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--fx-border-subtle)] pt-2 text-[9px] text-[var(--fx-text-muted)]">
+                              <span>{sharedSignal.provider}</span>
+                              <time dateTime={sharedSignal.timestamp}>{new Date(sharedSignal.timestamp).toLocaleString()}</time>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => { useMarketStore.getState().setSelectedAsset(sharedSignal.symbol); setViewMode('chart'); }}
+                              className="flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-blue-500/40 bg-blue-500/10 text-[10px] font-bold text-blue-500 transition-colors hover:bg-blue-500 hover:text-white"
+                            >
+                              <BarChart2 size={12} /> Inspect {sharedSignal.symbol} chart
+                            </button>
+                          </div>
+                        ) : msg.content.startsWith('[TradingView Chart]') ? (
                           <div className="space-y-2 p-2 bg-[#090d16] border border-blue-500/30 rounded-xl max-w-sm select-none">
                             <div className="flex items-center justify-between">
                               <span className="text-[8px] bg-blue-600/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
@@ -364,12 +421,12 @@ export function ChatWindow({
                         ) : msg.content.startsWith('[Signal Card]') ? (
                           /* 2. Custom Renderer: Buy/Sell Signal Card */
                           (() => {
-                            const side = msg.content.match(/Side:\s*([^\s|]+)/)?.[1] || 'BUY';
+                            const side = msg.content.match(/Side:\s*([^\s|]+)/)?.[1]?.toUpperCase() || 'SIGNAL';
                             const isBuy = side.toUpperCase() === 'BUY';
-                            const asset = msg.content.match(/Asset:\s*([^\s|]+)/)?.[1] || 'EURUSD';
-                            const entry = msg.content.match(/Entry:\s*([^\s|]+)/)?.[1] || '1.0850';
-                            const tp = msg.content.match(/TP:\s*([^\s|]+)/)?.[1] || '1.0920';
-                            const sl = msg.content.match(/SL:\s*([^\s|]+)/)?.[1] || '1.0800';
+                            const asset = msg.content.match(/Asset:\s*([^\s|]+)/)?.[1] || 'Unavailable';
+                            const entry = msg.content.match(/Entry:\s*([^\s|]+)/)?.[1] || 'Unavailable';
+                            const tp = msg.content.match(/TP:\s*([^\s|]+)/)?.[1] || 'Unavailable';
+                            const sl = msg.content.match(/SL:\s*([^\s|]+)/)?.[1] || 'Unavailable';
 
                             return (
                               <div
