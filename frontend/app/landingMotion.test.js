@@ -17,7 +17,7 @@ test('landing keeps account access and product context on narrow screens while k
 
   assert.match(page, /href="\/login"/);
   assert.match(page, /href="\/register"/);
-  assert.match(page, /Market intelligence, in one place/);
+  assert.doesNotMatch(page, /Market intelligence, in one place/);
   assert.match(page, /fxzone-landing-watermark pointer-events-none/);
   assert.match(page, /animate=\{reduceMotion \? undefined/);
   assert.doesNotMatch(page, /fxzone-live-mark--force-motion/);
