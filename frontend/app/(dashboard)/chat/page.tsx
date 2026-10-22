@@ -14,6 +14,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { api } from '@/lib/api';
 import { Loader2, MessageSquare, Search, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 export default function ChatPage() {
   const router = useRouter();
@@ -32,6 +33,8 @@ export default function ChatPage() {
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
+  const markConversationRead = useNotificationStore((state) => state.markConversationRead);
+  const setActiveConversation = useNotificationStore((state) => state.setActiveConversation);
 
   // States for user selection modal
   const [eligibleUsers, setEligibleUsers] = useState<any[]>([]);
@@ -47,7 +50,10 @@ export default function ChatPage() {
 
   const selectConversation = useCallback((conversationId: string | null) => {
     setActiveConvId(conversationId);
+    setActiveConversation(conversationId);
     if (!conversationId) return;
+
+    void markConversationRead(conversationId);
 
     setConversations((previous) =>
       previous.map((conversation) =>
@@ -56,7 +62,7 @@ export default function ChatPage() {
           : conversation
       )
     );
-  }, []);
+  }, [markConversationRead, setActiveConversation]);
 
   const handleDeleteConversation = useCallback(async (conversationId: string) => {
     try {
@@ -86,6 +92,7 @@ export default function ChatPage() {
         if (String(senderId) === String(user?.id)) return;
 
         if (String(convId) === String(activeConvId)) {
+          void markConversationRead(String(convId));
           messageRequests.current.invalidate(String(convId));
           setMessages((prev) => {
             // Deduplicate: skip if already exists
@@ -188,7 +195,7 @@ export default function ChatPage() {
     } catch (err) {
       console.error(err);
     }
-  }, []);
+  }, [markConversationRead]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -197,6 +204,8 @@ export default function ChatPage() {
   useEffect(() => {
     setHasOlderMessages(true);
   }, [activeConvId]);
+
+  useEffect(() => () => setActiveConversation(null), [setActiveConversation]);
 
   const loadOlderMessages = useCallback(async () => {
     if (!activeConvId || !hasOlderMessages || loadingOlderMessages) return;

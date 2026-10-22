@@ -16,15 +16,20 @@ export interface NotificationItem {
 interface NotificationState {
   notifications: NotificationItem[];
   unreadCount: number;
+  activeConversationId: string | null;
   fetchNotifications: () => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
   markAllRead: () => Promise<void>;
   addNotification: (notification: NotificationItem) => void;
+  setActiveConversation: (conversationId: string | null) => void;
+  markConversationRead: (conversationId: string) => Promise<void>;
+  clearConversationNotifications: (conversationId: string) => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
+  activeConversationId: null,
 
   fetchNotifications: async () => {
     // Only fetch if there is an active Supabase session
@@ -86,9 +91,59 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       if (state.notifications.some((n) => n.id === notification.id)) {
         return {};
       }
-      const list = [notification, ...state.notifications];
+      const isActiveConversationMessage = notification.type === 'message'
+        && state.activeConversationId
+        && notification.data?.conversation_id === state.activeConversationId;
+      const nextNotification = isActiveConversationMessage
+        ? { ...notification, is_read: true }
+        : notification;
+      const list = [nextNotification, ...state.notifications];
       const unread = list.filter((n) => !n.is_read).length;
       return { notifications: list, unreadCount: unread };
     });
+  },
+
+  setActiveConversation: (conversationId) => {
+    set((state) => {
+      const list = conversationId
+        ? state.notifications.map((notification) =>
+            notification.type === 'message'
+              && notification.data?.conversation_id === conversationId
+              ? { ...notification, is_read: true }
+              : notification,
+          )
+        : state.notifications;
+      return {
+        activeConversationId: conversationId,
+        notifications: list,
+        unreadCount: list.filter((notification) => !notification.is_read).length,
+      };
+    });
+  },
+
+  clearConversationNotifications: (conversationId) => {
+    set((state) => {
+      const list = state.notifications.map((notification) =>
+        notification.type === 'message'
+          && notification.data?.conversation_id === conversationId
+          ? { ...notification, is_read: true }
+          : notification,
+      );
+      return {
+        notifications: list,
+        unreadCount: list.filter((notification) => !notification.is_read).length,
+      };
+    });
+  },
+
+  markConversationRead: async (conversationId) => {
+    get().clearConversationNotifications(conversationId);
+    try {
+      await api.post(`/api/chat/conversations/${conversationId}/read`);
+    } catch (err) {
+      // The optimistic state keeps the UI responsive; the next notification
+      // refresh will reconcile it if the server update failed.
+      console.error('Failed to mark conversation as read:', err);
+    }
   },
 }));

@@ -20,6 +20,7 @@ import { useThemeStore } from '@/stores/themeStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { supabase } from '@/lib/supabase';
 import { initializeClientBootstrap } from '@/lib/clientBootstrap';
+import { useChatStore } from '@/stores/chatStore';
 
 export function ClientInitializer() {
   useEffect(() => {
@@ -31,9 +32,11 @@ export function ClientInitializer() {
             useAuthStore.getState()._setFromSession(session, event);
             if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
               setTimeout(() => useNotificationStore.getState().fetchNotifications(), 500);
+              setTimeout(() => useChatStore.getState().fetchConversations(), 500);
             }
             if (event === 'SIGNED_OUT') {
               useNotificationStore.setState({ notifications: [], unreadCount: 0 });
+              useChatStore.setState({ conversations: [], activeConversationId: null, messages: {}, typingUsers: {} });
             }
           }
         );
