@@ -289,7 +289,8 @@ export function VerifiedAssetDetail({
             ) : historyError ? (
               <p className="text-center text-xs leading-5 text-amber-700 dark:text-amber-300">{historyError}</p>
             ) : path && areaPath ? (
-              <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="h-24 w-full" role="img" aria-label={`${asset.symbol} verified ${timeframe} provider history area chart`}>
+              <div key={`${asset.symbol}-${timeframe}-${candles.length}`} className="fx-history-chart w-full">
+                <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="h-24 w-full" role="img" aria-label={`${asset.symbol} verified ${timeframe} provider history area chart`}>
                 <defs>
                   <linearGradient id={`history-area-${asset.symbol}`} x1="0" x2="0" y1="0" y2="1">
                     <stop offset="0%" stopColor={isPositive ? '#10b981' : '#f43f5e'} stopOpacity="0.35" />
@@ -298,7 +299,8 @@ export function VerifiedAssetDetail({
                 </defs>
                 <path d={areaPath} fill={`url(#history-area-${asset.symbol})`} stroke="none" />
                 <path d={path} fill="none" stroke="currentColor" strokeWidth="1.8" vectorEffect="non-scaling-stroke" className={isPositive ? 'text-emerald-500' : 'text-rose-500'} />
-              </svg>
+                </svg>
+              </div>
             ) : (
               <p className="text-center text-xs leading-5 text-[var(--color-text-muted)]">No verified historical candles are available for this interval.</p>
             )}

@@ -22,14 +22,15 @@ import { Avatar } from '../ui/Avatar';
 import { useChatStore } from '@/stores/chatStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { getUnreadBadgeLabel } from '@/lib/postAssetTags';
+import { getChatUnreadBadgeCount } from '@/lib/chatUnread';
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const mounted = useHydrated();
-  const chatUnreadCount = useChatStore((state) => state.conversations.reduce((total, conversation) => total + Math.max(0, conversation.unread_count || 0), 0));
-  const messageNotificationCount = useNotificationStore((state) => state.notifications.filter((notification) => !notification.is_read && notification.type === 'message').length);
-  const totalChatUnreadCount = chatUnreadCount + messageNotificationCount;
+  const conversations = useChatStore((state) => state.conversations);
+  const notifications = useNotificationStore((state) => state.notifications);
+  const totalChatUnreadCount = getChatUnreadBadgeCount(conversations, notifications);
 
   const menuItems = [
     {
@@ -63,11 +64,11 @@ export function Sidebar() {
     <>
       {/* Desktop / Tablet Sidebar */}
       <aside
-        className="relative hidden w-16 shrink-0 select-none flex-col justify-between border-r border-zinc-850 bg-zinc-950/60 backdrop-blur-md md:flex"
+        className="relative hidden w-56 shrink-0 select-none flex-col justify-between border-r border-zinc-850 bg-zinc-950/60 backdrop-blur-md md:flex"
         aria-label="Primary navigation"
       >
         {/* Sidebar Items */}
-        <div className="flex flex-col gap-6 py-6 px-3">
+        <div className="flex flex-col gap-6 px-3 py-6">
           {/* Navigation Group */}
           <div className="flex flex-col gap-1.5">
             {menuItems.map((item) => {
@@ -79,7 +80,7 @@ export function Sidebar() {
                   aria-label={item.label}
                   title={item.label}
                   className={cn(
-                    'group relative flex min-h-11 w-full items-center justify-center rounded-lg border text-xs font-semibold transition-all duration-200 focus:outline-none',
+                    'group relative flex min-h-11 w-full items-center justify-start gap-3 rounded-lg border px-3 text-xs font-semibold transition-all duration-200 focus:outline-none',
                     isActive
                       ? 'bg-blue-600/10 text-blue-400 border border-blue-500/25 shadow-[0_0_10px_rgba(59,130,246,0.08)]'
                       : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
@@ -93,9 +94,7 @@ export function Sidebar() {
                       </span>
                     )}
                   </span>
-                  <span className="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                    {item.label}
-                  </span>
+                  <span className="truncate text-sm">{item.label}</span>
                 </Link>
               );
             })}
@@ -119,12 +118,12 @@ export function Sidebar() {
                 aria-label="Profile"
                 title="Profile"
                 className={cn(
-                  'group relative flex min-h-10 w-full items-center justify-center rounded-lg text-xs font-semibold text-zinc-400 transition-all hover:bg-white/5 hover:text-white',
+                  'group relative flex min-h-10 w-full items-center justify-start gap-3 rounded-lg px-3 text-xs font-semibold text-zinc-400 transition-all hover:bg-white/5 hover:text-white',
                   pathname === `/profile/${user.id}` && 'bg-blue-600/10 text-blue-400 border border-blue-500/25'
                 )}
               >
                 <UserIcon size={18} />
-                <span className="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Profile</span>
+                <span className="text-sm">Profile</span>
               </Link>
             )}
 
@@ -163,10 +162,10 @@ export function Sidebar() {
               onClick={() => logout()}
               aria-label="Sign out"
               title="Sign out"
-              className="group relative flex min-h-10 w-full items-center justify-center rounded-lg text-xs font-semibold text-zinc-400 transition-all hover:bg-red-500/5 hover:text-red-400"
+              className="group relative flex min-h-10 w-full items-center justify-start gap-3 rounded-lg px-3 text-xs font-semibold text-zinc-400 transition-all hover:bg-red-500/5 hover:text-red-400"
             >
               <LogOut size={18} />
-              <span className="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Sign out</span>
+              <span className="text-sm">Sign out</span>
             </button>
           </div>
         </div>

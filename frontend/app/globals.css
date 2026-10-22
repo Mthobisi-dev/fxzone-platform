@@ -576,6 +576,28 @@ html[class*="theme-"] :focus-visible {
   animation-play-state: paused;
 }
 
+@keyframes fx-history-chart-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scaleY(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+.fx-history-chart {
+  transform-origin: center bottom;
+  animation: fx-history-chart-in 360ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-history-chart {
+    animation: none;
+  }
+}
+
 /* Glow Borders for Neon Cyber */
 .neon-glow-blue {
   box-shadow: 0 0 10px rgba(0, 210, 255, 0.5);
