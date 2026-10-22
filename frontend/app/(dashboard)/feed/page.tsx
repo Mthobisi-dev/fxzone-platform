@@ -55,6 +55,7 @@ function TrendingSymbolsCard({ items }: { items: TrendingSymbolView[] }) {
 export default function SocialFeedPage() {
   const { user } = useAuth();
   const mounted = useHydrated();
+  const [requestedPostId, setRequestedPostId] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'admin';
   const showAdminControls = mounted && isAdmin;
@@ -147,6 +148,7 @@ export default function SocialFeedPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') setRequestedPostId(new URLSearchParams(window.location.search).get('post'));
     fetchFeed();
     fetchSidebarData();
     const handleRefresh = () => {
@@ -157,6 +159,12 @@ export default function SocialFeedPage() {
     window.addEventListener('fxzone_refresh_feed', handleRefresh);
     return () => window.removeEventListener('fxzone_refresh_feed', handleRefresh);
   }, []);
+
+  useEffect(() => {
+    if (!requestedPostId || !posts.length) return;
+    const requestedPost = posts.find((post) => String(post.id) === requestedPostId);
+    if (requestedPost) setSelectedPost(requestedPost);
+  }, [posts, requestedPostId]);
 
   const handleStartFresh = async () => {
     if (!confirm('Are you sure you want to delete all feed posts and start fresh?'))

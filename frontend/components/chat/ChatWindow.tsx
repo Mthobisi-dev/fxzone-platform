@@ -21,6 +21,8 @@ import {
   ExternalLink,
   Sparkles,
   Trash2,
+  MoreHorizontal,
+  Copy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -62,6 +64,11 @@ interface ChatWindowProps {
   onTyping?: () => void;
   typingUsers?: string[];
   onBack?: () => void;
+  onLoadOlderMessages?: () => Promise<void>;
+  hasOlderMessages?: boolean;
+  isLoadingOlder?: boolean;
+  highlightMessageId?: string | null;
+  onGroupChanged?: () => Promise<void>;
 }
 
 export function ChatWindow({
@@ -80,21 +87,32 @@ export function ChatWindow({
   onTyping,
   typingUsers = [],
   onBack,
+  onLoadOlderMessages,
+  hasOlderMessages = false,
+  isLoadingOlder = false,
+  highlightMessageId = null,
+  onGroupChanged,
 }: ChatWindowProps) {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const loadingOlderRef = useRef(false);
+  const nearBottomRef = useRef(true);
   const [showGroupProfile, setShowGroupProfile] = useState(false);
   
   // View mode state for laptop / mobile ('chat' | 'split' | 'chart')
   const [viewMode, setViewMode] = useState<'chat' | 'split' | 'chart'>('chat');
 
   const [groupTitle, setGroupTitle] = useState(conversationName || 'FxZone Group');
-  const [groupDescription, setGroupDescription] = useState('FxZone Trading & Signal Analysis Group');
+  const [groupDescription, setGroupDescription] = useState(String(conversationData?.description || ''));
   const [addMembersModalOpen, setAddMembersModalOpen] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [addedMembers, setAddedMembers] = useState<string[]>([]);
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
+  const creatorId = conversationData?.creator_id ?? conversationData?.creatorId;
+  const isGroupAdmin = Boolean(isGroup && creatorId && String(creatorId) === String(currentUserId));
 
   const handleDeleteMessage = async (messageId: string) => {
     if (!onDeleteMessage || deletingMessageId) return;
@@ -130,13 +148,76 @@ export function ChatWindow({
     );
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(() => setGroupTitle(conversationName || 'FxZone Group'), [conversationName]);
+  useEffect(() => setGroupDescription(String(conversationData?.description || '')), [conversationData?.description]);
+
+  const saveGroupSettings = async () => {
+    if (!isGroupAdmin || !groupTitle.trim()) return;
+    try {
+      await api.patch(`/api/chat/conversations/${conversationId}`, { name: groupTitle.trim(), description: groupDescription.trim() });
+      await onGroupChanged?.();
+      setShowGroupProfile(false);
+    } catch (error) {
+      console.error('Unable to update group settings:', error);
+      window.alert('The group settings could not be saved.');
+    }
+  };
+
+  const applyAddedMembers = async () => {
+    if (!isGroupAdmin || !addedMembers.length) return;
+    try {
+      await api.post(`/api/chat/conversations/${conversationId}/members`, { user_ids: addedMembers });
+      await onGroupChanged?.();
+      setAddedMembers([]);
+      setAddMembersModalOpen(false);
+    } catch (error) {
+      console.error('Unable to add group members:', error);
+      window.alert('Members could not be added.');
+    }
+  };
+
+  const removeGroupMember = async (memberId: string) => {
+    if (!isGroupAdmin || String(memberId) === String(currentUserId)) return;
+    try {
+      await api.delete(`/api/chat/conversations/${conversationId}/members?user_id=${encodeURIComponent(memberId)}`);
+      await onGroupChanged?.();
+    } catch (error) {
+      console.error('Unable to remove group member:', error);
+      window.alert('The member could not be removed.');
+    }
+  };
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, typingUsers]);
+    scrollToBottom('auto');
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (nearBottomRef.current) scrollToBottom();
+  }, [messages.length, typingUsers.length]);
+
+  useEffect(() => {
+    if (!highlightMessageId) return;
+    document.getElementById(`chat-message-${highlightMessageId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlightMessageId, messages.length]);
+
+  const handleMessagesScroll = async (event: React.UIEvent<HTMLDivElement>) => {
+    const node = event.currentTarget;
+    nearBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 96;
+    if (node.scrollTop > 48 || !onLoadOlderMessages || !hasOlderMessages || loadingOlderRef.current) return;
+    loadingOlderRef.current = true;
+    try {
+      const previousHeight = node.scrollHeight;
+      const previousTop = node.scrollTop;
+      await onLoadOlderMessages();
+      requestAnimationFrame(() => { node.scrollTop = node.scrollHeight - previousHeight + previousTop; });
+    } finally {
+      loadingOlderRef.current = false;
+    }
+  };
 
   // Handle Snapshot / Signal sent from TradingViewChatPanel
   const handleShareChartSnapshot = async (snapshotText: string) => {
@@ -278,7 +359,8 @@ export function ChatWindow({
           )}
         >
           {/* Messages Feed */}
-          <div className="flex-1 overflow-y-auto px-2.5 py-3 sm:p-4 flex flex-col gap-3 min-h-0 overscroll-contain">
+          <div ref={messagesScrollRef} onScroll={handleMessagesScroll} className="flex-1 overflow-y-auto px-2.5 py-3 sm:p-4 flex flex-col gap-3 min-h-0 overscroll-contain">
+            {isLoadingOlder && <div className="sticky top-0 z-10 self-center rounded-full bg-[var(--color-surface)] px-3 py-1 text-[10px] text-[var(--fx-text-muted)]">Loading older messages…</div>}
             {messages.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 p-6 select-none">
                 <div className="h-10 w-10 bg-zinc-900 border border-zinc-850 rounded-xl flex items-center justify-center text-zinc-500">
@@ -299,9 +381,11 @@ export function ChatWindow({
                 return (
                   <div
                     key={msg.id}
+                    id={`chat-message-${msg.id}`}
                     className={cn(
                       'group flex gap-2 max-w-[88%] sm:max-w-[75%]',
-                      isSelf ? 'self-end flex-row-reverse' : 'self-start'
+                      isSelf ? 'self-end flex-row-reverse' : 'self-start',
+                      highlightMessageId === msg.id && 'rounded-xl ring-2 ring-blue-400/70 ring-offset-2 ring-offset-[var(--fx-bg-canvas)]'
                     )}
                   >
                     {!isSelf && (
@@ -367,6 +451,12 @@ export function ChatWindow({
                                 <span className="block text-[8px] uppercase tracking-wide text-rose-500">Stop loss</span>
                                 <span className="fx-data mt-0.5 block text-[11px] font-bold text-rose-500">{sharedSignal.stopLoss}</span>
                               </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 py-0.5" aria-label="Signal levels">
+                              <span className="h-px flex-1 bg-[var(--fx-border-subtle)]" />
+                              <span className="text-[8px] font-semibold uppercase tracking-wide text-[var(--fx-text-muted)]">Signal levels</span>
+                              <span className="h-px flex-1 bg-[var(--fx-border-subtle)]" />
                             </div>
 
                             {sharedSignal.rationale && (
@@ -533,17 +623,18 @@ export function ChatWindow({
                             </button>
                           )}
                           {isSelf && msg.status === 'pending' && <span className="text-blue-400">Sending…</span>}
-                          {isSelf && onDeleteMessage && !String(msg.id).startsWith('temp-') && (
-                            <button
-                              type="button"
-                              onClick={() => void handleDeleteMessage(msg.id)}
-                              disabled={Boolean(deletingMessageId)}
-                              aria-label="Delete sent message"
-                              title="Delete this message"
-                              className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg text-[var(--fx-text-muted)] transition hover:bg-red-500/10 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
-                            >
-                              <Trash2 size={14} className={cn(deletingMessageId === msg.id && 'animate-pulse')} />
-                            </button>
+                          {(isSelf && onDeleteMessage && !String(msg.id).startsWith('temp-')) && (
+                            <div className="relative">
+                              <button type="button" onClick={() => setOpenMessageMenuId((current) => current === msg.id ? null : msg.id)} aria-label="Message actions" title="Message actions" className="grid min-h-9 min-w-9 place-items-center rounded-lg text-[var(--fx-text-muted)] transition hover:bg-[var(--fx-bg-elevated)] hover:text-[var(--fx-text-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)]">
+                                <MoreHorizontal size={15} />
+                              </button>
+                              {openMessageMenuId === msg.id && (
+                                <div className="absolute bottom-full right-0 z-30 mb-1 min-w-32 rounded-lg border border-[var(--fx-border-subtle)] bg-[var(--color-surface)] p-1 shadow-xl">
+                                  {msg.messageType === 'text' && <button type="button" onClick={() => { void navigator.clipboard?.writeText(msg.content); setOpenMessageMenuId(null); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[10px] text-[var(--fx-text-strong)] hover:bg-[var(--fx-bg-elevated)]"><Copy size={12} /> Copy text</button>}
+                                  <button type="button" onClick={() => { setOpenMessageMenuId(null); void handleDeleteMessage(msg.id); }} disabled={Boolean(deletingMessageId)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[10px] text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"><Trash2 size={12} /> Delete</button>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -573,16 +664,19 @@ export function ChatWindow({
                 <h5 className="text-xs font-bold text-white">{conversationName}</h5>
                 <p className="text-[10px] text-zinc-400">{members.length} active traders</p>
               </div>
-              <Button size="sm" onClick={() => setAddMembersModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white text-[10px]">
+              {isGroupAdmin && <Button size="sm" onClick={() => { setAddMembersModalOpen(true); void fetchUsersForGroup(); }} className="bg-purple-600 hover:bg-purple-500 text-white text-[10px]">
                 + Add Member
-              </Button>
+              </Button>}
             </div>
+
+            {isGroupAdmin && <div className="space-y-2"><input value={groupTitle} onChange={(event) => setGroupTitle(event.target.value)} maxLength={120} className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-white" aria-label="Group name" /><textarea value={groupDescription} onChange={(event) => setGroupDescription(event.target.value)} maxLength={500} rows={2} placeholder="Group description" className="w-full resize-none rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-white" aria-label="Group description" /><div className="flex justify-end"><Button size="sm" onClick={() => void saveGroupSettings()}>Save</Button></div></div>}
 
             <div className="max-h-48 overflow-y-auto space-y-1">
               {members.map((m: any) => (
                 <div key={m.userId || m.id} className="p-2 bg-zinc-950 rounded-lg flex items-center gap-2 border border-zinc-850">
                   <Avatar src={m.avatarUrl} name={m.displayName || m.username} size="sm" className="h-6 w-6" />
                   <span className="text-xs text-zinc-200 font-medium">{m.displayName || m.username}</span>
+                  {isGroupAdmin && String(m.userId || m.id) !== String(currentUserId) && <button type="button" onClick={() => void removeGroupMember(String(m.userId || m.id))} className="ml-auto text-[10px] text-rose-400 hover:text-rose-300">Remove</button>}
                 </div>
               ))}
             </div>
@@ -612,11 +706,11 @@ export function ChatWindow({
             ) : (
               <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
                 {availableUsers.map((u: any) => {
-                  const isAdded = addedMembers.includes(u.username);
+                  const isAdded = addedMembers.includes(String(u.id));
                   return (
                     <div
                       key={u.id}
-                      onClick={() => handleToggleAddMember(u.username)}
+                      onClick={() => handleToggleAddMember(String(u.id))}
                       className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-colors ${
                         isAdded
                           ? 'bg-purple-500/10 border-purple-500/30'
@@ -643,7 +737,7 @@ export function ChatWindow({
               </div>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              <Button size="sm" onClick={() => setAddMembersModalOpen(false)} className="bg-blue-600 hover:bg-blue-500">
+              <Button size="sm" onClick={() => void applyAddedMembers()} className="bg-blue-600 hover:bg-blue-500">
                 Done ({addedMembers.length} selected)
               </Button>
             </div>

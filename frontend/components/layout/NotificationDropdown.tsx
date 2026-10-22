@@ -61,7 +61,7 @@ export function NotificationDropdown() {
     const data = notification.data || {};
     const destination =
       typeof data.post_id === 'string' ? `/feed?post=${data.post_id}` :
-      typeof data.conversation_id === 'string' ? `/chat?conversation=${data.conversation_id}` :
+      typeof data.conversation_id === 'string' ? `/chat?conversation=${data.conversation_id}${typeof data.message_id === 'string' ? `&message=${encodeURIComponent(data.message_id)}` : ''}` :
       typeof data.session_id === 'string' ? `/session/${data.session_id}` :
       typeof data.profile_id === 'string' ? `/profile/${data.profile_id}` :
       null;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
+import { normalizePostAssetTags } from '@/lib/postAssetTags';
 
 // GET /api/social/posts — fetch paginated posts (alias for /api/social/feed)
 export async function GET(request: NextRequest) {
@@ -16,12 +17,14 @@ export async function GET(request: NextRequest) {
     const basePostSelect = `
         id, content, image_url, likes_count, comments_count, reposts_count,
         is_story, is_pinned, created_at,
+        asset_tags,
         users:user_id (id, username, display_name, avatar_url, role)
       `;
     const enhancedPostSelect = `
         id, content, image_url, likes_count, comments_count, reposts_count,
         is_story, is_pinned, created_at, caption,
         show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share,
+        asset_tags,
         users:user_id (id, username, display_name, avatar_url, role)
       `;
     const fetchPosts = (select: string) => {
@@ -62,6 +65,7 @@ export async function GET(request: NextRequest) {
       is_story: p.is_story,
       is_pinned: p.is_pinned,
       caption: p.caption,
+      asset_tags: Array.isArray(p.asset_tags) ? p.asset_tags : [],
       show_comments_count: p.show_comments_count,
       show_likes_count: p.show_likes_count,
       allow_reshare: p.allow_reshare,
@@ -85,7 +89,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { content, image_url, is_story, caption, show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share } = body;
+    const { content, image_url, is_story, caption, asset_tags, show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share } = body;
+    const normalizedAssetTags = normalizePostAssetTags(asset_tags);
 
     let finalContent = (content || '').trim();
     if (!finalContent) {
@@ -106,6 +111,7 @@ export async function POST(request: NextRequest) {
       image_url: image_url || null,
       is_story: !!is_story,
       expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+      asset_tags: normalizedAssetTags,
     };
     const enhancedPost = {
       ...basePost,
@@ -116,12 +122,14 @@ export async function POST(request: NextRequest) {
         allow_save: typeof allow_save === 'boolean' ? allow_save : true,
         allow_share: typeof allow_share === 'boolean' ? allow_share : true,
     };
-    const createPost = (payload: typeof enhancedPost | typeof basePost) =>
+    const legacyPost = { ...basePost };
+    delete (legacyPost as { asset_tags?: string[] }).asset_tags;
+    const createPost = (payload: typeof enhancedPost | typeof basePost | typeof legacyPost) =>
       db.from('posts').insert(payload).select().single();
 
     let insertRes = await createPost(enhancedPost);
     if (insertRes.error && (insertRes.error.code === '42703' || insertRes.error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(insertRes.error.message || ''))) {
-      insertRes = await createPost(basePost);
+      insertRes = await createPost(legacyPost);
     }
 
     // If FK constraint violation occurred, force user upsert and retry once
@@ -130,7 +138,7 @@ export async function POST(request: NextRequest) {
       await ensureUserProfile(db, user);
       insertRes = await createPost(enhancedPost);
       if (insertRes.error && (insertRes.error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(insertRes.error.message || ''))) {
-        insertRes = await createPost(basePost);
+        insertRes = await createPost(legacyPost);
       }
     }
 

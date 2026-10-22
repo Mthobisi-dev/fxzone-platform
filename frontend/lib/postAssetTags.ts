@@ -23,6 +23,20 @@ export function extractPostAssetTags(text: string, knownSymbols: ReadonlySet<str
   return result;
 }
 
+/** Normalize composer input before persisting it on a post. */
+export function normalizePostAssetTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const known = new Set(Array.from(POST_ASSET_SYMBOLS, normalizeSymbol));
+  const result: string[] = [];
+  for (const value of input) {
+    if (typeof value !== 'string') continue;
+    const symbol = normalizeSymbol(value.trim().replace(/[^A-Za-z0-9/$.]/g, ''));
+    if (known.has(symbol) && !result.includes(symbol)) result.push(symbol);
+    if (result.length >= 12) break;
+  }
+  return result;
+}
+
 export function getUnreadBadgeLabel(count: number): string | null {
   if (!Number.isFinite(count) || count <= 0) return null;
   return count > 99 ? '99+' : String(Math.floor(count));

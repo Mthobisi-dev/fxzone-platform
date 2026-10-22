@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest, ensureUserProfile } from '@/lib/server/supabaseServer';
+import { normalizePostAssetTags } from '@/lib/postAssetTags';
 
 
 // GET /api/social/feed — paginated social posts with author info
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest) {
         is_story,
         is_pinned,
         created_at,
+        asset_tags,
         users:user_id (
           id,
           username,
@@ -50,6 +52,7 @@ export async function GET(request: NextRequest) {
         allow_save,
         allow_share,
         created_at,
+        asset_tags,
         users:user_id (
           id,
           username,
@@ -109,6 +112,7 @@ export async function GET(request: NextRequest) {
       is_story: p.is_story,
       is_pinned: p.is_pinned,
       caption: p.caption,
+      asset_tags: Array.isArray(p.asset_tags) ? p.asset_tags : [],
       show_comments_count: p.show_comments_count,
       show_likes_count: p.show_likes_count,
       allow_reshare: p.allow_reshare,
@@ -142,7 +146,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { content, image_url, is_story, caption, show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share } = body;
+    const { content, image_url, is_story, caption, asset_tags, show_comments_count, show_likes_count, allow_reshare, allow_save, allow_share } = body;
+    const normalizedAssetTags = normalizePostAssetTags(asset_tags);
 
     let finalContent = (content || '').trim();
     if (!finalContent) {
@@ -162,6 +167,7 @@ export async function POST(request: NextRequest) {
       image_url: image_url || null,
       is_story: !!is_story,
       expires_at: is_story ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+      asset_tags: normalizedAssetTags,
     };
     const enhancedPost = {
       ...basePost,
@@ -172,11 +178,13 @@ export async function POST(request: NextRequest) {
       allow_save: typeof allow_save === 'boolean' ? allow_save : true,
       allow_share: typeof allow_share === 'boolean' ? allow_share : true,
     };
-    const createPost = (payload: typeof enhancedPost | typeof basePost) =>
+    const legacyPost = { ...basePost };
+    delete (legacyPost as { asset_tags?: string[] }).asset_tags;
+    const createPost = (payload: typeof enhancedPost | typeof basePost | typeof legacyPost) =>
       db.from('posts').insert(payload).select().single();
     let { data, error } = await createPost(enhancedPost);
     if (error && (error.code === '42703' || error.code === 'PGRST204' || /column .* does not exist|could not find.*column/i.test(error.message || ''))) {
-      ({ data, error } = await createPost(basePost));
+      ({ data, error } = await createPost(legacyPost));
     }
 
     if (error) throw error;

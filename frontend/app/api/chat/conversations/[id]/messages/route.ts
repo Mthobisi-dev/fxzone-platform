@@ -42,6 +42,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const requestedLimit = Number.parseInt(searchParams.get('limit') || '50', 10);
     const requestedOffset = Number.parseInt(searchParams.get('offset') || '0', 10);
+    const markRead = searchParams.get('mark_read') !== 'false';
     const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), MAX_PAGE_SIZE) : 50;
     const offset = Number.isFinite(requestedOffset) ? Math.max(requestedOffset, 0) : 0;
 
@@ -73,7 +74,7 @@ export async function GET(
     })));
 
     const newestMessageAt = data?.[0]?.created_at;
-    if (newestMessageAt && (!membership.last_read_at || newestMessageAt > membership.last_read_at)) {
+    if (markRead && offset === 0 && newestMessageAt && (!membership.last_read_at || newestMessageAt > membership.last_read_at)) {
       const { error: readReceiptError } = await db
         .from('conversation_members')
         .update({ last_read_at: newestMessageAt })

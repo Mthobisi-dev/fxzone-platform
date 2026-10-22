@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
       .select(`
         id,
         name,
+        description,
         is_group,
+        creator_id,
         created_at,
         updated_at,
         canonical_conversation_id
@@ -46,7 +48,7 @@ export async function GET(request: NextRequest) {
       hasCanonicalChatMigration = false;
       const fallback = await db
         .from('conversations')
-        .select('id,name,is_group,created_at,updated_at')
+        .select('id,name,description,is_group,creator_id,created_at,updated_at')
         .in('id', convIds)
         .order('updated_at', { ascending: false });
       conversations = fallback.data;
@@ -63,6 +65,17 @@ export async function GET(request: NextRequest) {
       `)
       .in('conversation_id', convIds);
     if (allMembersError) throw allMembersError;
+
+    const { data: latestMessages, error: latestMessagesError } = await db
+      .from('messages')
+      .select('conversation_id, created_at')
+      .in('conversation_id', convIds)
+      .order('created_at', { ascending: false });
+    if (latestMessagesError) throw latestMessagesError;
+    const latestByConversation = new Map<string, string>();
+    for (const message of latestMessages || []) {
+      if (!latestByConversation.has(message.conversation_id)) latestByConversation.set(message.conversation_id, message.created_at);
+    }
 
     // Build a map of conversationId → members[]
     const membersByConvId: Record<string, any[]> = {};
@@ -94,12 +107,17 @@ export async function GET(request: NextRequest) {
       return [{
         id: conv.id,
         name: conv.name,
+        description: conv.description,
         is_group: conv.is_group,
+        creator_id: conv.creator_id,
         created_at: conv.created_at,
         updated_at: conv.updated_at,
         members,
-        // Unread count is computed client-side from Realtime state; skip expensive per-conv COUNT query
-        unread_count: 0,
+        unread_count: (() => {
+          const latest = latestByConversation.get(conv.id);
+          const lastRead = membership?.last_read_at;
+          return latest && (!lastRead || latest > lastRead) ? 1 : 0;
+        })(),
         last_read_at: membership?.last_read_at || null,
       }];
     }).sort((a: any, b: any) => String(b.updated_at).localeCompare(String(a.updated_at)));

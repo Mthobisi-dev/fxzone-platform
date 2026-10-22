@@ -28,6 +28,10 @@ export default function ChatPage() {
   const [targetUsername, setTargetUsername] = useState('');
   const [creatingChat, setCreatingChat] = useState(false);
   const [startingUserId, setStartingUserId] = useState<string | null>(null);
+  const [hasOlderMessages, setHasOlderMessages] = useState(true);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
 
   // States for user selection modal
   const [eligibleUsers, setEligibleUsers] = useState<any[]>([]);
@@ -123,8 +127,9 @@ export default function ChatPage() {
         const mapped = response.map((c: any) => ({
           id: c.id,
           name: c.name,
+          description: c.description,
           isGroup: c.is_group ?? c.isGroup ?? false,
-          unreadCount: c.unreadCount || 0,
+          unreadCount: c.unreadCount ?? c.unread_count ?? 0,
           createdAt: c.created_at || c.createdAt,
           updatedAt: c.updated_at || c.updatedAt,
           members: Array.isArray(c.members)
@@ -135,6 +140,7 @@ export default function ChatPage() {
                 avatarUrl: m.avatar_url || m.avatarUrl,
               }))
             : [],
+          creatorId: c.creator_id || c.creatorId,
         }));
         setConversations((previous) => dedupeDirectConversations(mapped.map((conversation) => ({
           ...conversation,
@@ -150,10 +156,12 @@ export default function ChatPage() {
     }
   }, []);
 
-  const fetchMessages = useCallback(async (convId: string) => {
+  const fetchMessages = useCallback(async (convId: string, options: { older?: boolean } = {}) => {
+    const older = options.older === true;
     const isCurrentRequest = messageRequests.current.begin(convId);
     try {
-      const response = await api.get(`/api/chat/conversations/${convId}/messages`);
+      const existingCount = messagesRef.current.filter((message) => message.conversationId === convId && !String(message.id).startsWith('temp-')).length;
+      const response = await api.get(`/api/chat/conversations/${convId}/messages?limit=50&offset=${older ? existingCount : 0}&mark_read=${older ? 'false' : 'true'}`);
       if (!isCurrentRequest()) return;
       if (Array.isArray(response)) {
         const mapped = response.map((m: any) => ({
@@ -172,6 +180,7 @@ export default function ChatPage() {
             : undefined,
         }));
         setMessages((prev) => mergeConversationMessages(prev, mapped, convId));
+        if (mapped.length < 50) setHasOlderMessages(false);
       } else {
         setMessages((previous) => previous.filter((message) => message.conversationId !== convId));
       }
@@ -180,6 +189,24 @@ export default function ChatPage() {
       console.error(err);
     }
   }, []);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    setHasOlderMessages(true);
+  }, [activeConvId]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeConvId || !hasOlderMessages || loadingOlderMessages) return;
+    setLoadingOlderMessages(true);
+    try {
+      await fetchMessages(activeConvId, { older: true });
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  }, [activeConvId, fetchMessages, hasOlderMessages, loadingOlderMessages]);
 
   const fetchEligibleUsers = useCallback(async () => {
     try {
@@ -204,7 +231,9 @@ export default function ChatPage() {
       await fetchConversations();
       if (typeof window !== 'undefined') {
         const searchParams = new URLSearchParams(window.location.search);
-        const conv = searchParams.get('conv');
+        const conv = searchParams.get('conv') || searchParams.get('conversation');
+        const message = searchParams.get('message');
+        if (message) setHighlightMessageId(message);
         if (conv) selectConversation(conv);
       }
     });
@@ -240,8 +269,10 @@ export default function ChatPage() {
             const mapped = {
               id: conv.id,
               name: conv.name,
+              description: conv.description,
               isGroup: conv.is_group ?? conv.isGroup ?? false,
               unreadCount: 0,
+              creatorId: conv.creator_id || conv.creatorId,
               createdAt: conv.created_at || conv.createdAt,
               updatedAt: conv.updated_at || conv.updatedAt,
               members: Array.isArray(conv.members)
@@ -532,6 +563,11 @@ export default function ChatPage() {
                 isGroup={activeDetails.isGroup}
                 members={activeConv?.members || []}
                 conversationData={activeConv}
+                onLoadOlderMessages={loadOlderMessages}
+                hasOlderMessages={hasOlderMessages}
+                isLoadingOlder={loadingOlderMessages}
+                highlightMessageId={highlightMessageId}
+                onGroupChanged={fetchConversations}
                 onSendMessage={handleSendMessage}
                 onDeleteMessage={handleDeleteMessage}
                 onRetryMessage={handleRetryMessage}
