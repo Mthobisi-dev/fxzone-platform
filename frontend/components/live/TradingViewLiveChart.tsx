@@ -1,7 +1,7 @@
 'use client';
 
-import { ExternalLink, LineChart } from 'lucide-react';
-import { useMemo } from 'react';
+import { ChevronDown, ChevronUp, ExternalLink, Expand, LineChart, Minimize2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { getTradingViewChartSymbol, getTradingViewChartUrl } from '@/lib/tradingView';
 
@@ -37,6 +37,8 @@ interface TradingViewLiveChartProps {
 
 export function TradingViewLiveChart({ context, isHost, onContextChange }: TradingViewLiveChartProps) {
   const { isDark } = useTheme();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const qualifiedSymbol = getTradingViewChartSymbol(context.symbol) ?? 'COINBASE:BTCUSD';
   const chartUrl = getTradingViewChartUrl(context.symbol);
   const widgetUrl = useMemo(() => {
@@ -56,8 +58,18 @@ export function TradingViewLiveChart({ context, isHost, onContextChange }: Tradi
     return `https://www.tradingview.com/widgetembed/?${query.toString()}`;
   }, [context.interval, isDark, isHost, qualifiedSymbol]);
 
+  useEffect(() => {
+    if (!isExpanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [isExpanded]);
+
   return (
-    <section className="overflow-hidden rounded-xl border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] shadow-lg" aria-label="Live TradingView chart">
+    <section
+      className={`${isExpanded ? 'fixed inset-3 z-[80] flex min-h-0 flex-col' : ''} overflow-hidden rounded-xl border border-[var(--fx-border-subtle)] bg-[var(--fx-bg-surface)] shadow-lg`}
+      aria-label="Live TradingView chart"
+    >
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--fx-border-subtle)] px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <LineChart size={15} className="shrink-0 text-[var(--fx-accent)]" aria-hidden="true" />
@@ -66,19 +78,39 @@ export function TradingViewLiveChart({ context, isHost, onContextChange }: Tradi
             <p className="truncate text-[10px] text-[var(--fx-text-muted)]">TradingView · {context.symbol} · {context.interval === 'D' ? '1D' : `${context.interval}m`}</p>
           </div>
         </div>
-        {chartUrl && (
-          <a
-            href={chartUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[var(--fx-border-subtle)] px-2.5 text-[10px] font-semibold text-[var(--fx-text-muted)] transition hover:border-[var(--fx-accent)] hover:text-[var(--fx-text-strong)]"
+        <div className="flex items-center gap-1.5">
+          {chartUrl && (
+            <a
+              href={chartUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[var(--fx-border-subtle)] px-2.5 text-[10px] font-semibold text-[var(--fx-text-muted)] transition hover:border-[var(--fx-accent)] hover:text-[var(--fx-text-strong)]"
+            >
+              <span className="hidden sm:inline">Open TradingView</span><ExternalLink size={12} aria-hidden="true" />
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+            className="grid min-h-9 min-w-9 place-items-center rounded-md border border-[var(--fx-border-subtle)] text-[var(--fx-text-muted)] transition hover:border-[var(--fx-accent)] hover:text-[var(--fx-text-strong)]"
+            aria-label={isCollapsed ? 'Restore live chart' : 'Minimize live chart'}
+            title={isCollapsed ? 'Restore live chart' : 'Minimize live chart'}
           >
-            Open TradingView <ExternalLink size={12} aria-hidden="true" />
-          </a>
-        )}
+            {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setIsCollapsed(false); setIsExpanded((expanded) => !expanded); }}
+            className="grid min-h-9 min-w-9 place-items-center rounded-md border border-[var(--fx-border-subtle)] text-[var(--fx-text-muted)] transition hover:border-[var(--fx-accent)] hover:text-[var(--fx-text-strong)]"
+            aria-label={isExpanded ? 'Exit expanded live chart' : 'Maximize live chart'}
+            title={isExpanded ? 'Exit expanded live chart' : 'Maximize live chart'}
+          >
+            {isExpanded ? <Minimize2 size={14} /> : <Expand size={14} />}
+          </button>
+        </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--fx-border-subtle)] px-3 py-2">
+      {!isCollapsed && <div className="flex flex-wrap items-center gap-1 border-b border-[var(--fx-border-subtle)] px-3 py-2">
         <label className="sr-only" htmlFor="live-session-chart-symbol">Chart asset</label>
         <select
           id="live-session-chart-symbol"
@@ -104,9 +136,9 @@ export function TradingViewLiveChart({ context, isHost, onContextChange }: Tradi
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
-      <div className="aspect-[16/8] min-h-48 w-full bg-black/10 sm:min-h-56">
+      {!isCollapsed && <div className={`${isExpanded ? 'min-h-0 flex-1' : 'aspect-[16/8] min-h-48 sm:min-h-56'} w-full bg-black/10`}>
         <iframe
           key={widgetUrl}
           title={`${context.symbol} live TradingView chart`}
@@ -116,12 +148,12 @@ export function TradingViewLiveChart({ context, isHost, onContextChange }: Tradi
           allow="fullscreen"
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
-      </div>
+      </div>}
 
       <p className="border-t border-[var(--fx-border-subtle)] px-3 py-2 text-[10px] leading-4 text-[var(--fx-text-muted)]">
         {isHost
-          ? 'Choose an asset and interval, then use Share screen and select Entire Screen or this browser tab so viewers can follow your chart discussion.'
-          : 'The host controls the shared chart view. Use the broadcast screen to follow the host’s current asset and interval.'}
+          ? 'You control the shared chart. Choose an asset or interval, then use Share screen so viewers can follow your discussion.'
+          : 'The host or designated chart controller controls this view. Use the broadcast screen to follow their current asset and interval.'}
       </p>
     </section>
   );

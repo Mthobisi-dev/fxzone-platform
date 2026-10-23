@@ -17,6 +17,50 @@ export function broadcastCaptureOptions(): BroadcastCaptureOptions {
   };
 }
 
+export interface BroadcastCaptureResult {
+  stream: MediaStream;
+  microphoneTrack: MediaStreamTrack | null;
+  sharedAudioTrack: MediaStreamTrack | null;
+  microphoneError: string | null;
+}
+
+/**
+ * Capture the display together with the host microphone. Display audio is
+ * optional because browsers only expose it for some tabs/windows. A denied
+ * microphone must not discard an otherwise valid screen share; the caller can
+ * show the returned warning and keep the broadcast running.
+ */
+export async function captureBroadcastStream(
+  mediaDevices: Pick<MediaDevices, 'getDisplayMedia' | 'getUserMedia'> = navigator.mediaDevices,
+): Promise<BroadcastCaptureResult> {
+  const displayStream = await mediaDevices.getDisplayMedia(broadcastCaptureOptions());
+  const displayAudioTracks = typeof displayStream.getAudioTracks === 'function' ? displayStream.getAudioTracks() : [];
+  const sharedAudioTrack = displayAudioTracks[0] || null;
+  let microphoneTrack: MediaStreamTrack | null = null;
+  let microphoneError: string | null = null;
+
+  if (typeof mediaDevices.getUserMedia === 'function') {
+    try {
+      const microphoneStream = await mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      microphoneTrack = microphoneStream.getAudioTracks()[0] || null;
+      if (microphoneTrack && typeof displayStream.addTrack === 'function') displayStream.addTrack(microphoneTrack);
+    } catch (error) {
+      microphoneError = error instanceof Error ? error.message : 'Microphone permission was not granted.';
+    }
+  } else {
+    microphoneError = 'This browser does not expose microphone capture.';
+  }
+
+  return { stream: displayStream, microphoneTrack, sharedAudioTrack, microphoneError };
+}
+
 export function stopBroadcastTracks(stream: MediaStream): void {
   stream.getTracks().forEach((track) => {
     track.onended = null;

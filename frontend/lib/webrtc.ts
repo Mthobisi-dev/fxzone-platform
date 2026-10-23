@@ -3,7 +3,7 @@
  * Institutional-grade peer-to-peer screen sharing and real-time audio/video streaming.
  */
 import { api } from '@/lib/api';
-import { broadcastCaptureOptions, stopBroadcastTracks } from '@/lib/broadcastMedia';
+import { captureBroadcastStream, stopBroadcastTracks } from '@/lib/broadcastMedia';
 
 function buildBaseRtcConfig(): RTCConfiguration {
   const iceServers: RTCIceServer[] = [
@@ -101,26 +101,17 @@ export class WebRTCClient {
         const [peerId, pc] = peers[i];
         try {
           const senders = pc.getSenders();
-          const videoTrack = stream.getVideoTracks()[0];
-          const audioTrack = stream.getAudioTracks()[0];
-
-          if (senders.length > 0) {
-            const videoSender = senders.find((s: RTCRtpSender) => s.track?.kind === 'video');
-            const audioSender = senders.find((s: RTCRtpSender) => s.track?.kind === 'audio');
-
-            if (videoSender && videoTrack) {
-              await videoSender.replaceTrack(videoTrack);
-            } else if (videoTrack) {
-              pc.addTrack(videoTrack, stream);
+          const usedSenders = new Set<RTCRtpSender>();
+          for (const track of stream.getTracks()) {
+            const sender = senders.find((candidate: RTCRtpSender) => (
+              !usedSenders.has(candidate) && candidate.track?.kind === track.kind
+            ));
+            if (sender) {
+              usedSenders.add(sender);
+              await sender.replaceTrack(track);
+            } else {
+              pc.addTrack(track, stream);
             }
-
-            if (audioSender && audioTrack) {
-              await audioSender.replaceTrack(audioTrack);
-            } else if (audioTrack) {
-              pc.addTrack(audioTrack, stream);
-            }
-          } else {
-            stream.getTracks().forEach((track) => pc.addTrack(track, stream));
           }
 
           // Renegotiate connection with peer
@@ -172,7 +163,7 @@ export class WebRTCClient {
    */
   public async startLocalStream(): Promise<MediaStream> {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia(broadcastCaptureOptions());
+      const { stream } = await captureBroadcastStream(navigator.mediaDevices);
 
       if (this.closed) {
         stopBroadcastTracks(stream);
@@ -200,9 +191,9 @@ export class WebRTCClient {
   /**
    * Toggle microphone audio track state.
    */
-  public toggleAudio(enabled: boolean) {
+  public toggleAudio(enabled: boolean, trackId?: string) {
     if (this.localStream) {
-      this.localStream.getAudioTracks().forEach((track) => {
+      this.localStream.getAudioTracks().filter((track) => !trackId || track.id === trackId).forEach((track) => {
         track.enabled = enabled;
       });
     }

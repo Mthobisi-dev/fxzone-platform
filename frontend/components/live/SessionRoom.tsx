@@ -18,9 +18,10 @@ import {
   Disc,
 } from 'lucide-react';
 import { WebRTCClient } from '@/lib/webrtc';
-import { broadcastCaptureOptions, stopBroadcastTracks, getScreenShareCapability, screenShareUnavailableMessage, type ShareCapability } from '@/lib/broadcastMedia';
+import { captureBroadcastStream, stopBroadcastTracks, getScreenShareCapability, screenShareUnavailableMessage, type ShareCapability } from '@/lib/broadcastMedia';
 import { api } from '@/lib/api';
 import { canControlLiveBroadcastMedia, canEndLiveBroadcast } from '@/lib/liveSessionPermissions';
+import { canAcceptLiveChartContext, canControlLiveChart, isLiveChartControlEventFromHost } from '@/lib/liveChartControl';
 import { Button } from '../ui/Button';
 import { Avatar } from '../ui/Avatar';
 
@@ -65,12 +66,14 @@ export function SessionRoom({
   const [isStartingShare, setIsStartingShare] = useState(false);
   const [captureSurface, setCaptureSurface] = useState<string | null>(null);
   const [chartContext, setChartContext] = useState<LiveChartContext>({ symbol: 'BTCUSD', interval: '60' });
+  const [chartControllerId, setChartControllerId] = useState<string | null>(null);
+  const [chartControllerName, setChartControllerName] = useState<string | null>(null);
   const hydrated = useHydrated();
   const screenShareCapability: ShareCapability = hydrated && typeof navigator !== 'undefined'
     ? getScreenShareCapability(navigator)
     : 'unsupported';
   const screenShareSupported = screenShareCapability === 'supported';
-  const [hasSharedAudio, setHasSharedAudio] = useState(false);
+  const [hasMicrophone, setHasMicrophone] = useState(false);
   const capturePendingRef = useRef(false);
 
   // ─── Refs (never go stale in callbacks) ─────────────────────────────────────
@@ -83,10 +86,13 @@ export function SessionRoom({
   const recordingTimerRef = useRef<any>(null);
   const shareTimerRef = useRef<any>(null);
   const participantFetchRef = useRef<any>(null);
+  const chartControllerRef = useRef<string | null>(null);
+  const microphoneTrackRef = useRef<MediaStreamTrack | null>(null);
 
   // Admin override detection
   const isAdmin = user?.role === 'admin';
   const canControlBroadcast = canControlLiveBroadcastMedia(isHost);
+  const canControlChart = canControlLiveChart({ viewerId: userId, hostId, controllerId: chartControllerId });
   const canEndBroadcast = canEndLiveBroadcast({ isHost, isAdmin });
 
   // ─── WebSocket ────────────────────────────────────────────────────────────────
@@ -110,6 +116,17 @@ export function SessionRoom({
             username: user.username,
           },
         });
+        if (isHost) {
+          socketRef.current?.send({
+            type: 'chart_control',
+            data: {
+              controller_id: chartControllerRef.current,
+              controller_name: chartControllerName,
+              sender_id: user.id,
+            },
+          });
+          socketRef.current?.send({ type: 'chart_context', data: { ...chartContext, sender_id: user.id } });
+        }
         if (isSharingRef.current) {
           socketRef.current?.send({ type: 'rtc_signal', data: {
             type: 'presenter_stream_started', sender_id: user.id, sender_username: user.username,
@@ -134,6 +151,14 @@ export function SessionRoom({
       // Always use the ref — never a captured stale closure value.
       const signal = payload.data || payload;
       if (signal?.type === 'peer_joined' && isHost && userId) {
+        socketRef.current?.send({
+          type: 'chart_control',
+          data: {
+            controller_id: chartControllerRef.current,
+            controller_name: chartControllerName,
+            sender_id: userId,
+          },
+        });
         socketRef.current?.send({ type: 'chart_context', data: { ...chartContext, sender_id: userId } });
       }
       rtcClientRef.current?.handleSignal(signal);
@@ -155,7 +180,16 @@ export function SessionRoom({
     chart_context: (payload) => {
       const data = payload.data || payload;
       if (!data || data.sender_id === userId || !data.symbol || !data.interval) return;
+      if (!canAcceptLiveChartContext({ senderId: data.sender_id, hostId, controllerId: chartControllerRef.current })) return;
       setChartContext({ symbol: String(data.symbol), interval: String(data.interval) });
+    },
+    chart_control: (payload) => {
+      const data = payload.data || payload;
+      if (!data || !isLiveChartControlEventFromHost(data.sender_id, hostId)) return;
+      const nextControllerId = data.controller_id ? String(data.controller_id) : null;
+      chartControllerRef.current = nextControllerId;
+      setChartControllerId(nextControllerId);
+      setChartControllerName(data.controller_name ? String(data.controller_name) : null);
     },
     recording_status: (payload) => {
       const recData = payload.data || payload;
@@ -171,27 +205,37 @@ export function SessionRoom({
   }, Boolean(user && token && isAuthenticated));
 
   const handleChartContextChange = useCallback((nextContext: LiveChartContext) => {
-    if (!isHost || !nextContext.symbol || !nextContext.interval) return;
+    if (!canControlChart || !nextContext.symbol || !nextContext.interval) return;
     setChartContext(nextContext);
     if (userId && socketRef.current?.getState() === 'CONNECTED') {
       socketRef.current.send({ type: 'chart_context', data: { ...nextContext, sender_id: userId } });
     }
-  }, [isHost, userId]);
+  }, [canControlChart, userId]);
 
   // ─── Participants ─────────────────────────────────────────────────────────────
   const fetchParticipants = useCallback(async () => {
     try {
       const res = await api.get(`/api/sessions/${sessionId}/participants`);
       if (Array.isArray(res)) {
-        setParticipants(res.map((participant) => ({
+        const nextParticipants = res.map((participant) => ({
           ...participant,
           user: participant.user ? {
             ...participant.user,
             displayName: participant.user.displayName || participant.user.display_name,
             avatarUrl: participant.user.avatarUrl || participant.user.avatar_url,
           } : null,
-        })));
-        setParticipantsCount(res.filter((participant) => participant.role === 'viewer' || participant.role === 'host').length);
+        }));
+        setParticipants(nextParticipants);
+        setParticipantsCount(nextParticipants.filter((participant) => participant.role === 'viewer' || participant.role === 'host').length);
+        if (isHost && chartControllerRef.current && !nextParticipants.some((participant) => (
+          (participant.role === 'viewer' || participant.role === 'host')
+          && String(participant.user_id || participant.userId || participant.user?.id || '') === chartControllerRef.current
+        ))) {
+          chartControllerRef.current = null;
+          setChartControllerId(null);
+          setChartControllerName(null);
+          if (userId) socketRef.current?.send({ type: 'chart_control', data: { controller_id: null, controller_name: null, sender_id: userId } });
+        }
         setApprovalError(null);
       }
     } catch (e) {
@@ -242,6 +286,25 @@ export function SessionRoom({
     } finally {
       setReviewingParticipantId(null);
     }
+  };
+
+  const handleChartControllerChange = (targetUserId: string | null, targetName: string | null = null) => {
+    if (!isHost || !userId) return;
+    if (targetUserId && !participants.some((participant) => (
+      (participant.role === 'viewer' || participant.role === 'host')
+      && String(participant.user_id || participant.userId || participant.user?.id || '') === targetUserId
+    ))) {
+      setBroadcastError('Only an admitted participant can receive chart control.');
+      return;
+    }
+    chartControllerRef.current = targetUserId;
+    setChartControllerId(targetUserId);
+    setChartControllerName(targetName);
+    socketRef.current?.send({
+      type: 'chart_control',
+      data: { controller_id: targetUserId, controller_name: targetName, sender_id: userId },
+    });
+    socketRef.current?.send({ type: 'chart_context', data: { ...chartContext, sender_id: userId } });
   };
 
   // ─── WebRTC client — created ONCE per session mount, lives in a ref ──────────
@@ -340,7 +403,8 @@ export function SessionRoom({
     setIsStartingShare(true);
     let capturedStream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia(broadcastCaptureOptions());
+      const capture = await captureBroadcastStream(navigator.mediaDevices);
+      const stream = capture.stream;
       capturedStream = stream;
 
       if (rtcClientRef.current !== client) {
@@ -351,10 +415,14 @@ export function SessionRoom({
       // Update refs immediately — callbacks read these, not stale state.
       isSharingRef.current = true;
       activeStreamRef.current = stream;
+      microphoneTrackRef.current = capture.microphoneTrack;
       setActiveStream(stream);
       setIsSharingScreen(true);
-      setHasSharedAudio(stream.getAudioTracks().length > 0);
+      setHasMicrophone(Boolean(capture.microphoneTrack));
       setCaptureSurface(stream.getVideoTracks()[0]?.getSettings().displaySurface || null);
+      if (capture.microphoneError) {
+        setBroadcastError(`Screen sharing started, but your microphone is unavailable: ${capture.microphoneError}`);
+      }
 
       // Push stream into the existing (ref-stable) WebRTC client.
       if (rtcClientRef.current) {
@@ -391,7 +459,8 @@ export function SessionRoom({
       activeStreamRef.current = null;
       setActiveStream(null);
       setIsSharingScreen(false);
-      setHasSharedAudio(false);
+      setHasMicrophone(false);
+      microphoneTrackRef.current = null;
       setCaptureSurface(null);
       console.warn('Display media capture cancelled or rejected:', err);
       setBroadcastError(err instanceof Error && err.name === 'NotAllowedError'
@@ -411,7 +480,8 @@ export function SessionRoom({
     activeStreamRef.current = null;
     setActiveStream(null);
     setIsSharingScreen(false);
-    setHasSharedAudio(false);
+    setHasMicrophone(false);
+    microphoneTrackRef.current = null;
     setCaptureSurface(null);
     setShareTimeLeft(null);
     if (mediaRecorderRef.current?.state === 'recording') stopRecording();
@@ -525,7 +595,7 @@ export function SessionRoom({
 
   // Audio/video mute toggles — always use the ref.
   const handleMicToggle = (enabled: boolean) => {
-    if (canControlBroadcast) rtcClientRef.current?.toggleAudio(enabled);
+    if (canControlBroadcast) rtcClientRef.current?.toggleAudio(enabled, microphoneTrackRef.current?.id);
   };
   const handleCamToggle = (enabled: boolean) => {
     if (canControlBroadcast) rtcClientRef.current?.toggleVideo(enabled);
@@ -550,6 +620,7 @@ export function SessionRoom({
   };
 
   const pendingParticipants = participants.filter((p) => p.role === 'pending');
+  const activeParticipants = participants.filter((p) => p.role === 'viewer' || p.role === 'host');
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -670,7 +741,7 @@ export function SessionRoom({
 
           <TradingViewLiveChart
             context={chartContext}
-            isHost={isHost}
+            isHost={canControlChart}
             onContextChange={handleChartContextChange}
           />
 
@@ -681,7 +752,7 @@ export function SessionRoom({
             isStartingShare={isStartingShare}
             canStartShare={signalingStatus === 'connected'}
             screenShareSupported={screenShareSupported}
-            hasSharedAudio={hasSharedAudio}
+            hasMicrophone={hasMicrophone}
             isRecording={isRecording}
             recordingDuration={formatRecordTime(recordingSeconds)}
             onToggleMic={handleMicToggle}
@@ -756,6 +827,37 @@ export function SessionRoom({
                   </div>
                 );
               })}
+            </div>
+            <div className="border-t border-zinc-850 pt-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Active participants</h4>
+                {chartControllerId && <span className="text-[9px] text-blue-300">Chart control delegated</span>}
+              </div>
+              {activeParticipants.length === 0 && <p className="text-[10px] text-zinc-500">Approved viewers appear here.</p>}
+              <div className="space-y-1.5">
+                {activeParticipants.map((participant) => {
+                  const targetUserId = String(participant.user_id || participant.userId || participant.user?.id || '');
+                  if (!targetUserId || targetUserId === String(userId)) return null;
+                  const targetName = participant.user?.displayName || participant.user?.username || 'Viewer';
+                  const hasControl = chartControllerId === targetUserId;
+                  return (
+                    <div key={`active-${participant.id || targetUserId}`} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-850 bg-zinc-900/70 px-2.5 py-2">
+                      <div className="min-w-0">
+                        <span className="block truncate text-[10px] font-semibold text-zinc-200">{targetName}</span>
+                        <span className="block text-[9px] text-zinc-500">{participant.role === 'host' ? 'Host' : hasControl ? 'Chart controller' : 'Viewer'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleChartControllerChange(hasControl ? null : targetUserId, hasControl ? null : targetName)}
+                        className={`min-h-9 shrink-0 rounded-md border px-2 text-[9px] font-semibold transition ${hasControl ? 'border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20' : 'border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'}`}
+                        aria-label={hasControl ? `Revoke chart control from ${targetName}` : `Give chart control to ${targetName}`}
+                      >
+                        {hasControl ? 'Revoke' : 'Give control'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

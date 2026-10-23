@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Volume2,
-  VolumeX,
+  Mic,
+  MicOff,
   Video,
   VideoOff,
   ScreenShare,
@@ -22,6 +22,7 @@ interface SessionControlsProps {
   canStartShare?: boolean;
   screenShareSupported?: boolean;
   hasSharedAudio?: boolean;
+  hasMicrophone?: boolean;
   isRecording?: boolean;
   recordingDuration?: string;
   onToggleMic: (enabled: boolean) => void;
@@ -41,6 +42,7 @@ export function SessionControls({
   canStartShare = true,
   screenShareSupported = true,
   hasSharedAudio = false,
+  hasMicrophone,
   isRecording = false,
   recordingDuration = '00:00',
   onToggleMic,
@@ -56,6 +58,7 @@ export function SessionControls({
   const [camOn, setCamOn] = useState(true);
   const [duration, setDuration] = useState('00:00:00');
   const [mountedAt] = useState(() => Date.now());
+  const microphoneAvailable = hasMicrophone ?? hasSharedAudio;
 
   useEffect(() => {
     const start = startTime ? new Date(startTime).getTime() : mountedAt;
@@ -115,16 +118,16 @@ export function SessionControls({
           <>
             <button
               onClick={handleMic}
-              disabled={!isSharing || !hasSharedAudio}
+              disabled={!isSharing || !microphoneAvailable}
               className={`min-h-11 min-w-11 rounded-lg border p-2.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fx-accent)] ${
                 micOn
                   ? 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:bg-zinc-850'
                   : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
               }`}
-              title={!hasSharedAudio ? 'No shared audio. Choose Share tab audio in the screen picker.' : micOn ? 'Mute shared audio' : 'Unmute shared audio'}
-              aria-label={micOn ? 'Mute shared audio' : 'Unmute shared audio'}
+              title={!microphoneAvailable ? 'Microphone unavailable. Allow microphone access when starting the broadcast.' : micOn ? 'Mute microphone' : 'Unmute microphone'}
+              aria-label={micOn ? 'Mute microphone' : 'Unmute microphone'}
             >
-              {micOn ? <Volume2 size={15} /> : <VolumeX size={15} />}
+              {micOn ? <Mic size={15} /> : <MicOff size={15} />}
             </button>
 
             <button

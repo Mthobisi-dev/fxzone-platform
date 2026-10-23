@@ -124,6 +124,7 @@ test('double Share clicks open one picker and leaving before selection releases 
     'lucide-react': require('lucide-react'), '@/lib/webrtc': { WebRTCClient: RTC },
     '@/lib/api': { api: { get: async () => [] } },
     '@/lib/liveSessionPermissions': load('liveSessionPermissions.ts', {}),
+    '@/lib/liveChartControl': load('liveChartControl.ts', {}),
     '../ui/Button': { Button: () => null }, '../ui/Avatar': { Avatar: () => null },
   }, {
     document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} },
