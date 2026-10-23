@@ -183,7 +183,7 @@ function rtcHarness() {
       this.offers = [];
       peers.push(this);
     }
-    addTrack(track) { this.senders.push({ track, replaceTrack: async (next) => { track = next; } }); }
+    addTrack(track) { const sender = { track, replaceTrack: async (next) => { sender.track = next; } }; this.senders.push(sender); return sender; }
     getSenders() { return this.senders; }
     removeTrack(sender) { this.senders = this.senders.filter((s) => s !== sender); }
     async createOffer(options) { this.offers.push(options); return { type: 'offer', sdp: 'offer-sdp' }; }
@@ -243,6 +243,18 @@ test('duplicate discovery during an outstanding offer does not replace the peer'
   await client.handleSignal({ type: 'request_stream', sender_id: 'viewer' });
   assert.equal(peers.length, 1);
   assert.equal(signals.filter((s) => s.type === 'offer').length, 1);
+});
+
+test('replacing a live capture track does not renegotiate an established connection', async () => {
+  const { client, stream, peers, signals } = rtcHarness();
+  await client.setLocalStream(stream);
+  await client.handleSignal({ type: 'peer_joined', user_id: 'viewer' });
+  await client.handleSignal({ type: 'answer', sender_id: 'viewer', data: { type: 'answer', sdp: 'answer' } });
+  const initialOfferCount = signals.filter((signal) => signal.type === 'offer').length;
+  const replacement = { kind: 'video', stop() {} };
+  await client.setLocalStream({ getTracks: () => [replacement], getVideoTracks: () => [replacement], getAudioTracks: () => [] });
+  assert.equal(peers[0].getSenders()[0].track, replacement);
+  assert.equal(signals.filter((signal) => signal.type === 'offer').length, initialOfferCount);
 });
 
 test('host screen sharing never renders its own capture back into the captured page', () => {

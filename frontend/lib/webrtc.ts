@@ -3,7 +3,7 @@
  * Institutional-grade peer-to-peer screen sharing and real-time audio/video streaming.
  */
 import { api } from '@/lib/api';
-import { captureBroadcastStream, stopBroadcastTracks } from '@/lib/broadcastMedia';
+import { captureBroadcastStream, stopBroadcastTracks, tuneBroadcastSender } from '@/lib/broadcastMedia';
 
 function buildBaseRtcConfig(): RTCConfiguration {
   const iceServers: RTCIceServer[] = [
@@ -48,6 +48,8 @@ export class WebRTCClient {
   private negotiatingPeers: Set<string> = new Set();
   private signalQueues = new Map<string, Promise<void>>();
   private restartAttempts = new Map<string, number>();
+  private recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private remoteStreams = new Map<string, MediaStream>();
   private closed = false;
   private localStream: MediaStream | null = null;
   private sessionId: string;
@@ -109,22 +111,29 @@ export class WebRTCClient {
             if (sender) {
               usedSenders.add(sender);
               await sender.replaceTrack(track);
+              await tuneBroadcastSender(sender, track);
             } else {
-              pc.addTrack(track, stream);
+              const addedSender = pc.addTrack(track, stream);
+              await tuneBroadcastSender(addedSender, track);
             }
           }
 
-          // Renegotiate connection with peer
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true,
-          });
-          await pc.setLocalDescription(offer);
-          this.sendSignal({
-            target_user_id: peerId,
-            type: 'offer',
-            data: offer,
-          });
+          // Reuse the negotiated sender when a capture is stopped or a browser
+          // drops an optional audio track. Replacing with null avoids tearing
+          // down the ICE transport and prevents a visible freeze during a
+          // quick restart.
+          for (const sender of senders) {
+            if (!usedSenders.has(sender) && sender.track) {
+              usedSenders.add(sender);
+              await sender.replaceTrack(null);
+            }
+          }
+
+          // replaceTrack does not require SDP renegotiation. Only negotiate
+          // when a new sender was added, avoiding a burst of offers whenever a
+          // host changes or restarts a capture.
+          const addedTrack = pc.getSenders().some((sender) => sender.track && !senders.includes(sender));
+          if (addedTrack) await this.negotiatePeer(peerId, pc);
         } catch (e) {
           console.error(`Error updating stream tracks for peer ${peerId}:`, e);
         }
@@ -137,15 +146,14 @@ export class WebRTCClient {
       });
     } else {
       // Stream stopped — remove tracks from connections and announce stop
-      this.peerConnections.forEach((pc) => {
-        pc.getSenders().forEach((sender: RTCRtpSender) => {
-          try {
-            pc.removeTrack(sender);
-          } catch (e) {
-            // Safe ignore
+      await Promise.all(Array.from(this.peerConnections.entries()).map(async ([peerId, pc]) => {
+        for (const sender of pc.getSenders()) {
+          if (sender.track) {
+            try { await sender.replaceTrack(null); } catch { /* connection may be closing */ }
           }
-        });
-      });
+        }
+        this.cancelRecovery(peerId);
+      }));
 
       this.sendSignal({
         type: 'presenter_stream_stopped',
@@ -363,8 +371,13 @@ export class WebRTCClient {
     }
     this.pendingCandidates.delete(peerId);
     this.restartAttempts.delete(peerId);
+    this.cancelRecovery(peerId);
+    this.remoteStreams.delete(peerId);
     if (this.onPeerLeftCallback) {
       this.onPeerLeftCallback(peerId);
+    }
+    if (!this.isPresenter && this.remoteStreams.size === 0 && this.onStreamCallback) {
+      this.onStreamCallback(null);
     }
   }
 
@@ -400,21 +413,12 @@ export class WebRTCClient {
       if (this.closed || !this.localStream) { pc.close(); return; }
       this.peerConnections.set(targetUserId, pc);
 
-      this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
-      });
+      for (const track of this.localStream.getTracks()) {
+        const addedSender = pc.addTrack(track, this.localStream!);
+        await tuneBroadcastSender(addedSender, track);
+      }
 
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
-      });
-      await pc.setLocalDescription(offer);
-
-      this.sendSignal({
-        target_user_id: targetUserId,
-        type: 'offer',
-        data: offer,
-      });
+      await this.negotiatePeer(targetUserId, pc);
     } finally {
       this.negotiatingPeers.delete(targetUserId);
     }
@@ -437,11 +441,12 @@ export class WebRTCClient {
 
     // If viewer also has local media tracks (e.g. 2-way voice/mic)
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
+      for (const track of this.localStream.getTracks()) {
         if (!pc!.getSenders().some((sender) => sender.track === track)) {
-          pc!.addTrack(track, this.localStream!);
+          const addedSender = pc!.addTrack(track, this.localStream!);
+          await tuneBroadcastSender(addedSender, track);
         }
-      });
+      }
     }
 
     const sessionDesc = offerData instanceof RTCSessionDescription
@@ -536,26 +541,41 @@ export class WebRTCClient {
     };
 
     pc.ontrack = (event) => {
-      const incomingStream = event.streams[0] || new MediaStream([event.track]);
+      const existingStream = this.remoteStreams.get(targetUserId);
+      const incomingStream = existingStream || event.streams[0] || new MediaStream();
+      if (event.streams[0] && event.streams[0] !== incomingStream) {
+        event.streams[0].getTracks().forEach((track) => {
+          if (!incomingStream.getTracks().some((candidate) => candidate.id === track.id)) incomingStream.addTrack(track);
+        });
+      }
+      if (!incomingStream.getTracks().some((track) => track.id === event.track.id)) {
+        incomingStream.addTrack(event.track);
+      }
+      this.remoteStreams.set(targetUserId, incomingStream);
       if (this.onStreamCallback) {
         this.onStreamCallback(incomingStream, { userId: targetUserId, username: targetUsername });
       }
     };
 
-    pc.onconnectionstatechange = () => {
+    const recoverConnection = () => {
       if (this.closed || this.peerConnections.get(targetUserId) !== pc) return;
-      if (pc.connectionState === 'failed') {
-        if (this.localStream) {
-          void this.restartPeer(targetUserId, pc).catch((error) => console.warn('ICE recovery failed:', error));
-        } else {
-          this.sendSignal({ type: 'request_stream', target_user_id: targetUserId, data: { restart: true } });
-        }
-      } else if (pc.connectionState === 'connected') {
+      const failed = pc.connectionState === 'failed' || pc.iceConnectionState === 'failed';
+      const disconnected = pc.connectionState === 'disconnected' || pc.iceConnectionState === 'disconnected';
+      if (failed) {
+        void this.restartPeer(targetUserId, pc).catch((error) => console.warn('ICE recovery failed:', error));
+      } else if (disconnected) {
+        // Disconnected is often a short Wi-Fi handoff. Debounce it so a
+        // transient mobile network change does not create another offer.
+        this.scheduleRecovery(targetUserId, pc);
+      } else if (pc.connectionState === 'connected' || pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        this.cancelRecovery(targetUserId);
         this.restartAttempts.delete(targetUserId);
       } else if (pc.connectionState === 'closed') {
         this.handlePeerLeft(targetUserId, pc);
       }
     };
+    pc.onconnectionstatechange = recoverConnection;
+    pc.oniceconnectionstatechange = recoverConnection;
 
     return pc;
   }
@@ -573,6 +593,33 @@ export class WebRTCClient {
       await pc.setLocalDescription(offer);
       this.sendSignal({ type: 'offer', target_user_id: peerId, data: offer });
     } finally { this.negotiatingPeers.delete(peerId); }
+  }
+
+  private async negotiatePeer(peerId: string, pc: RTCPeerConnection): Promise<void> {
+    if (this.closed || this.peerConnections.get(peerId) !== pc) return;
+    const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+    await pc.setLocalDescription(offer);
+    this.sendSignal({ target_user_id: peerId, type: 'offer', data: offer });
+  }
+
+  private scheduleRecovery(peerId: string, pc: RTCPeerConnection): void {
+    if (this.closed || this.recoveryTimers.has(peerId)) return;
+    const timer = setTimeout(() => {
+      this.recoveryTimers.delete(peerId);
+      if (this.closed || this.peerConnections.get(peerId) !== pc) return;
+      if (this.localStream) {
+        void this.restartPeer(peerId, pc).catch((error) => console.warn('ICE recovery failed:', error));
+      } else {
+        this.sendSignal({ type: 'request_stream', target_user_id: peerId, data: { restart: true } });
+      }
+    }, 1_500);
+    this.recoveryTimers.set(peerId, timer);
+  }
+
+  private cancelRecovery(peerId: string): void {
+    const timer = this.recoveryTimers.get(peerId);
+    if (timer) clearTimeout(timer);
+    this.recoveryTimers.delete(peerId);
   }
 
   private async loadTurnCredentials(): Promise<void> {
@@ -643,6 +690,9 @@ export class WebRTCClient {
     this.negotiatingPeers.clear();
     this.signalQueues.clear();
     this.restartAttempts.clear();
+    this.recoveryTimers.forEach((timer) => clearTimeout(timer));
+    this.recoveryTimers.clear();
+    this.remoteStreams.clear();
   }
 
   public disconnect() {

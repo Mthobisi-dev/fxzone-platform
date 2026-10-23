@@ -25,6 +25,67 @@ export interface BroadcastCaptureResult {
 }
 
 /**
+ * Keep a screen-share readable while putting a hard ceiling on the amount of
+ * video a peer connection can send. Screen captures can otherwise inherit a
+ * 4K/60Hz desktop format and saturate the uplink, which presents to viewers as
+ * buffering and delayed input.
+ */
+export const BROADCAST_VIDEO_MAX_BITRATE = 2_500_000;
+export const BROADCAST_VIDEO_MAX_FRAMERATE = 30;
+export const BROADCAST_AUDIO_MAX_BITRATE = 128_000;
+
+export async function constrainBroadcastVideoTrack(
+  track: Pick<MediaStreamTrack, 'kind'> & { applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void> },
+): Promise<void> {
+  if (track.kind !== 'video') return;
+  configureBroadcastTrack(track);
+  if (typeof track.applyConstraints !== 'function') return;
+  try {
+    await track.applyConstraints({
+      width: { max: 1920 },
+      height: { max: 1080 },
+      frameRate: { max: BROADCAST_VIDEO_MAX_FRAMERATE },
+    });
+  } catch {
+    // A browser may reject display-track constraints after the picker. The
+    // sender bitrate ceiling remains active and the original track is valid.
+  }
+}
+
+export function configureBroadcastTrack(track: Pick<MediaStreamTrack, 'kind'> & { contentHint?: string }): void {
+  try {
+    track.contentHint = track.kind === 'video' ? 'detail' : 'speech';
+  } catch {
+    // Older browsers expose contentHint as read-only. Sender parameters below
+    // still provide the congestion guard in those browsers.
+  }
+}
+
+export async function tuneBroadcastSender(
+  sender: Pick<RTCRtpSender, 'getParameters' | 'setParameters'>,
+  track: Pick<MediaStreamTrack, 'kind'> | null,
+): Promise<void> {
+  if (track) configureBroadcastTrack(track);
+  try {
+    const parameters = sender.getParameters();
+    const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
+    const isVideo = track?.kind === 'video' || encodings.some((encoding) => encoding.maxFramerate !== undefined);
+    parameters.encodings = encodings.map((encoding) => ({
+      ...encoding,
+      ...(isVideo
+        ? { maxBitrate: BROADCAST_VIDEO_MAX_BITRATE, maxFramerate: BROADCAST_VIDEO_MAX_FRAMERATE }
+        : { maxBitrate: BROADCAST_AUDIO_MAX_BITRATE }),
+    }));
+    if (isVideo) parameters.degradationPreference = 'maintain-resolution';
+    await sender.setParameters(parameters);
+  } catch {
+    // setParameters is not implemented by some older mobile browsers. The
+    // stream remains valid and the browser's default congestion controller is
+    // used instead.
+  }
+}
+
+/**
  * Capture the display together with the host microphone. Display audio is
  * optional because browsers only expose it for some tabs/windows. A denied
  * microphone must not discard an otherwise valid screen share; the caller can
@@ -34,6 +95,8 @@ export async function captureBroadcastStream(
   mediaDevices: Pick<MediaDevices, 'getDisplayMedia' | 'getUserMedia'> = navigator.mediaDevices,
 ): Promise<BroadcastCaptureResult> {
   const displayStream = await mediaDevices.getDisplayMedia(broadcastCaptureOptions());
+  const displayVideoTrack = typeof displayStream.getVideoTracks === 'function' ? displayStream.getVideoTracks()[0] : null;
+  if (displayVideoTrack) await constrainBroadcastVideoTrack(displayVideoTrack);
   const displayAudioTracks = typeof displayStream.getAudioTracks === 'function' ? displayStream.getAudioTracks() : [];
   const sharedAudioTrack = displayAudioTracks[0] || null;
   let microphoneTrack: MediaStreamTrack | null = null;

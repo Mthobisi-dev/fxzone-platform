@@ -1,6 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { broadcastCaptureOptions, captureBroadcastStream, supportsScreenShare } = require('./broadcastMedia.ts');
+const {
+  broadcastCaptureOptions,
+  captureBroadcastStream,
+  configureBroadcastTrack,
+  constrainBroadcastVideoTrack,
+  tuneBroadcastSender,
+  supportsScreenShare,
+} = require('./broadcastMedia.ts');
 
 test('screen capture prefers the entire display so a host can navigate between FxZone pages', () => {
   const options = broadcastCaptureOptions();
@@ -13,6 +20,38 @@ test('screen share availability follows the current browser media API', () => {
   assert.equal(supportsScreenShare(undefined), false);
   assert.equal(supportsScreenShare({}), false);
   assert.equal(supportsScreenShare({ getDisplayMedia() {} }), true);
+});
+
+test('screen-share tracks are tuned for readable motion without saturating the connection', async () => {
+  const videoTrack = { kind: 'video' };
+  const sender = {
+    getParameters() { return { encodings: [{}] }; },
+    async setParameters(parameters) { this.parameters = parameters; },
+  };
+
+  configureBroadcastTrack(videoTrack);
+  await tuneBroadcastSender(sender, videoTrack);
+
+  assert.equal(videoTrack.contentHint, 'detail');
+  assert.equal(sender.parameters.degradationPreference, 'maintain-resolution');
+  assert.equal(sender.parameters.encodings[0].maxFramerate, 30);
+  assert.equal(sender.parameters.encodings[0].maxBitrate, 2_500_000);
+});
+
+test('screen-share capture constrains oversized desktop frames before publishing', async () => {
+  const constraints = [];
+  const track = {
+    kind: 'video',
+    applyConstraints: async (value) => { constraints.push(value); },
+  };
+
+  await constrainBroadcastVideoTrack(track);
+
+  assert.deepEqual(constraints, [{
+    width: { max: 1920 },
+    height: { max: 1080 },
+    frameRate: { max: 30 },
+  }]);
 });
 
 test('broadcast capture adds a microphone track while preserving display audio', async () => {
