@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
-import { Plus, X, ArrowLeft, ArrowRight, Upload, Heart } from 'lucide-react';
+import { Plus, X, ArrowLeft, ArrowRight, Upload, Heart, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { uploadSocialMedia } from '@/lib/uploadSocialMedia';
@@ -41,6 +41,7 @@ export function StoryBar() {
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [deletingStoryId, setDeletingStoryId] = useState<string | null>(null);
 
   const selectStoryFile = (file: File | null) => {
     setStoryFile(file);
@@ -180,6 +181,34 @@ export function StoryBar() {
       console.error('Failed to like story:', error);
       setStories((previous) => previous.map((story) => applyLike(story, current.isLiked, current.likesCount)));
       setActiveStoryGroup((previous) => previous?.map((story) => applyLike(story, current.isLiked, current.likesCount)) ?? null);
+    }
+  };
+
+  const deleteStory = async (storyId: string) => {
+    const story = stories.find((candidate) => candidate.id === storyId);
+    if (!story || !user?.id || story.userId !== user.id || deletingStoryId) return;
+    if (!window.confirm('Delete this story now? This cannot be undone.')) return;
+
+    setDeletingStoryId(storyId);
+    try {
+      await api.delete(`/api/social/posts/${storyId}`);
+      const remainingStories = stories.filter((candidate) => candidate.id !== storyId);
+      const remainingGroup = activeStoryGroup?.filter((candidate) => candidate.id !== storyId) ?? null;
+      setStories(remainingStories);
+      if (!remainingGroup || remainingGroup.length === 0) {
+        setActiveStoryGroup(null);
+        setActiveStoryIdx(0);
+      } else {
+        setActiveStoryGroup(remainingGroup);
+        setActiveStoryIdx((index) => Math.min(index, remainingGroup.length - 1));
+      }
+      window.dispatchEvent(new CustomEvent('fxzone_refresh_stories'));
+      window.dispatchEvent(new CustomEvent('fxzone_refresh_feed'));
+    } catch (error) {
+      console.error('Failed to delete story:', error);
+      window.alert('Could not delete this story. Please try again.');
+    } finally {
+      setDeletingStoryId(null);
     }
   };
 
@@ -356,6 +385,18 @@ export function StoryBar() {
                     </span>
                   </div>
                 </div>
+                {user?.id === activeStoryGroup[activeStoryIdx].userId && (
+                  <button
+                    type="button"
+                    onClick={() => void deleteStory(activeStoryGroup[activeStoryIdx].id)}
+                    disabled={deletingStoryId === activeStoryGroup[activeStoryIdx].id}
+                    className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-full border border-white/15 bg-black/50 text-zinc-300 transition-colors hover:bg-rose-500/20 hover:text-rose-200 disabled:cursor-wait disabled:opacity-60"
+                    aria-label="Delete story"
+                    title="Delete story"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
               </div>
 
               {/* Story Content View */}
