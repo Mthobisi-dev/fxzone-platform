@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ScreenShare } from './ScreenShare';
+import { TradingViewLiveChart, type LiveChartContext } from './TradingViewLiveChart';
 import { SessionChat, SessionChatMessage } from './SessionChat';
 import { SessionControls } from './SessionControls';
 import { useAuth } from '@/hooks/useAuth';
@@ -63,6 +64,7 @@ export function SessionRoom({
   const [isEndingBroadcast, setIsEndingBroadcast] = useState(false);
   const [isStartingShare, setIsStartingShare] = useState(false);
   const [captureSurface, setCaptureSurface] = useState<string | null>(null);
+  const [chartContext, setChartContext] = useState<LiveChartContext>({ symbol: 'BTCUSD', interval: '60' });
   const hydrated = useHydrated();
   const screenShareCapability: ShareCapability = hydrated && typeof navigator !== 'undefined'
     ? getScreenShareCapability(navigator)
@@ -130,7 +132,11 @@ export function SessionRoom({
     },
     rtc_signal: (payload) => {
       // Always use the ref — never a captured stale closure value.
-      rtcClientRef.current?.handleSignal(payload.data || payload);
+      const signal = payload.data || payload;
+      if (signal?.type === 'peer_joined' && isHost && userId) {
+        socketRef.current?.send({ type: 'chart_context', data: { ...chartContext, sender_id: userId } });
+      }
+      rtcClientRef.current?.handleSignal(signal);
     },
     members_update: (payload) => {
       setParticipantsCount(payload.data?.count || payload.count || 1);
@@ -146,6 +152,11 @@ export function SessionRoom({
       }
     },
     participant_rejected: () => fetchParticipants(),
+    chart_context: (payload) => {
+      const data = payload.data || payload;
+      if (!data || data.sender_id === userId || !data.symbol || !data.interval) return;
+      setChartContext({ symbol: String(data.symbol), interval: String(data.interval) });
+    },
     recording_status: (payload) => {
       const recData = payload.data || payload;
       setIsRoomBeingRecorded(!!recData.isRecording);
@@ -158,6 +169,14 @@ export function SessionRoom({
       setCopilotAlerts((prev) => [payload.data.message, ...prev].slice(0, 3));
     },
   }, Boolean(user && token && isAuthenticated));
+
+  const handleChartContextChange = useCallback((nextContext: LiveChartContext) => {
+    if (!isHost || !nextContext.symbol || !nextContext.interval) return;
+    setChartContext(nextContext);
+    if (userId && socketRef.current?.getState() === 'CONNECTED') {
+      socketRef.current.send({ type: 'chart_context', data: { ...nextContext, sender_id: userId } });
+    }
+  }, [isHost, userId]);
 
   // ─── Participants ─────────────────────────────────────────────────────────────
   const fetchParticipants = useCallback(async () => {
@@ -648,6 +667,12 @@ export function SessionRoom({
               isHost={isHost}
             />
           </div>
+
+          <TradingViewLiveChart
+            context={chartContext}
+            isHost={isHost}
+            onContextChange={handleChartContextChange}
+          />
 
           {/* Controls Bar */}
           <SessionControls

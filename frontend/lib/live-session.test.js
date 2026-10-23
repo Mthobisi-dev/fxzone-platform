@@ -116,6 +116,7 @@ test('double Share clicks open one picker and leaving before selection releases 
   class RTC { close() {} async setLocalStream() {} }
   const harness = componentHarness('../components/live/SessionRoom.tsx', {
     './ScreenShare': { ScreenShare: () => null }, './SessionChat': { SessionChat: () => null },
+    './TradingViewLiveChart': { TradingViewLiveChart: () => null },
     './SessionControls': { SessionControls: Controls },
     '@/hooks/useAuth': { useAuth: () => ({ user: { id: 'host' }, token: 'test', isAuthenticated: true }) },
     '@/hooks/useHydrated': { useHydrated: () => true },
