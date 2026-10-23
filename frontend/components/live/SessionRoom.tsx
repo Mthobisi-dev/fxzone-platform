@@ -210,6 +210,9 @@ export function SessionRoom({
     if (userId && socketRef.current?.getState() === 'CONNECTED') {
       socketRef.current.send({ type: 'chart_context', data: { ...nextContext, sender_id: userId } });
     }
+  // socketRef is a stable mutable ref; it must not be a dependency because its
+  // current value changes as the realtime connection reconnects.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canControlChart, userId]);
 
   // ─── Participants ─────────────────────────────────────────────────────────────
@@ -242,7 +245,9 @@ export function SessionRoom({
       console.error('Error fetching participants:', e);
       setApprovalError('Access requests could not refresh. Retrying automatically.');
     }
-  }, [sessionId]);
+  // socketRef is intentionally omitted for the same stable-ref reason above.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, sessionId, userId]);
 
   useEffect(() => {
     if (!isHost) return;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StoryBar } from '@/components/social/StoryBar';
 import { PostComposer } from '@/components/social/PostComposer';
 import { PostCard, Post } from '@/components/social/PostCard';
@@ -55,7 +55,9 @@ function TrendingSymbolsCard({ items }: { items: TrendingSymbolView[] }) {
 export default function SocialFeedPage() {
   const { user } = useAuth();
   const mounted = useHydrated();
-  const [requestedPostId, setRequestedPostId] = useState<string | null>(null);
+  const [requestedPostId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('post')
+  );
 
   const isAdmin = user?.role === 'admin';
   const showAdminControls = mounted && isAdmin;
@@ -66,7 +68,7 @@ export default function SocialFeedPage() {
   // Sidebar dynamic real data
   const [trendingSymbols, setTrendingSymbols] = useState<TrendingSymbolView[]>([]);
 
-  const fetchSidebarData = () => {
+  const fetchSidebarData = useCallback(() => {
     return api.get('/api/social/trending-symbols', { public: true }).then((trendResponse) => {
       if (Array.isArray(trendResponse)) {
         setTrendingSymbols(
@@ -89,9 +91,9 @@ export default function SocialFeedPage() {
     }).catch((e) => {
       console.error('Failed to load sidebar data:', e);
     });
-  };
+  }, []);
 
-  const fetchFeed = () => {
+  const fetchFeed = useCallback(() => {
     return api.get('/api/social/feed').then((response) => {
       if (Array.isArray(response)) {
         const mapped = response.map((p: any) => ({
@@ -136,7 +138,12 @@ export default function SocialFeedPage() {
             uniquePostsMap.set(post.id, post);
           }
         }
-        setPosts(Array.from(uniquePostsMap.values()));
+        const nextPosts = Array.from(uniquePostsMap.values());
+        setPosts(nextPosts);
+        if (requestedPostId) {
+          const requestedPost = nextPosts.find((post) => String(post.id) === requestedPostId);
+          if (requestedPost) setSelectedPost(requestedPost);
+        }
       } else {
         setPosts([]);
       }
@@ -145,10 +152,9 @@ export default function SocialFeedPage() {
     }).finally(() => {
       setLoading(false);
     });
-  };
+  }, [requestedPostId]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') setRequestedPostId(new URLSearchParams(window.location.search).get('post'));
     fetchFeed();
     fetchSidebarData();
     const handleRefresh = () => {
@@ -158,13 +164,7 @@ export default function SocialFeedPage() {
     };
     window.addEventListener('fxzone_refresh_feed', handleRefresh);
     return () => window.removeEventListener('fxzone_refresh_feed', handleRefresh);
-  }, []);
-
-  useEffect(() => {
-    if (!requestedPostId || !posts.length) return;
-    const requestedPost = posts.find((post) => String(post.id) === requestedPostId);
-    if (requestedPost) setSelectedPost(requestedPost);
-  }, [posts, requestedPostId]);
+  }, [fetchFeed, fetchSidebarData]);
 
   const handleStartFresh = async () => {
     if (!confirm('Are you sure you want to delete all feed posts and start fresh?'))

@@ -50,6 +50,7 @@ export default function ChatPage() {
 
   const selectConversation = useCallback((conversationId: string | null) => {
     setActiveConvId(conversationId);
+    setHasOlderMessages(Boolean(conversationId));
     setActiveConversation(conversationId);
     if (!conversationId) return;
 
@@ -195,15 +196,11 @@ export default function ChatPage() {
     } catch (err) {
       console.error(err);
     }
-  }, [markConversationRead]);
+  }, []);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-
-  useEffect(() => {
-    setHasOlderMessages(true);
-  }, [activeConvId]);
 
   useEffect(() => () => setActiveConversation(null), [setActiveConversation]);
 

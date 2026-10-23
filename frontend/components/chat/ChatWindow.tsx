@@ -148,9 +148,6 @@ export function ChatWindow({
     );
   };
 
-  useEffect(() => setGroupTitle(conversationName || 'FxZone Group'), [conversationName]);
-  useEffect(() => setGroupDescription(String(conversationData?.description || '')), [conversationData?.description]);
-
   const saveGroupSettings = async () => {
     if (!isGroupAdmin || !groupTitle.trim()) return;
     try {
