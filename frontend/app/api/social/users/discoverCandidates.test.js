@@ -7,6 +7,17 @@ test('Discover excludes accounts already followed before it applies pagination',
   const route = fs.readFileSync(path.join(__dirname, 'route.ts'), 'utf8');
 
   assert.match(route, /const followingIds = new Set/);
+  assert.match(route, /followingIds\.size > 0 && !q\.trim\(\)/);
   assert.match(route, /query = query\.not\('id', 'in', `\(\$\{Array\.from\(followingIds\)/);
   assert.match(route, /\.limit\(Math\.min\(limit \+ LEGACY_DEMO_USERNAMES\.size \+ 1, 100\)\)/);
+});
+
+test('Discover keeps followed accounts searchable', () => {
+  const route = fs.readFileSync(path.join(__dirname, 'route.ts'), 'utf8');
+
+  assert.match(
+    route,
+    /if \(!mutualOnly && followingIds\.size > 0 && !q\.trim\(\)\)\s*\{[\s\S]*?query = query\.not/
+  );
+  assert.match(route, /query = query\.or\(`username\.ilike/);
 });

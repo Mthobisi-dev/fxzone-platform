@@ -62,7 +62,10 @@ export async function GET(request: NextRequest) {
 
       if (currentUser) query = query.neq('id', currentUser.id);
       if (mutualOnly) query = query.in('id', mutualIds);
-      if (!mutualOnly && followingIds.size > 0) {
+      // Keep the default Discover suggestions focused on accounts the viewer
+      // does not follow yet. An explicit search must still be able to find
+      // any registered account, including people the viewer already follows.
+      if (!mutualOnly && followingIds.size > 0 && !q.trim()) {
         query = query.not('id', 'in', `(${Array.from(followingIds).join(',')})`);
       }
       if (q.trim()) {
