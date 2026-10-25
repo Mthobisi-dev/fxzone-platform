@@ -46,6 +46,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     });
   } catch (error: any) {
     console.error('Error fetching user:', error);
-    return NextResponse.json({ error: 'Failed to fetch user profile', detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch user profile', detail: 'Unable to load this profile right now.' }, { status: 500 });
   }
 }

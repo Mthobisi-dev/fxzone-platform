@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
     if (authErr || !user) {
-      return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
     }
 
     const db = getSupabaseAdmin(request);
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Error in social users POST:', error);
     return NextResponse.json(
-      { error: 'Operation failed', detail: error?.message },
+      { error: 'Operation failed', detail: 'Unable to complete this account action right now.' },
       { status: 500 }
     );
   }

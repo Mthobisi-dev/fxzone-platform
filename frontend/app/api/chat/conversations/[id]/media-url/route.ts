@@ -6,7 +6,7 @@ import { CHAT_MEDIA_BUCKET } from '@/lib/chatMedia';
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
-    if (authError || !user) return apiError('UNAUTHORIZED', authError || 'Authentication required', 401);
+    if (authError || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
     const { id: conversationId } = await context.params;
     const path = new URL(request.url).searchParams.get('path') || '';
     if (!path.startsWith(`${conversationId}/${user.id}/`) && !path.startsWith(`${conversationId}/`)) {

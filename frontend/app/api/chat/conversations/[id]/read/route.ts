@@ -15,7 +15,7 @@ export async function POST(
 ) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
-    if (authError || !user) return apiError('UNAUTHORIZED', authError || 'Authentication required', 401);
+    if (authError || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
 
     const { id: conversationId } = await context.params;
     if (!conversationId || conversationId.length > 64) {

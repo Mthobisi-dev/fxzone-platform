@@ -17,7 +17,7 @@ const { parseTurnUrls, credentialTtlSeconds } = turnCredentials;
 export async function GET(request: NextRequest) {
   const { user, error: authError } = await getUserFromRequest(request);
   if (authError || !user) {
-    return apiError('UNAUTHORIZED', authError || 'Authentication required', 401);
+    return apiError('UNAUTHORIZED', 'Authentication required.', 401);
   }
 
   const sessionId = request.nextUrl.searchParams.get('sessionId')?.trim();

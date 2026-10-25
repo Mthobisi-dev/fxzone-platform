@@ -9,7 +9,7 @@ const MAX_GROUP_NAME_LENGTH = 120;
 export async function GET(request: NextRequest) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
+    if (authErr || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
 
     const db = getSupabaseAdmin(request);
 
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
+    if (authErr || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
 
     const db = getSupabaseAdmin(request);
     const body: unknown = await request.json();

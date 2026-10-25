@@ -5,7 +5,7 @@ export async function PUT(request: NextRequest) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
     if (authError || !user) {
-      return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
     }
 
     const client = getSupabaseAdmin(request);
@@ -19,6 +19,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Notification mark-all read error:', error);
-    return NextResponse.json({ detail: error?.message || 'Unable to mark notifications as read.' }, { status: 500 });
+    return NextResponse.json({ detail: 'Unable to mark notifications as read right now.' }, { status: 500 });
   }
 }

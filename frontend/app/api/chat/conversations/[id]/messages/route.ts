@@ -23,7 +23,7 @@ export async function GET(
 ) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
+    if (authErr || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
 
     const { id } = await context.params;
     const db = getSupabaseAdmin(request);
@@ -99,7 +99,7 @@ export async function POST(
 ) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
+    if (authErr || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
 
     const { id } = await context.params;
     const db = getSupabaseAdmin(request);

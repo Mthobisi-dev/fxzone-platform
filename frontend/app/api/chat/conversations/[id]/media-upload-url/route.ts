@@ -7,7 +7,7 @@ import { CHAT_MEDIA_BUCKET } from '@/lib/chatMedia';
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
-    if (authError || !user) return apiError('UNAUTHORIZED', authError || 'Authentication required', 401);
+    if (authError || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
     const { id: conversationId } = await context.params;
     const body = await request.json().catch(() => null) as { type?: unknown; size?: unknown } | null;
     if (!body || typeof body.type !== 'string' || typeof body.size !== 'number' || !Number.isSafeInteger(body.size)) {

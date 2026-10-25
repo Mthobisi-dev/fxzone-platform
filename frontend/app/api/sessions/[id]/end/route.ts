@@ -4,7 +4,7 @@ import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { user, role, error: authError } = await getUserFromRequest(request);
-    if (authError || !user) return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+    if (authError || !user) return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
     const { id: sessionId } = await context.params;
     const db = getSupabaseAdmin(request);
     const { data: session, error: sessionError } = await db
@@ -24,6 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     return NextResponse.json({ success: true, status: 'ended' });
   } catch (error: any) {
-    return NextResponse.json({ detail: error?.message || 'Unable to end session' }, { status: 500 });
+    console.error('End session error:', error);
+    return NextResponse.json({ detail: 'Unable to end this session right now.' }, { status: 500 });
   }
 }

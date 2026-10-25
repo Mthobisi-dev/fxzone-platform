@@ -9,7 +9,6 @@ import { normalizeDiscoverQuery, shouldSearchDiscover } from '@/lib/discoverSear
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Modal } from '@/components/ui/Modal';
 import {
   Search,
   UserPlus,
@@ -276,46 +275,6 @@ export default function DiscoverPage() {
     }
   };
 
-  // Add Trader state
-  const [addTraderModalOpen, setAddTraderModalOpen] = useState(false);
-  const [newTraderUsername, setNewTraderUsername] = useState('');
-  const [newTraderDisplayName, setNewTraderDisplayName] = useState('');
-  const [newTraderRole, setNewTraderRole] = useState('trader');
-  const [newTraderBio, setNewTraderBio] = useState('');
-  const [newTraderAvatar, setNewTraderAvatar] = useState('');
-  const [addingTrader, setAddingTrader] = useState(false);
-  const [addError, setAddError] = useState('');
-
-  const handleAddTrader = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTraderUsername.trim() || addingTrader) return;
-    setAddingTrader(true);
-    setAddError('');
-
-    try {
-      await api.post('/api/social/users', {
-        username: newTraderUsername.trim(),
-        display_name: newTraderDisplayName.trim() || newTraderUsername.trim(),
-        role: newTraderRole,
-        bio: newTraderBio.trim() || undefined,
-        avatar_url: newTraderAvatar.trim() || undefined,
-      });
-
-      setAddTraderModalOpen(false);
-      setNewTraderUsername('');
-      setNewTraderDisplayName('');
-      setNewTraderRole('trader');
-      setNewTraderBio('');
-      setNewTraderAvatar('');
-      await fetchDiscovery(search);
-    } catch (err: any) {
-      console.error('Failed to add trader:', err);
-      setAddError(err?.detail || err?.message || 'Failed to add trader to network.');
-    } finally {
-      setAddingTrader(false);
-    }
-  };
-
   const normalizedSearch = normalizeDiscoverQuery(search);
   const hasSearch = shouldSearchDiscover(normalizedSearch);
   const visibleUsers = hasSearch ? users : users.slice(0, 3);
@@ -573,118 +532,6 @@ export default function DiscoverPage() {
         )}
       </section>
 
-      {/* Add Trader Modal */}
-      {addTraderModalOpen && (
-        <Modal
-          isOpen={addTraderModalOpen}
-          onClose={() => setAddTraderModalOpen(false)}
-          title="Add Trader to Network Directory"
-        >
-          <form onSubmit={handleAddTrader} className="space-y-4">
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">
-                Username <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={newTraderUsername}
-                onChange={(e) => setNewTraderUsername(e.target.value)}
-                placeholder="e.g. SatoshiFx or TraderJoe"
-                className="w-full h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">
-                Display Name
-              </label>
-              <input
-                type="text"
-                value={newTraderDisplayName}
-                onChange={(e) => setNewTraderDisplayName(e.target.value)}
-                placeholder="e.g. Satoshi Nakamoto"
-                className="w-full h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">
-                Role / Expertise
-              </label>
-              <select
-                value={newTraderRole}
-                onChange={(e) => setNewTraderRole(e.target.value)}
-                className="w-full h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-zinc-700"
-              >
-                <option value="trader">Trader</option>
-                <option value="analyst">Analyst</option>
-                <option value="verified_educator">Verified Educator</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">
-                Bio / Strategy
-              </label>
-              <textarea
-                value={newTraderBio}
-                onChange={(e) => setNewTraderBio(e.target.value)}
-                placeholder="Trading methodology, preferred asset pairs, risk strategies..."
-                className="w-full h-20 bg-zinc-950 border border-zinc-850 rounded-lg p-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700 resize-none"
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] text-zinc-400 block mb-1 font-semibold">
-                Avatar Image URL (Optional)
-              </label>
-              <input
-                type="url"
-                value={newTraderAvatar}
-                onChange={(e) => setNewTraderAvatar(e.target.value)}
-                placeholder="https://..."
-                className="w-full h-9 bg-zinc-950 border border-zinc-850 rounded-lg px-3 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
-              />
-            </div>
-
-            {addError && (
-              <p className="text-[10px] text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded">
-                {addError}
-              </p>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-900">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setAddTraderModalOpen(false)}
-                disabled={addingTrader}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-500 font-bold text-xs"
-                type="submit"
-                disabled={!newTraderUsername.trim() || addingTrader}
-              >
-                {addingTrader ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin mr-1" />
-                    Adding...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus size={12} className="mr-1" />
-                    Add Trader to Discover
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 }

@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
     if (authErr || !user) {
-      return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
     }
 
     const db = getSupabaseAdmin(request);
@@ -137,7 +137,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { user, role, error: authErr } = await getUserFromRequest(request);
     if (authErr || !user) {
-      return NextResponse.json({ detail: authErr || 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
     }
 
     if (role !== 'admin') {
@@ -149,8 +149,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Ended sessions cleared' });
   } catch (error: any) {
+    console.error('Clear session history error:', error);
     return NextResponse.json(
-      { error: 'Failed to clear history', detail: error?.message },
+      { error: 'Failed to clear history', detail: 'Unable to clear ended broadcasts right now.' },
       { status: 500 }
     );
   }

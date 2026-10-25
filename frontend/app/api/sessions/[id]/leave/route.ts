@@ -9,7 +9,7 @@ export async function POST(
   try {
     const { user, error: authError } = await getUserFromRequest(request);
     if (authError || !user) {
-      return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
     }
 
     const { id: sessionId } = await context.params;
@@ -22,12 +22,12 @@ export async function POST(
 
     if (leaveError) {
       const status = /not found/i.test(leaveError.message) ? 404 : 400;
-      return NextResponse.json({ detail: leaveError.message }, { status });
+      return NextResponse.json({ detail: status === 404 ? 'Session not found.' : 'Unable to leave this session.' }, { status });
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Leave session error:', error);
-    return NextResponse.json({ detail: error?.message || 'Failed to leave session' }, { status: 500 });
+    return NextResponse.json({ detail: 'Unable to leave this session right now.' }, { status: 500 });
   }
 }

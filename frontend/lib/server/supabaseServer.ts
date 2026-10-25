@@ -122,12 +122,13 @@ export async function ensureUserProfile(
 
   try {
     // 1. Check existence first (cheap primary-key lookup)
-    const { data: existing } = await adminDb
+    const { data: existing, error: existingError } = await adminDb
       .from('users')
       .select('id')
       .eq('id', user.id)
       .maybeSingle();
 
+    if (existingError) throw existingError;
     if (existing) return true; // Already exists — fast path
 
     // 2. Row is missing — build profile payload
@@ -183,19 +184,21 @@ export async function ensureUserProfile(
     }
 
     // 4. Verify the row actually landed (confirms FK safety)
-    const { data: confirmed } = await adminDb
+    const { data: confirmed, error: confirmationError } = await adminDb
       .from('users')
       .select('id')
       .eq('id', user.id)
       .maybeSingle();
 
+    if (confirmationError) throw confirmationError;
     if (!confirmed) {
       return false;
     }
 
     return true;
-  } catch (err: any) {
-    return false;
+  } catch (err: unknown) {
+    console.error('[ensureUserProfile] profile provisioning failed:', err);
+    throw err;
   }
 }
 

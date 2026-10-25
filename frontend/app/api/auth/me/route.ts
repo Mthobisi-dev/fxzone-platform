@@ -4,6 +4,7 @@ import { ensureUserProfile, getSupabaseAdmin, getUserFromRequest } from '@/lib/s
 // Keep the authenticated profile response explicit. In particular, never
 // return legacy password material or internal moderation/security columns.
 const PROFILE_COLUMNS = 'id, email, username, display_name, avatar_url, bio, role, preferred_broker, followers_count, following_count, created_at, updated_at, is_active';
+const PROFILE_COLUMNS_LEGACY = 'id, email, username, display_name, avatar_url, bio, role, followers_count, following_count, created_at, updated_at, is_active';
 
 // GET /api/auth/me — returns user profile from public.users via the session token
 export async function GET(request: NextRequest) {
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: 'Failed to fetch profile', detail: err?.message },
+      { error: 'Failed to fetch profile', detail: 'Unable to load your profile right now.' },
       { status: 500 }
     );
   }
@@ -141,16 +142,17 @@ export async function PUT(request: NextRequest) {
           .from('users')
           .update(fallbackPayload)
           .eq('id', user.id)
-          .select()
+          .select(PROFILE_COLUMNS_LEGACY)
           .maybeSingle();
         if (fallback.error || !fallback.data) {
-          return NextResponse.json({ detail: fallback.error?.message || 'Failed to update profile' }, { status: 400 });
+          console.error('[PUT /api/auth/me] Legacy profile update failed:', fallback.error);
+          return NextResponse.json({ detail: 'Unable to update your profile right now.' }, { status: 400 });
         }
         updated = { ...fallback.data, preferred_broker: cleanBroker };
         updateError = null;
       } else {
         console.error('[PUT /api/auth/me] Update failed:', updateError);
-        return NextResponse.json({ detail: updateError.message || 'Failed to update profile' }, { status: 400 });
+        return NextResponse.json({ detail: 'Unable to update your profile right now.' }, { status: 400 });
       }
     }
     if (!updated) {
@@ -180,7 +182,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(responseData);
   } catch (err: any) {
     return NextResponse.json(
-      { error: 'Failed to update profile', detail: err?.message },
+      { error: 'Failed to update profile', detail: 'Unable to update your profile right now.' },
       { status: 500 }
     );
   }
@@ -218,12 +220,25 @@ export async function DELETE(request: NextRequest) {
       const { error: delErr } = await db.from(item.name).delete().eq(item.key, userId);
       if (delErr) {
         console.error(`[Account Delete] Failed to delete ${item.name} for user ${userId}:`, delErr.message);
+        return NextResponse.json(
+          { success: false, error: 'ACCOUNT_DELETE_FAILED', detail: 'Could not remove account data. Please try again.' },
+          { status: 502 },
+        );
       }
     }
 
     // Delete follow relationships (both directions)
-    await db.from('follows').delete().eq('follower_id', userId);
-    await db.from('follows').delete().eq('following_id', userId);
+    const followDeleteErrors = await Promise.all([
+      db.from('follows').delete().eq('follower_id', userId),
+      db.from('follows').delete().eq('following_id', userId),
+    ]);
+    if (followDeleteErrors.some(({ error: followError }) => followError)) {
+      console.error('[Account Delete] Failed to remove follow relationships:', followDeleteErrors.map(({ error: followError }) => followError));
+      return NextResponse.json(
+        { success: false, error: 'ACCOUNT_DELETE_PARTIAL', detail: 'Account cleanup could not be completed. Please try again.' },
+        { status: 502 },
+      );
+    }
 
     // 2. Delete the application profile before the Auth identity. This prevents
     // a stale public.users row from blocking a later registration if there is no
@@ -251,7 +266,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true, message: 'Account permanently deleted' });
   } catch (err: any) {
     return NextResponse.json(
-      { success: false, error: 'Failed to delete account', detail: err?.message },
+      { success: false, error: 'Failed to delete account', detail: 'Unable to delete your account right now.' },
       { status: 500 }
     );
   }

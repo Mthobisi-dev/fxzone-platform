@@ -47,8 +47,9 @@ export async function GET(
       created_at: data.created_at,
     });
   } catch (error: any) {
+    console.error('Session fetch error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch session', detail: error?.message },
+      { error: 'Failed to fetch session', detail: 'Unable to load this broadcast right now.' },
       { status: 500 }
     );
   }
@@ -79,8 +80,9 @@ export async function DELETE(
     if (deleteError) throw deleteError;
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error('Session delete error:', error);
     return NextResponse.json(
-      { error: 'Failed to delete session', detail: error?.message },
+      { error: 'Failed to delete session', detail: 'Unable to delete this broadcast right now.' },
       { status: 500 }
     );
   }

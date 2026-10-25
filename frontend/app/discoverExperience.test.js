@@ -21,6 +21,8 @@ test('Discover shows trending provider news and no longer exposes group creation
   assert.match(source, /article\.media_type\s*===\s*['"]video['"]/);
   assert.doesNotMatch(source, /Discover Traders/);
   assert.doesNotMatch(source, /Create Group/);
+  assert.doesNotMatch(source, /Add Trader to Network Directory/);
+  assert.doesNotMatch(source, /api\/social\/users.*username/);
   assert.doesNotMatch(source, /Enter at least two characters to search for a trader/);
 });
 

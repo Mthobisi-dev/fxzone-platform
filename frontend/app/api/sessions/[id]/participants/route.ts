@@ -4,7 +4,7 @@ import { getSupabaseAdmin, getUserFromRequest } from '@/lib/supabase';
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
-    if (authError || !user) return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+    if (authError || !user) return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
 
     const { id: sessionId } = await context.params;
     const db = getSupabaseAdmin(request);
@@ -33,6 +33,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       user: participant.users,
     })));
   } catch (error: any) {
-    return NextResponse.json({ detail: error?.message || 'Unable to load participants' }, { status: 500 });
+    console.error('Load participants error:', error);
+    return NextResponse.json({ detail: 'Unable to load participants right now.' }, { status: 500 });
   }
 }

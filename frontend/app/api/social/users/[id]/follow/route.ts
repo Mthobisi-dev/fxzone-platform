@@ -7,7 +7,7 @@ import { isHiddenSystemAccount } from '@/lib/systemAccounts';
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
-    if (authError || !user) return NextResponse.json({ detail: authError || 'Not authenticated' }, { status: 401 });
+    if (authError || !user) return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
     const { id: targetIdentifier } = await context.params;
     const db = getSupabaseAdmin(request);
     if (!await ensureUserProfile(db, user)) return NextResponse.json({ detail: 'Your profile is still being provisioned. Please try again in a moment.' }, { status: 503 });
@@ -58,6 +58,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     });
   } catch (error: any) {
     console.error('Follow error:', error);
-    return NextResponse.json({ error: 'Follow action failed', detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: 'Follow action failed', detail: 'Unable to update this follow relationship right now.' }, { status: 500 });
   }
 }

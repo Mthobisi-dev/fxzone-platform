@@ -7,7 +7,7 @@ import { getPostMediaExtension, getPostMediaSizeLimit, POST_MEDIA_BUCKET, resolv
 export async function POST(request: NextRequest) {
   try {
     const { user, error: authErr } = await getUserFromRequest(request);
-    if (authErr || !user) return apiError('UNAUTHORIZED', authErr || 'Authentication required', 401);
+    if (authErr || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
 
     const formData = await request.formData();
     const file = formData.get('file');

@@ -58,6 +58,40 @@ Migration 020 is mandatory privacy hardening. It applies explicit public
 profile-column grants and prevents browser clients from selecting email or
 other private fields from `public.users`.
 
+### Migration safety and destructive files
+
+The four files below are **not** part of the normal fresh-install migration
+sequence and must never be run automatically by Vercel or copied into a
+production SQL editor without an explicit, reviewed maintenance change:
+
+- `014_remove_jack_d9e07f.sql`
+- `016_remove_inaccessible_mthobisi_mzimela.sql`
+- `017_remove_jack_trade_account.sql`
+- `20261023090000_remove_requested_jack_accounts.sql`
+
+They contain account-specific data deletion. Their applied state cannot be
+proven from this repository alone, so they remain in migration history for
+compatibility and are excluded from the baseline above. Before any new
+environment uses them, inspect `supabase_migrations.schema_migrations` and the
+target account IDs in a safe project. Prefer a separately reviewed admin
+maintenance command that requires an immutable user ID and explicit
+confirmation. Never use a display name as the sole deletion key.
+
+The later non-destructive repair migrations must be reviewed and applied in
+filename order after their prerequisites:
+
+- `20261012010000_harden_legacy_counter_triggers.sql`
+- `20261012110000_enforce_live_session_follower_approval.sql`
+- `20261012215233_broadcast_live_session_end.sql`
+- `20261013071833_repair_live_session_admission_contract.sql`
+- `20261013113000_restore_live_session_host_admission.sql`
+- `20261014051643_repair_broadcast_participant_roles_and_privacy.sql`
+- `20261014060027_restore_social_features_and_direct_chat.sql`
+- `20261014061414_consolidate_duplicate_direct_chats.sql`
+
+Do not assume any migration in this list has been applied to production unless
+the Supabase migration history or an approved deployment record confirms it.
+
 ## 3. Configure the application
 
 Copy `frontend/.env.example` to `frontend/.env.local` and set:
@@ -192,9 +226,11 @@ Both rollback-only SQL tests in `supabase/tests/` passed against production:
   pending users and nonmembers denied for both reads and writes. Test messages
   use `skip_broadcast`; no test data persists.
 
-Application verification passed: 71 tests, typecheck, `npm run lint -- --quiet`
-(existing warnings remain), and production build. Real two-device audio/video
-and cross-network TURN delivery still need the manual checklist above.
+The historical 2026-10-14 broadcast repair record reported 71 tests,
+typecheck, lint (with existing warnings), and a production build at that time.
+That is not a current verification of this checkout. Run the repository quality
+gates again after a clean dependency install. Real two-device audio/video and
+cross-network TURN delivery still require the manual checklist above.
 
 The post-migration security advisor also reported existing issues outside this
 broadcast repair: RLS tables without policies (including chat membership),

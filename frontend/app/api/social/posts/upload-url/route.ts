@@ -14,7 +14,7 @@ import { getPostMediaExtension, isAllowedPostMedia, POST_MEDIA_BUCKET } from '@/
 export async function POST(request: NextRequest) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
-    if (authError || !user) return apiError('UNAUTHORIZED', authError || 'Authentication required', 401);
+    if (authError || !user) return apiError('UNAUTHORIZED', 'Authentication required.', 401);
 
     let body: unknown;
     try {

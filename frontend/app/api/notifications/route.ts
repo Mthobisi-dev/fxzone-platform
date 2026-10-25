@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, getUserFromRequest } from '@/lib/server/supabaseServer';
 import { apiError } from '@/lib/api-error';
 
+const NOTIFICATION_COLUMNS = 'id, user_id, type, title, message, data, is_read, created_at';
+
 // GET /api/notifications — fetch notifications for authenticated user
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +15,7 @@ export async function GET(request: NextRequest) {
     const client = getSupabaseAdmin(request);
     const { data, error } = await client
       .from('notifications')
-      .select('*')
+      .select(NOTIFICATION_COLUMNS)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -37,7 +39,7 @@ export async function PUT(request: NextRequest) {
   try {
     const { user, error: authError } = await getUserFromRequest(request);
     if (authError || !user) {
-      return apiError('UNAUTHORIZED', authError || 'Authentication required', 401);
+      return apiError('UNAUTHORIZED', 'Authentication required.', 401);
     }
 
     const client = getSupabaseAdmin(request);
